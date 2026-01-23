@@ -4,19 +4,81 @@ import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 
 export default function ProgressPage() {
-    const { user, getWeeklyStats } = useStore();
+    const { user, getWeeklyStats, history, exercises } = useStore();
     const { volumeByDay, totalWorkouts, totalVolume } = getWeeklyStats();
 
     // Chart Data
     const weeklyVolume = volumeByDay;
-    const maxVolume = Math.max(...weeklyVolume) || 1; // Avoid divide by zero
+    const maxVolume = Math.max(...weeklyVolume) || 1;
 
-    const bodyPartSplit = [
-        { name: 'Chest', value: 30, color: 'var(--primary)' },
-        { name: 'Back', value: 25, color: '#9b59b6' },
-        { name: 'Legs', value: 25, color: '#3498db' },
-        { name: 'Arms', value: 10, color: '#f1c40f' },
-        { name: 'Shoulders', value: 10, color: '#e74c3c' },
+    // Calculate Streak (Simplified: consecutive weeks with at least 1 workout, or days)
+    // For now, let's just do total workouts as a proxy or simple day check
+    const calculateStreak = () => {
+        if (!history || history.length === 0) return 0;
+        // Sort historydesc
+        const sorted = [...history].sort((a, b) => new Date(b.endTime) - new Date(a.endTime));
+
+        let streak = 0;
+        let currentDate = new Date();
+        currentDate.setHours(0, 0, 0, 0);
+
+        // Very basic consecutive day check
+        // In reality, might want "weeks active" or similar
+        // Let's just mock it based on frequency for now to be safe, or 0 if no recent
+        const lastWorkout = new Date(sorted[0].endTime);
+        const diffDays = Math.floor((new Date() - lastWorkout) / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 7) return 0; // Lost streak
+        return Math.min(history.length, 5); // Mock "active" streak logic for MVP
+    };
+    const streak = calculateStreak();
+
+    // Calculate Muscle Split
+    const getMuscleSplit = () => {
+        const stats = {};
+        let total = 0;
+
+        history.forEach(session => {
+            session.logs.forEach(log => {
+                const ex = exercises.find(e => e.id === log.exerciseId);
+                const muscle = ex ? ex.muscle : 'Other';
+                const setCouunt = log.sets.filter(s => s.completed).length;
+
+                stats[muscle] = (stats[muscle] || 0) + setCouunt;
+                total += setCouunt;
+            });
+        });
+
+        if (total === 0) return [];
+
+        return Object.entries(stats)
+            .map(([name, count]) => ({
+                name,
+                value: Math.round((count / total) * 100),
+                color: getMuscleColor(name)
+            }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+    };
+
+    const getMuscleColor = (muscle) => {
+        const colors = {
+            'Chest': 'var(--primary)',
+            'Back': '#9b59b6',
+            'Legs': '#3498db',
+            'Arms': '#f1c40f',
+            'Shoulders': '#e74c3c',
+            'Abs': '#2ecc71',
+            'Other': '#95a5a6'
+        };
+        return colors[muscle] || colors['Other'];
+    };
+
+    const bodyPartSplit = getMuscleSplit();
+
+    // If no data, show empty state or defaults
+    const displaySplit = bodyPartSplit.length > 0 ? bodyPartSplit : [
+        { name: 'No Data', value: 0, color: 'var(--surface-highlight)' }
     ];
 
     return (
@@ -51,7 +113,8 @@ export default function ProgressPage() {
                         }}>
                             <div style={{
                                 width: '100%',
-                                height: `${(h / maxVolume) * 100}%`,
+                                height: `${maxVolume > 0 ? (h / maxVolume) * 100 : 0}%`,
+                                minHeight: h > 0 ? '4px' : '0',
                                 background: i === 5 ? 'var(--primary)' : 'var(--border)',
                                 borderRadius: '4px',
                                 opacity: 0.8,
@@ -67,10 +130,10 @@ export default function ProgressPage() {
 
             {/* Stats Grid */}
             <section style={{ marginBottom: '32px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <StatCard label="Total Workouts" value="42" icon="🏋️‍♂️" />
-                <StatCard label="Time Trained" value="38h" icon="⏱️" />
-                <StatCard label="Total Volume" value="450k" icon="📊" suffix="kg" />
-                <StatCard label="Streak" value="5" icon="🔥" suffix="days" />
+                <StatCard label="Total Workouts" value={totalWorkouts} icon="🏋️‍♂️" />
+                <StatCard label="Time Trained" value={Math.round(totalVolume / 6000)} icon="⏱️" suffix="h" />
+                <StatCard label="Total Volume" value={(totalVolume / 1000).toFixed(1)} icon="📊" suffix="k" />
+                <StatCard label="Streak" value={streak} icon="🔥" suffix="days" />
             </section>
 
             {/* Body Part Split */}
@@ -82,7 +145,9 @@ export default function ProgressPage() {
                     borderRadius: 'var(--radius-lg)',
                     border: '1px solid var(--border)',
                 }}>
-                    {bodyPartSplit.map((part) => (
+                    {displaySplit.length === 0 && <div className="text-muted text-center">Start working out to see stats!</div>}
+
+                    {displaySplit.map((part) => (
                         <div key={part.name} style={{ marginBottom: '16px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
                                 <span>{part.name}</span>

@@ -4,10 +4,23 @@ import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 import Link from 'next/link';
 
+import { createClient } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
+
 export default function ProfilePage() {
     const { user, getWeeklyStats, getPersonalBests, GYMS } = useStore();
     const { totalWorkouts, totalVolume } = getWeeklyStats();
     const personalBests = getPersonalBests(); // Real data
+    const router = useRouter();
+    const supabase = createClient();
+
+    if (!user) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        // Fallback: Force redirect even if listener is slow
+        router.push('/login');
+    };
 
     const userGym = GYMS.find(g => g.id === user.gymId);
 
@@ -96,7 +109,8 @@ export default function ProfilePage() {
             <section>
                 <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Settings</h3>
                 <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                    <Link href="/profile/settings" style={{
+                    {/* Navigation Buttons */}
+                    <Link href="/profile/edit" style={{
                         width: '100%',
                         textAlign: 'left',
                         padding: '16px',
@@ -111,22 +125,63 @@ export default function ProfilePage() {
                         <span style={{ color: 'var(--text-dim)' }}>›</span>
                     </Link>
 
-                    {['Notifications', 'Privacy Policy', 'Sign Out'].map((item, i) => (
-                        <button key={item} style={{
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '16px',
-                            background: 'transparent',
-                            borderBottom: i !== 2 ? '1px solid var(--border)' : 'none',
-                            color: item === 'Sign Out' ? 'var(--warning)' : 'inherit',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            {item}
-                            {item !== 'Sign Out' && <span style={{ color: 'var(--text-dim)' }}>›</span>}
-                        </button>
-                    ))}
+                    <Link href="/profile/settings" style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '16px',
+                        background: 'transparent',
+                        borderBottom: '1px solid var(--border)',
+                        color: 'inherit',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        Account Settings
+                        <span style={{ color: 'var(--text-dim)' }}>›</span>
+                    </Link>
+                    <Link href="/profile/notifications" style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '16px',
+                        background: 'transparent',
+                        borderBottom: '1px solid var(--border)',
+                        color: 'inherit',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        Notifications
+                        <span style={{ color: 'var(--text-dim)' }}>›</span>
+                    </Link>
+
+                    <Link href="/privacy" style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '16px',
+                        background: 'transparent',
+                        borderBottom: '1px solid var(--border)',
+                        color: 'inherit',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        Privacy Policy
+                        <span style={{ color: 'var(--text-dim)' }}>›</span>
+                    </Link>
+
+                    <button onClick={handleLogout} style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '16px',
+                        background: 'transparent',
+                        color: 'var(--warning)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontWeight: '600'
+                    }}>
+                        Sign Out
+                    </button>
                 </div>
             </section>
 

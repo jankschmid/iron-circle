@@ -5,9 +5,25 @@ import BottomNav from '@/components/BottomNav';
 import LiveStatus from '@/components/LiveStatus';
 import Link from 'next/link';
 
+import { createClient } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
+
 export default function Home() {
     const { user, activeWorkout, getWeeklyStats } = useStore();
+    const router = useRouter();
+    const supabase = createClient();
+
+    // Safety check - if no user, rendering will be handled by redirect in store, 
+    // but we return empty here to prevent crash
+    if (!user) return <div className="min-h-screen bg-zinc-900 flex items-center justify-center text-zinc-500">Loading Circle...</div>;
+
+    // Only get stats if user exists
     const { volumeByDay } = getWeeklyStats();
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        router.push('/login');
+    };
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
@@ -15,6 +31,7 @@ export default function Home() {
                 <div>
                     <h1 className="text-gradient" style={{ fontSize: '1.8rem' }}>IronCircle</h1>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Welcome back, {user.name.split(' ')[0]}</p>
+                    <button onClick={handleLogout} style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '4px', textDecoration: 'underline' }}>Logout</button>
                 </div>
                 <img src={user.avatar} style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid var(--border)' }} />
             </header>

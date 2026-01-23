@@ -1,189 +1,146 @@
 "use client";
 
 import { useState } from 'react';
-import { useStore } from '@/lib/store';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useStore } from '@/lib/store';
+import { createClient } from '@/lib/supabase';
 
 export default function SettingsPage() {
-    const { user, updateUserProfile, GYMS } = useStore();
+    const { user, updateUserProfile } = useStore();
+    const [isLoading, setIsLoading] = useState(false);
+    const [message, setMessage] = useState(null);
+    const [error, setError] = useState(null);
     const router = useRouter();
+    const supabase = createClient();
 
-    const [form, setForm] = useState({
-        name: user.name,
-        handle: user.handle || '',
-        bio: user.bio || '',
-        avatar: user.avatar,
-        gymId: user.gymId || GYMS[0].id
-    });
+    // Form States
+    const [email, setEmail] = useState(user?.email || '');
+    const [newPassword, setNewPassword] = useState('');
 
-    const handleChange = (e) => {
-        setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    };
+    // Safety check - MUST be after hooks
+    if (!user) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
 
-    const handleSave = () => {
-        updateUserProfile(form);
-        router.back();
+
+    const handleUpdateProfile = async () => {
+        setIsLoading(true);
+        setMessage(null);
+        setError(null);
+
+        try {
+            // Update Supabase Auth for Email/Password
+            const updates = {};
+            if (email !== user.email) updates.email = email;
+            if (newPassword) updates.password = newPassword;
+            if (name !== user.name) updates.data = { name: name };
+
+            if (Object.keys(updates).length > 0) {
+                const { error: authError } = await supabase.auth.updateUser(updates);
+                if (authError) throw authError;
+            }
+
+            // Update Local Store & Supabase DB (if using one for profile data, currently mocking in store)
+            updateUserProfile({ name, email });
+
+            setMessage('Profile updated successfully!');
+            setNewPassword(''); // Clear password field for security
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
             <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <Link href="/profile" style={{ fontSize: '1.5rem', color: 'var(--text-muted)' }}>←</Link>
-                <h1 style={{ fontSize: '1.5rem' }}>Edit Profile</h1>
+                <h1 style={{ fontSize: '1.5rem' }}>Account Settings</h1>
             </header>
 
-            <section style={{ display: 'grid', gap: '24px' }}>
-                {/* Avatar Preview */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-                    <img
-                        src={form.avatar}
-                        style={{ width: '96px', height: '96px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)' }}
-                    />
-                    <div style={{ width: '100%' }}>
-                        <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Avatar URL</label>
-                        <input
-                            name="avatar"
-                            value={form.avatar}
-                            onChange={handleChange}
-                            style={inputStyle}
-                        />
+            <div style={{ maxWidth: '100%', margin: '0 auto' }}>
+                {message && (
+                    <div style={{
+                        background: 'rgba(0, 230, 118, 0.1)',
+                        border: '1px solid var(--success)',
+                        color: 'var(--success)',
+                        padding: '12px',
+                        borderRadius: 'var(--radius-sm)',
+                        marginBottom: '24px'
+                    }}>
+                        {message}
                     </div>
-                </div>
+                )}
 
-                <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Display Name</label>
-                    <input
-                        name="name"
-                        value={form.name}
-                        onChange={handleChange}
-                        style={inputStyle}
-                    />
-                </div>
-
-                <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Handle</label>
-                    <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '16px', top: '16px', color: 'var(--text-muted)' }}>@</span>
-                        <input
-                            name="handle"
-                            value={form.handle}
-                            onChange={handleChange}
-                            style={{ ...inputStyle, paddingLeft: '32px' }}
-                        />
+                {error && (
+                    <div style={{
+                        background: 'rgba(255, 23, 68, 0.1)',
+                        border: '1px solid var(--error)',
+                        color: 'var(--error)',
+                        padding: '12px',
+                        borderRadius: 'var(--radius-sm)',
+                        marginBottom: '24px'
+                    }}>
+                        {error}
                     </div>
-                </div>
+                )}
 
-                <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Bio</label>
-                    <textarea
-                        name="bio"
-                        value={form.bio}
-                        onChange={handleChange}
-                        rows={3}
-                        style={{ ...inputStyle, resize: 'none' }}
-                        placeholder="Tell us about your fitness journey..."
-                    />
-                </div>
-
-                {/* Units Toggle */}
-                <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Units</label>
-                    <div style={{ display: 'flex', gap: '16px' }}>
-                        <button
-                            onClick={() => updateUserProfile({ units: 'kg' })}
+                <section style={{ marginBottom: '32px' }}>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-muted)' }}>Security</h3>
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>Email Address</label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             style={{
-                                flex: 1,
-                                padding: '12px',
-                                background: user.units === 'kg' ? 'var(--primary)' : 'var(--surface)',
-                                color: user.units === 'kg' ? '#000' : 'var(--text-muted)',
+                                width: '100%',
+                                padding: '16px',
+                                background: 'var(--surface)',
                                 border: '1px solid var(--border)',
                                 borderRadius: 'var(--radius-md)',
-                                fontWeight: '600'
+                                color: 'var(--text-main)'
                             }}
-                        >
-                            Metric (kg)
-                        </button>
-                        <button
-                            onClick={() => updateUserProfile({ units: 'lbs' })}
+                        />
+                    </div>
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>New Password</label>
+                        <input
+                            type="password"
+                            placeholder="Leave blank to keep current"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
                             style={{
-                                flex: 1,
-                                padding: '12px',
-                                background: user.units === 'lbs' ? 'var(--primary)' : 'var(--surface)',
-                                color: user.units === 'lbs' ? '#000' : 'var(--text-muted)',
+                                width: '100%',
+                                padding: '16px',
+                                background: 'var(--surface)',
                                 border: '1px solid var(--border)',
                                 borderRadius: 'var(--radius-md)',
-                                fontWeight: '600'
+                                color: 'var(--text-main)'
                             }}
-                        >
-                            Imperial (lbs)
-                        </button>
+                        />
                     </div>
-                </div>
+                </section>
 
-                {/* Gym Selection */}
-                <div>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Gym</label>
-                    <select
-                        name="gymId"
-                        value={form.gymId}
-                        onChange={handleChange}
-                        style={{
-                            width: '100%',
-                            padding: '16px',
-                            background: 'var(--surface)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 'var(--radius-md)',
-                            color: 'var(--foreground)',
-                            fontSize: '1rem'
-                        }}
-                    >
-                        {GYMS.map(gym => (
-                            <option key={gym.id} value={gym.id}>{gym.name} ({gym.location})</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div style={{ marginTop: '24px' }}>
-                    <button
-                        onClick={handleSave}
-                        style={{
-                            width: '100%',
-                            padding: '16px',
-                            background: 'var(--primary)',
-                            color: '#000',
-                            borderRadius: 'var(--radius-md)',
-                            fontWeight: '700',
-                            fontSize: '1.1rem'
-                        }}
-                    >
-                        Save Changes
-                    </button>
-                    <button
-                        onClick={() => router.back()}
-                        style={{
-                            width: '100%',
-                            padding: '16px',
-                            background: 'transparent',
-                            color: 'var(--text-muted)',
-                            marginTop: '12px'
-                        }}
-                    >
-                        Cancel
-                    </button>
-                </div>
-            </section>
+                <button
+                    onClick={handleUpdateProfile}
+                    disabled={isLoading}
+                    style={{
+                        width: '100%',
+                        padding: '16px',
+                        background: 'var(--primary)',
+                        color: '#000',
+                        fontWeight: '700',
+                        fontSize: '1rem',
+                        border: 'none',
+                        borderRadius: 'var(--radius-md)',
+                        opacity: isLoading ? 0.7 : 1,
+                        cursor: isLoading ? 'wait' : 'pointer'
+                    }}
+                >
+                    {isLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+            </div>
         </div>
     );
 }
-
-const inputStyle = {
-    width: '100%',
-    padding: '16px',
-    background: 'var(--surface)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-md)',
-    color: 'var(--foreground)',
-    fontSize: '1rem',
-    fontFamily: 'inherit'
-};

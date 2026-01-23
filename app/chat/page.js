@@ -3,115 +3,213 @@
 import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase';
 
 export default function ChatListPage() {
-    const { chats, user, friends } = useStore();
+    const { user } = useStore();
+    const [conversations, setConversations] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const supabase = createClient();
 
-    // We only show chats that exist in the 'chats' state. 
-    // If a private chat hasn't been started (no message sent), it might not be here.
-    // Ideally, we'd merge known friends who you might want to chat with, but for "inbox" view, 
-    // showing active chats is standard.
+    useEffect(() => {
+        if (!user) return;
+        fetchConversations();
+    }, [user]);
 
-    // Sort by last message timestamp if available
-    const sortedChats = [...chats].sort((a, b) => {
-        const lastA = a.messages[a.messages.length - 1];
-        const lastB = b.messages[b.messages.length - 1];
-        const timeA = lastA ? new Date(lastA.timestamp) : new Date(0);
-        const timeB = lastB ? new Date(lastB.timestamp) : new Date(0);
-        return timeB - timeA;
-    });
+    const fetchConversations = async () => {
+        setLoading(true);
+        try {
+            // 1. Fetch conversations I'm in (just IDs)
+            const { data: myConvos, error: partError } = await supabase
+                .from('conversation_participants')
+                .select('conversation_id, last_read_at')
+                .eq('user_id', user.id);
+
+            if (partError) {
+                console.error('Participant fetch error:', partError);
+                throw partError;
+            }
+
+            if (!myConvos || myConvos.length === 0) {
+                setConversations([]);
+                setLoading(false);
+                return;
+            }
+
+            const conversationIds = myConvos.map(c => c.conversation_id);
+
+            // 2. Fetch the actual conversation details
+            const { data: conversationsData, error: convError } = await supabase
+                .from('conversations')
+                .select('id, type, name, gym_id')
+                .in('id', conversationIds);
+
+            if (convError) {
+                console.error('Conversation fetch error:', convError);
+                throw convError;
+            }
+
+            // 3. Process and merge
+            const processed = (await Promise.all(conversationsData.map(async (convo) => {
+                const participantInfo = myConvos.find(p => p.conversation_id === convo.id);
+
+                // Get last message
+                const { data: lastMsg } = await supabase
+                    .from('messages')
+                    .select('*')
+                    .eq('conversation_id', convo.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                let displayName = convo.name;
+                let avatar = null;
+
+                if (convo.type === 'private') {
+                    // Find the other person (Manual Fetch)
+                    const { data: other } = await supabase
+                        .from('conversation_participants')
+                        .select('user_id')
+                        .eq('conversation_id', convo.id)
+                        .neq('user_id', user.id)
+                        .maybeSingle();
+
+                    if (other) {
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('name, avatar_url')
+                            .eq('id', other.user_id)
+                            .maybeSingle();
+
+                        if (profile) {
+                            displayName = profile.name;
+                            avatar = profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.user_id}`;
+                        } else {
+                            displayName = 'Unknown User';
+                            avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.user_id}`;
+                        }
+                    } else {
+                        displayName = 'Unknown User';
+                    }
+                }
+
+                return {
+                    id: convo.id,
+                    type: convo.type,
+                    name: displayName,
+                    avatar: avatar,
+                    lastMessage: lastMsg?.content || 'No messages yet',
+                    timestamp: lastMsg?.created_at || participantInfo?.last_read_at || new Date().toISOString(),
+                    unread: false
+                };
+            }))).filter(Boolean);
+
+            // Sort by recent
+            processed.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            setConversations(processed);
+
+        } catch (err) {
+            console.error("Error fetching chats detailed:", err);
+            // Log the actual error object properties to helper debug
+            if (err.message) console.error("Message:", err.message);
+            if (err.details) console.error("Details:", err.details);
+            if (err.hint) console.error("Hint:", err.hint);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
             <header style={{ padding: '24px 0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h1 className="text-gradient">Messages</h1>
-                <Link href="/chat/create" style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: 'var(--primary)',
-                    color: '#000',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    fontWeight: 'bold',
+                <h1 style={{ fontSize: '1.8rem' }}>Messages</h1>
+                <Link href="/social/chat/new" style={{
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    color: 'var(--primary)',
                     textDecoration: 'none'
                 }}>
-                    +
+                    + New
                 </Link>
             </header>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {sortedChats.length === 0 && (
-                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                        No messages yet. Start a chat from the Social tab!
-                    </div>
-                )}
-
-                {sortedChats.map(chat => {
-                    const lastMsg = chat.messages[chat.messages.length - 1];
-                    // For group chat use generic icon, for private use friend avatar logic (simplified here)
-                    const isGroup = chat.type === 'group';
-
-                    return (
-                        <Link key={chat.id} href={`/social/chat/${chat.id}`} style={{
-                            background: 'var(--surface)',
-                            padding: '16px',
-                            borderRadius: 'var(--radius-md)',
-                            border: '1px solid var(--border)',
-                            display: 'flex',
-                            gap: '16px',
-                            alignItems: 'center',
-                            textDecoration: 'none',
-                            color: 'inherit'
-                        }}>
-                            <div style={{
-                                width: '48px',
-                                height: '48px',
-                                borderRadius: '50%',
-                                background: isGroup ? 'var(--primary-dim)' : 'var(--surface-highlight)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.2rem',
-                                border: '1px solid var(--border)'
-                            }}>
-                                {isGroup ? '📣' : '👤'}
+            {loading ? (
+                <div>Loading conversations...</div>
+            ) : conversations.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '40px' }}>
+                    No conversations yet.<br />
+                    <Link href="/social" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Find friends</Link> to start chatting!
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {/* Communities Section */}
+                    {conversations.some(c => c.type === 'gym') && (
+                        <div>
+                            <h2 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Communities</h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {conversations.filter(c => c.type === 'gym').map(chat => (
+                                    <ChatCard key={chat.id} chat={chat} />
+                                ))}
                             </div>
+                        </div>
+                    )}
 
-                            <div style={{ flex: 1, overflow: 'hidden' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                    <div style={{ fontWeight: '600', fontSize: '1rem' }}>{chat.name}</div>
-                                    {lastMsg && (
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                            {new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                    )}
-                                </div>
-                                <div style={{
-                                    color: 'var(--text-muted)',
-                                    fontSize: '0.9rem',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                }}>
-                                    {lastMsg ? (
-                                        <span>
-                                            {lastMsg.senderId === user.id ? 'You: ' : `${lastMsg.senderName}: `}
-                                            {lastMsg.text}
-                                        </span>
-                                    ) : (
-                                        <span style={{ fontStyle: 'italic', color: 'var(--text-dim)' }}>No messages yet</span>
-                                    )}
-                                </div>
+                    {/* DMs / Groups Section */}
+                    {conversations.some(c => c.type !== 'gym') && (
+                        <div>
+                            <h2 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Messages</h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {conversations.filter(c => c.type !== 'gym').map(chat => (
+                                    <ChatCard key={chat.id} chat={chat} />
+                                ))}
                             </div>
-                        </Link>
-                    );
-                })}
-            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <BottomNav />
         </div>
+    );
+}
+
+function ChatCard({ chat }) {
+    return (
+        <Link href={`/social/chat/${chat.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div style={{
+                background: 'var(--surface)',
+                padding: '16px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                border: '1px solid var(--border)'
+            }}>
+                <img
+                    src={chat.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`}
+                    style={{ width: '48px', height: '48px', borderRadius: '50%' }}
+                />
+                <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <div style={{ fontWeight: '600' }}>{chat.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {new Date(chat.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </div>
+                    </div>
+                    <div style={{
+                        fontSize: '0.9rem',
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: '200px'
+                    }}>
+                        {chat.lastMessage}
+                    </div>
+                </div>
+            </div>
+        </Link>
     );
 }

@@ -3,35 +3,85 @@
 import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 import Link from 'next/link';
+import { useState } from 'react';
 
 export default function SocialPage() {
-    const { friends, user } = useStore();
+    const { friends, user, getWeeklyStats } = useStore();
+    const { weeklyVolume, weeklyWorkouts, weeklyTime } = getWeeklyStats(); // User's own weekly stats
 
-    // Mock Leaderboard Data - merging current user and friends
-    // Use deterministic values for volume to prevent hydration mismatch
-    const leaderboardData = [
-        { ...user, rank: 1, volume: 45000 },
-        ...friends.map(f => {
-            // Simple deterministic "random" based on ID char code
-            const seed = f.id.charCodeAt(f.id.length - 1);
-            const volume = 10000 + (seed * 500);
-            return { ...f, volume };
-        })
-    ].sort((a, b) => b.volume - a.volume).map((u, i) => ({ ...u, rank: i + 1 }));
+    const [sortBy, setSortBy] = useState('Volume');
+
+    if (!user) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
+
+    // Real Leaderboard Data
+    const rawData = [
+        {
+            ...user,
+            id: user.id,
+            name: user.name,
+            handle: user.handle,
+            avatar: user.avatar,
+            stats: {
+                Volume: weeklyVolume,
+                Workouts: weeklyWorkouts,
+                Time: weeklyTime
+            }
+        },
+        ...friends.map(f => ({
+            ...f,
+            stats: {
+                Volume: f.weeklyStats?.volume || 0,
+                Workouts: f.weeklyStats?.workouts || 0,
+                Time: f.weeklyStats?.time || 0
+            }
+        }))
+    ];
+
+    const leaderboardData = rawData
+        .sort((a, b) => b.stats[sortBy] - a.stats[sortBy])
+        .map((u, i) => ({ ...u, rank: i + 1 }));
+
+    const formatValue = (metric, value) => {
+        if (metric === 'Volume') return `${(value / 1000).toFixed(1)}k`;
+        if (metric === 'Time') return `${Math.round(value / 60)}m`;
+        return value;
+    };
+
+    const getUnit = (metric) => {
+        if (metric === 'Volume') return 'kg';
+        if (metric === 'Time') return '';
+        return '';
+    };
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
-            <header style={{ padding: '24px 0 32px' }}>
+            <header style={{ padding: '24px 0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h1 className="text-gradient">Circle</h1>
+                <Link href="/social/add" style={{
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    color: 'var(--primary)',
+                    textDecoration: 'none',
+                    border: '1px solid var(--primary-dim)',
+                    padding: '8px 16px',
+                    borderRadius: '100px'
+                }}>
+                    + Find Friends
+                </Link>
             </header>
 
             {/* Leaderboard */}
             <section style={{ marginBottom: '40px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 style={{ fontSize: '1.2rem' }}>Weekly Leaderboard</h3>
-                    <select style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: 'none', fontSize: '0.8rem' }}>
-                        <option>Volume</option>
-                        <option>Frequency</option>
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: 'none', fontSize: '0.8rem', padding: '4px' }}
+                    >
+                        <option value="Volume">Volume</option>
+                        <option value="Workouts">Workouts</option>
+                        <option value="Time">Time</option>
                     </select>
                 </div>
 
@@ -44,7 +94,7 @@ export default function SocialPage() {
                             borderBottom: '1px solid var(--border)',
                             background: athlete.id === user.id ? 'var(--surface-highlight)' : 'transparent'
                         }}>
-                            <Link href={`/profile/${athlete.id}`} style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                            <Link href={`/profile/${athlete.id}`} style={{ display: 'flex', alignItems: 'center', width: '100%', textDecoration: 'none', color: 'inherit' }}>
                                 <div style={{
                                     width: '24px',
                                     fontWeight: '700',
@@ -58,7 +108,7 @@ export default function SocialPage() {
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{athlete.handle}</div>
                                 </div>
                                 <div style={{ fontWeight: '700', color: 'var(--primary)' }}>
-                                    {(athlete.volume / 1000).toFixed(1)}k <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>kg</span>
+                                    {formatValue(sortBy, athlete.stats[sortBy])} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{getUnit(sortBy)}</span>
                                 </div>
                             </Link>
                         </div>
