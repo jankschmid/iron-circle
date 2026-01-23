@@ -1,0 +1,83 @@
+:root {
+  /* High-End Dark Mode Palette */
+  --background: #0a0a0a;
+  --surface: #121212;
+  --surface-highlight: #1E1E1E;
+  --border: #2A2A2A;
+  
+  --primary: #E1F5FE; /* Ice Blue - Clean, cold, premium */
+  --primary-dim: #B3E5FC;
+  --accent: #FF3D00; /* Deep Orange for critical actions/PRs - Energetic */
+
+  --text-main: #EDEDED;
+  --text-muted: #A0A0A0;
+  --text-dim: #505050;
+
+  --success: #00E676;
+  --warning: #FFEA00;
+  --error: #FF1744;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 15px rgba(225, 245, 254, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background-color: var(--background);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Utility Classes for Layout */
+.container {
+  max-width: 600px; /* Mobile focused */
+  margin: 0 auto;
+  padding: 0 16px;
+  min-height: 100vh;
+  position: relative;
+}
+
+.text-gradient {
+  background: linear-gradient(to right, #ffffff, #a0a0a0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Modern Input Reset */
+input, button, select, textarea {
+  font-family: inherit;
+  font-size: 16px; /* User standard size to prevent zoom on mobile */
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
