@@ -10,6 +10,7 @@ export default function SignupPage() {
     const [password, setPassword] = useState('')
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
+    const [success, setSuccess] = useState(false)
     const router = useRouter()
     const supabase = createClient()
 
@@ -27,77 +28,114 @@ export default function SignupPage() {
             setError(error.message)
             setLoading(false)
         } else {
-            // Success! The auth listener in store.js will catch the new session
-            // and redirect to /profile/setup because the profile row doesn't exist yet.
-            router.refresh()
-            // We can also force it here to be sure
-            router.push('/profile/setup')
+            // Success! Show verification message
+            setSuccess(true)
+            setLoading(false)
         }
     }
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
-            <div style={{ width: '100%', maxWidth: '400px', background: 'var(--surface)', padding: '32px', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)' }}>
-                <h1 className="text-gradient" style={{ fontSize: '2rem', marginBottom: '8px', textAlign: 'center' }}>Join the Circle</h1>
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '32px' }}>Start your journey today.</p>
+            <div style={{
+                width: '100%',
+                maxWidth: '400px',
+                background: 'var(--surface)',
+                padding: '32px',
+                borderRadius: 'var(--radius-lg)',
+                boxShadow: 'var(--shadow-md)',
+                border: '1px solid var(--border)'
+            }}>
+                {success ? (
+                    <div style={{ textAlign: 'center' }}>
+                        <h1 style={{ color: '#ffffff', fontSize: '24px', marginBottom: '8px', fontWeight: '700' }}>Iron Circle</h1>
+                        <p style={{ color: '#a0a0a0', fontSize: '14px', marginBottom: '32px' }}>Verify your account to join the leaderboard.</p>
 
-                {error && (
-                    <div style={{ background: 'rgba(255, 23, 68, 0.1)', border: '1px solid var(--error)', color: 'var(--error)', padding: '16px', borderRadius: 'var(--radius-sm)', marginBottom: '24px', fontSize: '0.9rem' }}>
-                        {error}
+                        <div style={{ width: '80px', height: '80px', background: '#2a2a2a', borderRadius: '50%', margin: '0 auto 24px auto', lineHeight: '80px', fontSize: '32px' }}>💪</div>
+
+                        <h2 style={{ color: '#ffffff', fontSize: '18px', marginBottom: '16px', fontWeight: '600' }}>Welcome to the Circle!</h2>
+                        <p style={{ color: '#e0e0e0', fontSize: '15px', lineHeight: '1.5', marginBottom: '32px' }}>
+                            You're one step away from tracking your workouts and competing with friends.
+                        </p>
+
+
+
+                        <p style={{ color: '#666666', fontSize: '12px', marginTop: '32px', lineHeight: '1.4' }}>
+                            (Check your inbox at <strong>{email}</strong>)
+                        </p>
+
+                        <div style={{ marginTop: '24px' }}>
+                            <Link href="/login" style={{ color: 'var(--brand-yellow)', fontSize: '14px', fontWeight: '600' }}>
+                                Back to Login
+                            </Link>
+                        </div>
                     </div>
+                ) : (
+                    <>
+                        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                            <div style={{ width: '64px', height: '64px', background: '#2a2a2a', borderRadius: '50%', margin: '0 auto', lineHeight: '64px', fontSize: '28px' }}>💪</div>
+                        </div>
+                        <h1 className="text-gradient" style={{ fontSize: '2rem', marginBottom: '8px', textAlign: 'center' }}>Join the Circle</h1>
+                        <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '32px' }}>Start your journey today.</p>
+
+                        {error && (
+                            <div style={{ background: 'rgba(255, 23, 68, 0.1)', border: '1px solid var(--error)', color: 'var(--error)', padding: '16px', borderRadius: 'var(--radius-sm)', marginBottom: '24px', fontSize: '0.9rem' }}>
+                                {error}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                            <div>
+                                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Email</label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}
+                                    placeholder="you@example.com"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Password</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}
+                                    placeholder="••••••••"
+                                    required
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                style={{
+                                    width: '100%',
+                                    padding: '16px',
+                                    background: 'var(--brand-yellow)',
+                                    color: '#000000',
+                                    fontWeight: '700',
+                                    fontSize: '1rem',
+                                    border: 'none',
+                                    borderRadius: 'var(--radius-md)',
+                                    opacity: loading ? 0.7 : 1,
+                                    cursor: loading ? 'wait' : 'pointer'
+                                }}
+                            >
+                                {loading ? 'Creating Account...' : 'Sign Up'}
+                            </button>
+                        </form>
+
+                        <p style={{ marginTop: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                            Already have an account?{' '}
+                            <Link href="/login" style={{ color: 'var(--brand-yellow)', fontWeight: '600' }}>
+                                Sign In
+                            </Link>
+                        </p>
+                    </>
                 )}
-
-                <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                    <div>
-                        <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Email</label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}
-                            placeholder="you@example.com"
-                            required
-                        />
-                    </div>
-
-                    <div>
-                        <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Password</label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}
-                            placeholder="••••••••"
-                            required
-                        />
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        style={{
-                            width: '100%',
-                            padding: '16px',
-                            background: 'var(--primary)',
-                            color: '#000',
-                            fontWeight: '700',
-                            fontSize: '1rem',
-                            border: 'none',
-                            borderRadius: 'var(--radius-md)',
-                            opacity: loading ? 0.7 : 1,
-                            cursor: loading ? 'wait' : 'pointer'
-                        }}
-                    >
-                        {loading ? 'Creating Account...' : 'Sign Up'}
-                    </button>
-                </form>
-
-                <p style={{ marginTop: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    Already have an account?{' '}
-                    <Link href="/login" style={{ color: 'var(--primary)', fontWeight: '600' }}>
-                        Sign In
-                    </Link>
-                </p>
             </div>
         </div>
     )

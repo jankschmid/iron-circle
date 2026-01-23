@@ -42,6 +42,12 @@ export default function ProfileSetupPage() {
         setError(null);
 
         try {
+            // 0. Get User ID first
+            const { data: sessionData } = await supabase.auth.getSession();
+            const userId = sessionData?.session?.user?.id;
+
+            if (!userId) throw new Error("No authenticated session found");
+
             // 1. Check availability
             const { data: existing } = await supabase
                 .from('profiles')
@@ -49,18 +55,13 @@ export default function ProfileSetupPage() {
                 .eq('username', username)
                 .single();
 
-            if (existing) {
+            if (existing && existing.id !== userId) {
                 setError("Username already taken");
                 setLoading(false);
                 return;
             }
 
-            // 2. Create Profile
-            // We use the ID from the currently authenticated user
-            const { data: sessionData } = await supabase.auth.getSession();
-            const userId = sessionData?.session?.user?.id;
-
-            if (!userId) throw new Error("No authenticated session found");
+            // 2. Create/Update Profile
 
             const { error: insertError } = await supabase
                 .from('profiles')

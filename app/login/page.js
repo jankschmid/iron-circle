@@ -24,7 +24,10 @@ export default function LoginPage() {
         })
 
         if (error) {
-            setError(error.message)
+            let msg = error.message
+            if (msg.includes('Invalid login credentials')) msg = 'Incorrect email or password'
+            if (msg.includes('Email not confirmed')) msg = 'Please verify your email address'
+            setError(msg)
             setLoading(false)
         } else {
             // Force a router refresh to update server components/middleware
@@ -36,6 +39,9 @@ export default function LoginPage() {
     return (
         <div style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
             <div style={{ width: '100%', maxWidth: '400px', background: 'var(--surface)', padding: '32px', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)' }}>
+                <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                    <div style={{ width: '64px', height: '64px', background: '#2a2a2a', borderRadius: '50%', margin: '0 auto', lineHeight: '64px', fontSize: '28px' }}>💪</div>
+                </div>
                 <h1 className="text-gradient" style={{ fontSize: '2rem', marginBottom: '8px', textAlign: 'center' }}>Welcome Back</h1>
                 <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '32px' }}>Enter the Iron Circle.</p>
 
@@ -76,7 +82,7 @@ export default function LoginPage() {
                         style={{
                             width: '100%',
                             padding: '16px',
-                            background: 'var(--primary)',
+                            background: 'var(--brand-yellow)',
                             color: '#000',
                             fontWeight: '700',
                             fontSize: '1rem',

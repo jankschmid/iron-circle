@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
-    const { user, getWeeklyStats, getPersonalBests, GYMS } = useStore();
+    const { user, getWeeklyStats, getPersonalBests, GYMS, friends } = useStore();
     const { totalWorkouts, totalVolume } = getWeeklyStats();
     const personalBests = getPersonalBests(); // Real data
     const router = useRouter();
@@ -56,7 +56,7 @@ export default function ProfilePage() {
                     </div>
                 </div>
                 <h1 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{user.name}</h1>
-                <p style={{ color: 'var(--text-muted)' }}>@{user.handle || 'athlete'}</p>
+                <p style={{ color: 'var(--text-muted)' }}>{user.handle || '@athlete'}</p>
                 {userGym && (
                     <div style={{
                         marginTop: '8px',
@@ -82,7 +82,7 @@ export default function ProfilePage() {
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Volume</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontWeight: '700', fontSize: '1.2rem' }}>12</div>
+                        <div style={{ fontWeight: '700', fontSize: '1.2rem' }}>{friends?.length || 0}</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Friends</div>
                     </div>
                 </div>

@@ -56,7 +56,9 @@ export default function EditProfilePage() {
 
         try {
             // Validation
-            const cleanHandle = handle.trim();
+            // Ensure we strip *any* leading @ symbols from input just in case
+            const cleanHandle = handle.trim().replace(/^@+/, '');
+
             if (cleanHandle && (cleanHandle.length < 3 || cleanHandle.length > 15)) throw new Error("Handle must be 3-15 chars");
             if (cleanHandle && !/^[a-zA-Z0-9]+$/.test(cleanHandle)) throw new Error("Handle must be alphanumeric (no symbols)");
 
@@ -94,7 +96,7 @@ export default function EditProfilePage() {
                     username: cleanHandle,
                     bio: bio,
                     gym_id: gymId || null,
-                    gym_name: gymName || null,
+                    // gym_name removed - not in schema
                     updated_at: new Date()
                 })
                 .eq('id', user.id);
