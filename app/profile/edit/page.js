@@ -7,46 +7,20 @@ import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
 
 export default function EditProfilePage() {
-    const { user, updateUserProfile, GYMS } = useStore();
+    const { user, updateUserProfile, fetchGyms } = useStore();
     const router = useRouter();
     const supabase = createClient();
 
     const [name, setName] = useState(user?.name || '');
-    // Strip empty handle defaults or existing @
     const [handle, setHandle] = useState(user?.handle ? user.handle.replace(/^@/, '') : '');
     const [bio, setBio] = useState(user?.bio || '');
-    const [gymId, setGymId] = useState(user?.gymId || '');
-    const [gymName, setGymName] = useState(user?.gymName || '');
-
-    // Gym Search State
-    const [gymSearch, setGymSearch] = useState(user?.gymName || '');
-    const [gymResults, setGymResults] = useState([]);
-    const [showResults, setShowResults] = useState(false);
+    const [autoTracking, setAutoTracking] = useState(user?.auto_tracking_enabled || false);
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
     // Handlers
-    const handleGymSearch = async (e) => {
-        const query = e.target.value;
-        setGymSearch(query);
-        setShowResults(true);
 
-        if (query.length > 2) {
-            const { searchPlaces } = await import('@/lib/places');
-            const results = await searchPlaces(query);
-            setGymResults(results);
-        } else {
-            setGymResults([]);
-        }
-    };
-
-    const selectGym = (gym) => {
-        setGymId(gym.id);
-        setGymName(gym.name);
-        setGymSearch(gym.name);
-        setShowResults(false);
-    };
 
     if (!user) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
 
@@ -56,7 +30,6 @@ export default function EditProfilePage() {
 
         try {
             // Validation
-            // Ensure we strip *any* leading @ symbols from input just in case
             const cleanHandle = handle.trim().replace(/^@+/, '');
 
             if (cleanHandle && (cleanHandle.length < 3 || cleanHandle.length > 15)) throw new Error("Handle must be 3-15 chars");
@@ -68,7 +41,7 @@ export default function EditProfilePage() {
                 name !== (user.name || '') ||
                 cleanHandle !== currentHandle ||
                 bio !== (user.bio || '') ||
-                gymId !== (user.gymId || '');
+                autoTracking !== (user.auto_tracking_enabled || false);
 
             if (!hasChanges) {
                 router.push('/profile');
@@ -95,8 +68,8 @@ export default function EditProfilePage() {
                     name: name,
                     username: cleanHandle,
                     bio: bio,
-                    gym_id: gymId || null,
-                    // gym_name removed - not in schema
+                    // gym_id: gymId || null, // Removed legacy field update
+                    auto_tracking_enabled: autoTracking,
                     updated_at: new Date()
                 })
                 .eq('id', user.id);
@@ -105,7 +78,14 @@ export default function EditProfilePage() {
 
             // Update Local State safely
             try {
-                updateUserProfile({ name, handle: '@' + cleanHandle, bio, gymId: gymId || null, gymName: gymName || null });
+                updateUserProfile({
+                    name,
+                    handle: '@' + cleanHandle,
+                    bio,
+                    // gymId: gymId || null, 
+                    // gymName: gymName || null,
+                    auto_tracking_enabled: autoTracking
+                });
             } catch (localErr) {
                 console.error(localErr);
             }
@@ -191,79 +171,23 @@ export default function EditProfilePage() {
                     </p>
                 </div>
 
-                <div style={{ position: 'relative' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Home Gym</label>
-                    {gymId ? (
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '16px',
-                            background: 'var(--surface-highlight)',
-                            borderRadius: 'var(--radius-md)',
-                            border: '1px solid var(--primary)'
-                        }}>
-                            <div style={{ fontWeight: '600', color: 'var(--primary)' }}>
-                                {gymSearch || 'Selected Gym'}
-                            </div>
-                            <button
-                                onClick={() => { setGymId(''); setGymSearch(''); }}
-                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    ) : (
-                        <div>
-                            <input
-                                value={gymSearch}
-                                onChange={handleGymSearch}
-                                onFocus={() => setShowResults(true)}
-                                placeholder="Search for your gym..."
-                                style={{
-                                    width: '100%',
-                                    padding: '16px',
-                                    background: 'var(--surface)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: 'var(--radius-md)',
-                                    color: 'var(--foreground)'
-                                }}
-                            />
-                            {showResults && gymResults.length > 0 && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '100%',
-                                    left: 0,
-                                    right: 0,
-                                    background: 'var(--surface)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: 'var(--radius-md)',
-                                    marginTop: '4px',
-                                    zIndex: 10,
-                                    maxHeight: '200px',
-                                    overflowY: 'auto',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                                }}>
-                                    {gymResults.map(gym => (
-                                        <div
-                                            key={gym.id}
-                                            onClick={() => selectGym(gym)}
-                                            style={{
-                                                padding: '12px 16px',
-                                                borderBottom: '1px solid var(--border)',
-                                                cursor: 'pointer'
-                                            }}
-                                            onMouseEnter={(e) => e.target.style.background = 'var(--surface-highlight)'}
-                                            onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                                        >
-                                            <div style={{ fontWeight: '600' }}>{gym.name}</div>
-                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{gym.location}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                <div>
+                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Auto-Tracking</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--surface)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                        <input
+                            type="checkbox"
+                            id="autoTrack"
+                            checked={autoTracking}
+                            onChange={e => setAutoTracking(e.target.checked)}
+                            style={{ width: '20px', height: '20px', accentColor: 'var(--primary)' }}
+                        />
+                        <label htmlFor="autoTrack" style={{ color: 'var(--text-main)', fontSize: '1rem', cursor: 'pointer' }}>
+                            Enable Background Tracking
+                        </label>
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                        Requires GPS permissions. Automatically tracks sessions when you enter your saved gyms.
+                    </p>
                 </div>
 
                 <div>

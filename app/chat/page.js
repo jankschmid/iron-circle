@@ -105,10 +105,34 @@ export default function ChatListPage() {
                 };
             }))).filter(Boolean);
 
-            // Sort by recent
-            processed.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            // Deduplicate Private Chats (Client-side cleanup for legacy duplicates)
+            const uniqueMap = new Map();
+            processed.forEach(chat => {
+                if (chat.type === 'gym') {
+                    uniqueMap.set(chat.id, chat);
+                } else {
+                    // For private chats, key by the other user's name (proxy for ID) 
+                    // or just use unique key if we had otherUserId. 
+                    // Best effort: distinct by Name.
+                    const key = `private:${chat.name}`;
+                    if (!uniqueMap.has(key)) {
+                        uniqueMap.set(key, chat);
+                    } else {
+                        // Keep the one with more recent activity
+                        const existing = uniqueMap.get(key);
+                        if (new Date(chat.timestamp) > new Date(existing.timestamp)) {
+                            uniqueMap.set(key, chat);
+                        }
+                    }
+                }
+            });
 
-            setConversations(processed);
+            const deduplicated = Array.from(uniqueMap.values());
+
+            // Sort by recent
+            deduplicated.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            setConversations(deduplicated);
 
         } catch (err) {
             console.error("Error fetching chats detailed:", err);
@@ -136,7 +160,25 @@ export default function ChatListPage() {
             </header>
 
             {loading ? (
-                <div>Loading conversations...</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[1, 2, 3].map(i => (
+                        <div key={i} style={{
+                            padding: '16px',
+                            background: 'var(--surface)',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            gap: '16px',
+                            border: '1px solid var(--border)',
+                            opacity: 0.6
+                        }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--border)' }} />
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center' }}>
+                                <div style={{ width: '40%', height: '14px', background: 'var(--border)', borderRadius: '4px' }} />
+                                <div style={{ width: '70%', height: '12px', background: 'var(--border)', borderRadius: '4px' }} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
             ) : conversations.length === 0 ? (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '40px' }}>
                     No conversations yet.<br />

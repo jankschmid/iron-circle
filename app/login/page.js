@@ -18,21 +18,35 @@ export default function LoginPage() {
         setLoading(true)
         setError(null)
 
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        })
+        try {
+            // Using state values for email/password which are string primitives
+            // Race Supabase against a 10s timeout
+            const loginPromise = supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
 
-        if (error) {
-            let msg = error.message
-            if (msg.includes('Invalid login credentials')) msg = 'Incorrect email or password'
-            if (msg.includes('Email not confirmed')) msg = 'Please verify your email address'
-            setError(msg)
-            setLoading(false)
-        } else {
-            // Force a router refresh to update server components/middleware
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Connection timed out. Please check your internet or try again.')), 10000)
+            );
+
+            const { error: authError } = await Promise.race([loginPromise, timeoutPromise]);
+
+            if (authError) {
+                let msg = authError.message
+                if (msg.includes('Invalid login credentials')) msg = 'Incorrect email or password'
+                if (msg.includes('Email not confirmed')) msg = 'Please verify your email address'
+                throw new Error(msg);
+            }
+
+            // Success
             router.refresh()
             router.push('/')
+
+        } catch (err) {
+            // Error handling - ensure loading state is reset immediately
+            setError(err.message || "Failed to sign in. Please try again.");
+            setLoading(false);
         }
     }
 
@@ -53,9 +67,12 @@ export default function LoginPage() {
 
                 <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     <div>
-                        <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Email</label>
+                        <label htmlFor="email" style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Email</label>
                         <input
+                            id="email"
                             type="email"
+                            name="email"
+                            autoComplete="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}
@@ -65,9 +82,12 @@ export default function LoginPage() {
                     </div>
 
                     <div>
-                        <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Password</label>
+                        <label htmlFor="password" style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Password</label>
                         <input
+                            id="password"
                             type="password"
+                            name="password"
+                            autoComplete="current-password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}

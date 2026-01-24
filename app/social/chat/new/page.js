@@ -81,7 +81,7 @@ export default function NewChatPage() {
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
             <header style={{ padding: '24px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <Link href="/social/chat" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
+                <Link href="/chat" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
                     ←
                 </Link>
                 <h1 style={{ fontSize: '1.5rem' }}>New Message</h1>
@@ -92,7 +92,7 @@ export default function NewChatPage() {
                 {/* Actions */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <button
-                        onClick={() => alert("Group creation coming soon!")}
+                        onClick={() => router.push('/social/chat/new/group')}
                         style={{
                             padding: '16px',
                             background: 'var(--surface)',

@@ -97,7 +97,36 @@ export default function FriendProfilePage() {
         router.push('/workout');
     };
 
-    if (loading) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
+    const [isLongLoading, setIsLongLoading] = useState(false);
+
+    useEffect(() => {
+        let timer;
+        if (loading) {
+            timer = setTimeout(() => setIsLongLoading(true), 3000);
+        } else {
+            setIsLongLoading(false);
+        }
+        return () => clearTimeout(timer);
+    }, [loading]);
+
+    if (loading) {
+        if (isLongLoading) {
+            return (
+                <div className="container" style={{ paddingTop: '40px', textAlign: 'center' }}>
+                    <p style={{ marginBottom: '16px', color: 'var(--text-muted)' }}>Profile is taking a while to load...</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        style={{ padding: '8px 16px', fontWeight: 'bold', color: 'var(--primary)', background: 'transparent', border: '1px solid var(--primary)', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                        Reload Page
+                    </button>
+                    <br /><br />
+                    <Link href="/social" style={{ color: 'var(--text-muted)' }}>← Go Back</Link>
+                </div>
+            );
+        }
+        return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
+    }
     if (!profile) return <div className="container" style={{ paddingTop: '40px' }}>User not found</div>;
 
     const isFriend = friends.some(f => f.id === profile.id);
@@ -124,17 +153,94 @@ export default function FriendProfilePage() {
                 <p style={{ color: 'var(--text-muted)' }}>{profile.handle}</p>
 
                 <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
-                    <Link href={`/social/chat/${profile.id}`} style={{
-                        padding: '8px 24px',
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '100px',
-                        color: 'var(--foreground)',
-                        fontWeight: '600',
-                        textDecoration: 'none'
-                    }}>
+                    <button
+                        onClick={async () => {
+                            try {
+                                setLoading(true);
+                                console.log("Debug: Checking chat for", user.id, "and", profile.id);
+
+                                // 1. Get my conversation participants rows
+                                const { data: myParts } = await supabase
+                                    .from('conversation_participants')
+                                    .select('conversation_id')
+                                    .eq('user_id', user.id);
+
+                                const myConvoIds = myParts?.map(c => c.conversation_id) || [];
+                                console.log("Debug: My Convo IDs:", myConvoIds);
+
+                                if (myConvoIds.length === 0) {
+                                    // No chats at all, safe to create new
+                                    console.log("Debug: No chats found for me.");
+                                }
+
+                                let targetChatId = null;
+
+                                // 2. Filter these to find PRIVATE chats only
+                                if (myConvoIds.length > 0) {
+                                    const { data: privateConvos } = await supabase
+                                        .from('conversations')
+                                        .select('id')
+                                        .in('id', myConvoIds)
+                                        .eq('type', 'private');
+
+                                    const privateIds = privateConvos?.map(c => c.id) || [];
+                                    console.log("Debug: Private Chat IDs:", privateIds);
+
+                                    // 3. Check each private chat for the friend
+                                    for (const cid of privateIds) {
+                                        const { data: member } = await supabase
+                                            .from('conversation_participants')
+                                            .select('user_id')
+                                            .eq('conversation_id', cid)
+                                            .eq('user_id', profile.id)
+                                            .maybeSingle();
+
+                                        if (member) {
+                                            console.log("Debug: Found existing chat!", cid);
+                                            targetChatId = cid;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (!targetChatId) {
+                                    console.log("Debug: CREATE NEW CHAT");
+                                    const { data: newConvo, error: createError } = await supabase
+                                        .from('conversations')
+                                        .insert({ type: 'private' })
+                                        .select()
+                                        .single();
+
+                                    if (createError) throw createError;
+
+                                    await supabase.from('conversation_participants').insert([
+                                        { conversation_id: newConvo.id, user_id: user.id },
+                                        { conversation_id: newConvo.id, user_id: profile.id }
+                                    ]);
+                                    targetChatId = newConvo.id;
+                                }
+
+                                router.push(`/social/chat/${targetChatId}`);
+
+                            } catch (err) {
+                                console.error("Message navigation error:", err);
+                                alert("Could not start chat.");
+                            } finally {
+                                setLoading(false);
+                            }
+                        }}
+                        style={{
+                            padding: '8px 24px',
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '100px',
+                            color: 'var(--foreground)',
+                            fontWeight: '600',
+                            textDecoration: 'none',
+                            cursor: 'pointer'
+                        }}>
                         Message
-                    </Link>
+                    </button>
                     <button style={{
                         padding: '8px 24px',
                         background: isFriend ? 'var(--primary-dim)' : 'var(--primary)',

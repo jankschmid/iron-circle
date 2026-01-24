@@ -3,15 +3,115 @@
 import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 export default function SocialPage() {
     const { friends, user, getWeeklyStats } = useStore();
     const { weeklyVolume, weeklyWorkouts, weeklyTime } = getWeeklyStats(); // User's own weekly stats
+    const router = useRouter();
+    const supabase = createClient();
+    const [isLongLoading, setIsLongLoading] = useState(false);
 
     const [sortBy, setSortBy] = useState('Volume');
 
-    if (!user) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (!user) {
+                setIsLongLoading(true);
+            }
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [user]);
+
+    if (!user) {
+        if (isLongLoading) {
+            return (
+                <div style={{
+                    minHeight: '100vh',
+                    background: 'var(--background)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '24px',
+                    color: 'var(--text-muted)',
+                    textAlign: 'center',
+                    padding: '20px'
+                }}>
+                    <div>
+                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--foreground)' }}>Connection Issue</h2>
+                        <p>We're having trouble loading your data.</p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
+                        <button
+                            onClick={() => window.location.reload()}
+                            style={{
+                                color: '#000',
+                                background: 'var(--primary)',
+                                border: 'none',
+                                padding: '16px',
+                                borderRadius: 'var(--radius-md)',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            Retry Connection
+                        </button>
+                        <button
+                            onClick={async () => {
+                                supabase.auth.signOut().catch(err => console.error("Sign out ignored:", err));
+                                localStorage.clear();
+                                sessionStorage.clear();
+                                window.location.href = '/login';
+                            }}
+                            style={{
+                                color: 'var(--text-muted)',
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                padding: '16px',
+                                borderRadius: 'var(--radius-md)',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Log Out & Reset
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div style={{
+                minHeight: '100vh',
+                background: 'var(--background)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-muted)'
+            }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                    <div className="spinner"></div>
+                    <p>Syncing...</p>
+                </div>
+                <style jsx>{`
+                    .spinner {
+                        width: 40px;
+                        height: 40px;
+                        border: 4px solid var(--surface-highlight);
+                        border-top: 4px solid var(--primary);
+                        border-radius: 50%;
+                        animation: spin 1s linear infinite;
+                    }
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `}</style>
+            </div>
+        );
+    }
 
     // Real Leaderboard Data
     const rawData = [

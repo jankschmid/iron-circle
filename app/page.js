@@ -1,6 +1,7 @@
 "use client";
 
 import { useStore } from '@/lib/store';
+import { useState, useEffect } from 'react';
 import BottomNav from '@/components/BottomNav';
 import LiveStatus from '@/components/LiveStatus';
 import Link from 'next/link';
@@ -12,10 +13,112 @@ export default function Home() {
     const { user, activeWorkout, getWeeklyStats } = useStore();
     const router = useRouter();
     const supabase = createClient();
+    const [isLongLoading, setIsLongLoading] = useState(false);
+
+    useEffect(() => {
+        // Fail-safe: If user is not loaded in 5s, show the retry/reset options unconditionally.
+        // We avoid awaiting supabase.auth.getSession() here as that might be what's hanging.
+        const timer = setTimeout(() => {
+            if (!user) {
+                setIsLongLoading(true);
+            }
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [user]);
 
     // Safety check - if no user, rendering will be handled by redirect in store, 
     // but we return empty here to prevent crash
-    if (!user) return <div className="min-h-screen bg-zinc-900 flex items-center justify-center text-zinc-500">Loading Circle...</div>;
+    if (!user) {
+        if (isLongLoading) {
+            return (
+                <div style={{
+                    minHeight: '100vh',
+                    background: 'var(--background)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '24px',
+                    color: 'var(--text-muted)',
+                    textAlign: 'center',
+                    padding: '20px'
+                }}>
+                    <div>
+                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--foreground)' }}>Connection Issue</h2>
+                        <p>We're having trouble loading your data.</p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
+                        <button
+                            onClick={() => window.location.reload()}
+                            style={{
+                                color: '#000',
+                                background: 'var(--primary)',
+                                border: 'none',
+                                padding: '16px',
+                                borderRadius: 'var(--radius-md)',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            Retry Connection
+                        </button>
+                        <button
+                            onClick={async () => {
+                                // "Force" means we don't wait for the server. 
+                                // Fire the request but proceed to cleanup immediately.
+                                supabase.auth.signOut().catch(err => console.error("Sign out ignored:", err));
+
+                                // Immediate nuclear cleanup
+                                localStorage.clear();
+                                sessionStorage.clear(); // Clear session storage too just in case
+
+                                // Hard reload to login to clear in-memory states
+                                window.location.href = '/login';
+                            }}
+                            style={{
+                                color: 'var(--text-muted)',
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                padding: '16px',
+                                borderRadius: 'var(--radius-md)',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Log Out & Reset
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        return <div style={{
+            minHeight: '100vh',
+            background: 'var(--background)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-muted)'
+        }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                <div className="spinner"></div>
+                <p>Syncing...</p>
+            </div>
+            <style jsx>{`
+                .spinner {
+                    width: 40px;
+                    height: 40px;
+                    border: 4px solid var(--surface-highlight);
+                    border-top: 4px solid var(--primary);
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                }
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `}</style>
+        </div>;
+    }
 
     // Only get stats if user exists
     const { volumeByDay } = getWeeklyStats();
@@ -99,6 +202,49 @@ export default function Home() {
                         </Link>
                     </div>
                 )}
+            </section>
+
+            {/* Gym Tracker Card */}
+            <section style={{ marginTop: '16px' }}>
+                <Link href="/tracker" style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        padding: '20px',
+                        borderRadius: 'var(--radius-lg)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '16px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{
+                                width: '48px',
+                                height: '48px',
+                                borderRadius: '50%',
+                                background: 'var(--surface-highlight)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.5rem'
+                            }}>
+                                📍
+                            </div>
+                            <div>
+                                <h3 style={{ fontSize: '1rem', marginBottom: '4px' }}>Gym Tracker</h3>
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                    {user.gymId ? (user.auto_tracking_enabled ? 'Auto-Tracking On' : 'Manual Mode') : 'Set Home Gym'}
+                                </p>
+                            </div>
+                        </div>
+                        <div style={{
+                            fontSize: '1.2rem',
+                            color: 'var(--text-muted)'
+                        }}>
+                            →
+                        </div>
+                    </div>
+                </Link>
             </section>
 
             <section style={{ marginTop: '32px' }}>
