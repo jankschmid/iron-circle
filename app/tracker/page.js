@@ -381,9 +381,130 @@ function TrackerContent() {
         );
     }
 
+    const handleSearchCommunities = async (query) => {
+        setCommunitySearchQuery(query);
+        if (query.length < 2) return;
+
+        try {
+            const results = await fetchCommunities(query);
+            setCommunities(results);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleJoinCommunityAction = async (community) => {
+        if (!community.gyms) return;
+        setJoiningCommunity(community.id);
+        try {
+            const result = await joinCommunity(community.id, community.gyms.id, community.gyms.name);
+            if (result.success) {
+                alert(`Joined ${community.name}!`);
+                setShowCommunities(false);
+                setShowManage(false); // Go back to tracker
+                // Optionally redirect to chat
+                if (confirm("Go to community chat?")) {
+                    // router.push('/chat'); // or open specific chat
+                }
+            }
+        } catch (err) {
+            alert("Failed to join: " + err.message);
+        } finally {
+            setJoiningCommunity(null);
+        }
+    };
+
     if (showManage) {
         return (
-            <div className="container" style={{ paddingBottom: '100px', paddingTop: '20px' }}>
+            <div className="container" style={{ paddingBottom: '100px', paddingTop: '20px', position: 'relative' }}>
+                {showCommunities && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.8)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '20px'
+                    }}>
+                        <div style={{
+                            background: 'var(--surface)',
+                            width: '100%',
+                            maxWidth: '500px',
+                            maxHeight: '80vh',
+                            borderRadius: '16px',
+                            padding: '24px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Find Communities</h2>
+                                <button onClick={() => setShowCommunities(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
+                            </div>
+
+                            <input
+                                autoFocus
+                                type="text"
+                                placeholder="Search by gym name or city..."
+                                value={communitySearchQuery}
+                                onChange={(e) => handleSearchCommunities(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '12px',
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--border)',
+                                    background: 'var(--background)',
+                                    color: 'var(--text-main)'
+                                }}
+                            />
+
+                            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                                {communities.map(comm => (
+                                    <div key={comm.id} style={{
+                                        padding: '16px',
+                                        background: 'var(--surface-highlight)',
+                                        borderRadius: '12px',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{comm.name}</div>
+                                            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{comm.description || 'No description'}</div>
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                                                📍 {comm.gyms?.name || 'Unknown Gym'} • 👥 {comm.member_count || 0} members
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleJoinCommunityAction(comm)}
+                                            disabled={joiningCommunity === comm.id}
+                                            style={{
+                                                padding: '8px 16px',
+                                                background: 'var(--primary)',
+                                                color: '#000',
+                                                border: 'none',
+                                                borderRadius: '100px',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                opacity: joiningCommunity === comm.id ? 0.7 : 1
+                                            }}
+                                        >
+                                            {joiningCommunity === comm.id ? '...' : 'Join'}
+                                        </button>
+                                    </div>
+                                ))}
+                                {communities.length === 0 && communitySearchQuery.length > 2 && (
+                                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                                        No communities found.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
                     <button onClick={() => setShowManage(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', marginRight: '16px', cursor: 'pointer', color: 'var(--text-main)' }}>←</button>
                     <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Manage Gyms</h1>
@@ -464,6 +585,26 @@ function TrackerContent() {
                             onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
                         >
                             + Add New Gym
+                        </button>
+
+                        <button
+                            onClick={() => setShowCommunities(true)}
+                            style={{
+                                width: '100%',
+                                padding: '16px',
+                                borderRadius: 'var(--radius-md)',
+                                border: '2px solid var(--surface-highlight)',
+                                background: 'transparent',
+                                color: 'var(--text-main)',
+                                cursor: 'pointer',
+                                marginTop: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}
+                        >
+                            <span>👥</span> Find Communities
                         </button>
                     </div>
                 )}

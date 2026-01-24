@@ -27,7 +27,7 @@ export default function LoginPage() {
             });
 
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Connection timed out. Please check your internet or try again.')), 10000)
+                setTimeout(() => reject(new Error('Connection timed out. Please check your internet or try again.')), 30000)
             );
 
             const { error: authError } = await Promise.race([loginPromise, timeoutPromise]);
