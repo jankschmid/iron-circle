@@ -4,11 +4,11 @@ import { useStore } from '@/lib/store';
 import { useGeoTracker } from '@/lib/hooks/useGeoTracker';
 import BottomNav from '@/components/BottomNav';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function TrackerPage() {
+function TrackerContent() {
     const { user, saveUserGym, removeUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity } = useStore();
     const { status, currentLocation, distanceToGym, isAtGym, workoutSession, startTracking, stopTracking, warning } = useGeoTracker();
     const searchParams = useSearchParams();
@@ -896,5 +896,13 @@ export default function TrackerPage() {
 
             <BottomNav />
         </div>
+    );
+}
+
+export default function TrackerPage() {
+    return (
+        <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Tracker...</div>}>
+            <TrackerContent />
+        </Suspense>
     );
 }
