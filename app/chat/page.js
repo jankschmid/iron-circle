@@ -4,11 +4,11 @@ import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/lib/supabase';
 import CommunitiesModal from '@/components/CommunitiesModal';
 
-export default function ChatListPage() {
+function ChatListContent() {
     const { user, fetchCommunities, joinCommunity, leaveCommunity } = useStore();
     const [conversations, setConversations] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -346,6 +346,14 @@ function ChatCard({ chat, onUpdate }) {
                 </>
             )}
         </div>
+    );
+}
+
+export default function ChatListPage() {
+    return (
+        <Suspense fallback={<div style={{ padding: '20px', textAlign: 'center' }}>Loading chats...</div>}>
+            <ChatListContent />
+        </Suspense>
     );
 }
 
