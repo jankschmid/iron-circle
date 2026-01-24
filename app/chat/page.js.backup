@@ -1,0 +1,307 @@
+"use client";
+
+import { useStore } from '@/lib/store';
+import BottomNav from '@/components/BottomNav';
+import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase';
+
+export default function ChatListPage() {
+    const { user } = useStore();
+    const [conversations, setConversations] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('messages'); // 'messages', 'groups', 'communities'
+    const supabase = createClient();
+
+    useEffect(() => {
+        if (!user) return;
+        fetchConversations();
+    }, [user]);
+
+    const fetchConversations = async () => {
+        setLoading(true);
+        try {
+            // 1. Fetch conversations I'm in (just IDs)
+            const { data: myConvos, error: partError } = await supabase
+                .from('conversation_participants')
+                .select('conversation_id, last_read_at')
+                .eq('user_id', user.id);
+
+            if (partError) {
+                console.error('Participant fetch error:', partError);
+                throw partError;
+            }
+
+            if (!myConvos || myConvos.length === 0) {
+                setConversations([]);
+                setLoading(false);
+                return;
+            }
+
+            const conversationIds = myConvos.map(c => c.conversation_id);
+
+            // 2. Fetch the actual conversation details
+            const { data: conversationsData, error: convError } = await supabase
+                .from('conversations')
+                .select('id, type, name, gym_id')
+                .in('id', conversationIds);
+
+            if (convError) {
+                console.error('Conversation fetch error:', convError);
+                throw convError;
+            }
+
+            // 3. Process and merge
+            const processed = (await Promise.all(conversationsData.map(async (convo) => {
+                const participantInfo = myConvos.find(p => p.conversation_id === convo.id);
+
+                // Get last message
+                const { data: lastMsg } = await supabase
+                    .from('messages')
+                    .select('*')
+                    .eq('conversation_id', convo.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                let displayName = convo.name;
+                let avatar = null;
+
+                if (convo.type === 'private') {
+                    // Find the other person (Manual Fetch)
+                    const { data: other } = await supabase
+                        .from('conversation_participants')
+                        .select('user_id')
+                        .eq('conversation_id', convo.id)
+                        .neq('user_id', user.id)
+                        .maybeSingle();
+
+                    if (other) {
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('name, avatar_url')
+                            .eq('id', other.user_id)
+                            .maybeSingle();
+
+                        if (profile) {
+                            displayName = profile.name;
+                            avatar = profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.user_id}`;
+                        } else {
+                            displayName = 'Unknown User';
+                            avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.user_id}`;
+                        }
+                    } else {
+                        displayName = 'Unknown User';
+                    }
+                }
+
+                return {
+                    id: convo.id,
+                    type: convo.type,
+                    name: displayName,
+                    avatar: avatar,
+                    lastMessage: lastMsg?.content || 'No messages yet',
+                    timestamp: lastMsg?.created_at || participantInfo?.last_read_at || new Date().toISOString(),
+                    unread: false
+                };
+            }))).filter(Boolean);
+
+            // Deduplicate Private Chats (Client-side cleanup for legacy duplicates)
+            const uniqueMap = new Map();
+            processed.forEach(chat => {
+                if (chat.type === 'gym') {
+                    uniqueMap.set(chat.id, chat);
+                } else {
+                    // For private chats, key by the other user's name (proxy for ID) 
+                    // or just use unique key if we had otherUserId. 
+                    // Best effort: distinct by Name.
+                    const key = `private:${chat.name}`;
+                    if (!uniqueMap.has(key)) {
+                        uniqueMap.set(key, chat);
+                    } else {
+                        // Keep the one with more recent activity
+                        const existing = uniqueMap.get(key);
+                        if (new Date(chat.timestamp) > new Date(existing.timestamp)) {
+                            uniqueMap.set(key, chat);
+                        }
+                    }
+                }
+            });
+
+            const deduplicated = Array.from(uniqueMap.values());
+
+            // Sort by recent
+            deduplicated.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            setConversations(deduplicated);
+
+        } catch (err) {
+            console.error("Error fetching chats detailed:", err);
+            // Log the actual error object properties to helper debug
+            if (err.message) console.error("Message:", err.message);
+            if (err.details) console.error("Details:", err.details);
+            if (err.hint) console.error("Hint:", err.hint);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="container" style={{ paddingBottom: '100px' }}>
+            <header style={{ padding: '24px 0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h1 style={{ fontSize: '1.8rem' }}>Messages</h1>
+                <Link href="/social/chat/new" style={{
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    color: 'var(--primary)',
+                    textDecoration: 'none'
+                }}>
+                    + New
+                </Link>
+            </header>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+                <button
+                    onClick={() => setActiveTab('messages')}
+                    style={{
+                        padding: '8px 16px',
+                        background: activeTab === 'messages' ? 'var(--primary)' : 'transparent',
+                        color: activeTab === 'messages' ? '#000' : 'var(--text-muted)',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    💬 Messages
+                </button>
+                <button
+                    onClick={() => setActiveTab('groups')}
+                    style={{
+                        padding: '8px 16px',
+                        background: activeTab === 'groups' ? 'var(--primary)' : 'transparent',
+                        color: activeTab === 'groups' ? '#000' : 'var(--text-muted)',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    👥 Groups
+                </button>
+                <button
+                    onClick={() => setActiveTab('communities')}
+                    style={{
+                        padding: '8px 16px',
+                        background: activeTab === 'communities' ? 'var(--primary)' : 'transparent',
+                        color: activeTab === 'communities' ? '#000' : 'var(--text-muted)',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    🌐 Communities
+                </button>
+            </div>
+
+            {loading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[1, 2, 3].map(i => (
+                        <div key={i} style={{
+                            padding: '16px',
+                            background: 'var(--surface)',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            gap: '16px',
+                            border: '1px solid var(--border)',
+                            opacity: 0.6
+                        }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--border)' }} />
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center' }}>
+                                <div style={{ width: '40%', height: '14px', background: 'var(--border)', borderRadius: '4px' }} />
+                                <div style={{ width: '70%', height: '12px', background: 'var(--border)', borderRadius: '4px' }} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : conversations.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '40px' }}>
+                    No conversations yet.<br />
+                    <Link href="/social" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Find friends</Link> to start chatting!
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {/* Communities Section */}
+                    {conversations.some(c => c.type === 'gym') && (
+                        <div>
+                            <h2 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Communities</h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {conversations.filter(c => c.type === 'gym').map(chat => (
+                                    <ChatCard key={chat.id} chat={chat} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* DMs / Groups Section */}
+                    {conversations.some(c => c.type !== 'gym') && (
+                        <div>
+                            <h2 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Messages</h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {conversations.filter(c => c.type !== 'gym').map(chat => (
+                                    <ChatCard key={chat.id} chat={chat} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <BottomNav />
+        </div>
+    );
+}
+
+function ChatCard({ chat }) {
+    return (
+        <Link href={`/social/chat/${chat.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div style={{
+                background: 'var(--surface)',
+                padding: '16px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                border: '1px solid var(--border)'
+            }}>
+                <img
+                    src={chat.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`}
+                    style={{ width: '48px', height: '48px', borderRadius: '50%' }}
+                />
+                <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <div style={{ fontWeight: '600' }}>{chat.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {new Date(chat.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </div>
+                    </div>
+                    <div style={{
+                        fontSize: '0.9rem',
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: '200px'
+                    }}>
+                        {chat.lastMessage}
+                    </div>
+                </div>
+            </div>
+        </Link>
+    );
+}

@@ -5,12 +5,14 @@ import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
+import CommunitiesModal from '@/components/CommunitiesModal';
 
 export default function NewChatPage() {
-    const { user, friends } = useStore();
+    const { user, friends, fetchCommunities, joinCommunity } = useStore();
     const router = useRouter();
     const supabase = createClient();
     const [loading, setLoading] = useState(false);
+    const [showCommunitiesModal, setShowCommunitiesModal] = useState(false);
 
     const handleStartChat = async (friend) => {
         if (loading) return;
@@ -109,7 +111,7 @@ export default function NewChatPage() {
                         <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>New Group</span>
                     </button>
                     <button
-                        onClick={() => alert("Community search coming soon!")}
+                        onClick={() => setShowCommunitiesModal(true)}
                         style={{
                             padding: '16px',
                             background: 'var(--surface)',
@@ -126,6 +128,24 @@ export default function NewChatPage() {
                         <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>Find Community</span>
                     </button>
                 </div>
+
+                {/* Communities Modal */}
+                {showCommunitiesModal && (
+                    <CommunitiesModal
+                        onClose={() => setShowCommunitiesModal(false)}
+                        fetchCommunities={fetchCommunities}
+                        joinCommunity={joinCommunity}
+                        user={user}
+                        onSuccess={(conversationId) => {
+                            setShowCommunitiesModal(false);
+                            if (conversationId) {
+                                router.push(`/social/chat/${conversationId}`);
+                            } else {
+                                router.push('/chat');
+                            }
+                        }}
+                    />
+                )}
 
                 <div style={{ marginTop: '16px' }}>
                     <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Suggested</h3>
