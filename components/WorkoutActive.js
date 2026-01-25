@@ -1,13 +1,20 @@
 "use client";
 
+import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import ExerciseLogger from './ExerciseLogger';
 import BottomNav from './BottomNav';
 
 export default function WorkoutActive() {
-    const { activeWorkout, finishWorkout, logSet, getExerciseHistory, exercises } = useStore();
+    const { activeWorkout, finishWorkout, cancelWorkout, logSet, getExerciseHistory, getExercisePR, exercises } = useStore();
+    const [showFinishConfirm, setShowFinishConfirm] = useState(false);
 
     if (!activeWorkout) return null;
+
+    const handleFinish = () => {
+        finishWorkout();
+        setShowFinishConfirm(false);
+    };
 
     return (
         <div className="container" style={{ paddingBottom: '120px' }}>
@@ -27,32 +34,97 @@ export default function WorkoutActive() {
                     <h2 style={{ fontSize: '1.2rem' }}>{activeWorkout.name}</h2>
                     <div style={{ fontSize: '0.8rem', color: 'var(--success)' }}>● Live Session</div>
                 </div>
-                <button
-                    onClick={finishWorkout}
-                    style={{
-                        background: 'var(--warning)',
-                        color: '#000',
-                        padding: '8px 16px',
-                        borderRadius: '100px',
-                        fontWeight: '700',
-                        fontSize: '0.9rem'
-                    }}
-                >
-                    FINISH
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        onClick={cancelWorkout}
+                        style={{
+                            background: 'transparent',
+                            color: 'var(--error)',
+                            padding: '8px 12px',
+                            fontWeight: '600',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            border: '1px solid var(--error)',
+                            borderRadius: '100px'
+                        }}
+                    >
+                        CANCEL
+                    </button>
+                    <button
+                        onClick={() => setShowFinishConfirm(true)}
+                        style={{
+                            background: 'var(--warning)',
+                            color: '#000',
+                            padding: '8px 16px',
+                            borderRadius: '100px',
+                            fontWeight: '700',
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            border: 'none'
+                        }}
+                    >
+                        FINISH
+                    </button>
+                </div>
             </header>
+
+            {/* Confirmation Modal */}
+            {showFinishConfirm && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)',
+                    zIndex: 1000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        padding: '24px',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '320px',
+                        textAlign: 'center',
+                        border: '1px solid var(--border)'
+                    }}>
+                        <h3 style={{ marginBottom: '16px' }}>Finish Workout?</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                            Are you sure you want to finish and save this session?
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                onClick={() => setShowFinishConfirm(false)}
+                                style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleFinish}
+                                style={{ flex: 1, padding: '12px', background: 'var(--success)', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                Finish
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Exercise List */}
             <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
                 {activeWorkout.logs.map((log, index) => {
                     const exerciseDef = exercises.find(e => e.id === log.exerciseId);
-                    const history = getExerciseHistory(log.exerciseId);
+                    const lastSets = getExerciseHistory(log.exerciseId); // Now returns array of sets or null
+                    const pr = getExercisePR(log.exerciseId);
 
                     return (
                         <div key={log.exerciseId + index}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                 <h3 style={{ fontSize: '1.1rem', color: 'var(--primary)' }}>{exerciseDef?.name || 'Unknown'}</h3>
-                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>History: {history ? `${history.lastWeight}kg x ${history.lastReps}` : 'New'}</span>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--warning)' }}>
+                                    {pr ? `🏆 PR: ${pr}kg` : 'No PR yet'}
+                                </span>
                             </div>
 
                             {/* Table Header */}
@@ -67,22 +139,27 @@ export default function WorkoutActive() {
                             }}>
                                 <div>KG</div>
                                 <div>REPS</div>
-                                <div>RPE</div>
+                                <div>RIR</div>
                                 <div></div>
                             </div>
 
                             {/* Sets */}
-                            {log.sets.map((set, setIndex) => (
-                                <ExerciseLogger
-                                    key={setIndex}
-                                    exerciseId={log.exerciseId}
-                                    setId={setIndex}
-                                    previousData={history}
-                                    onLog={(data) => logSet(log.exerciseId, setIndex, data)}
-                                    // Pass pre-filled reps if available (from template)
-                                    initialReps={set.reps}
-                                />
-                            ))}
+                            {log.sets.map((set, setIndex) => {
+                                // Find correct previous set for this index
+                                const prevSet = lastSets && lastSets[setIndex] ? lastSets[setIndex] : null;
+                                const previousData = prevSet ? { lastWeight: prevSet.weight, lastReps: prevSet.reps } : null;
+
+                                return (
+                                    <ExerciseLogger
+                                        key={set.id || setIndex}
+                                        exerciseId={log.exerciseId}
+                                        setId={setIndex}
+                                        previousData={previousData}
+                                        initialData={set}
+                                        onLog={(data) => logSet(log.exerciseId, setIndex, data)}
+                                    />
+                                );
+                            })}
                         </div>
                     );
                 })}

@@ -1,16 +1,35 @@
 "use client";
 
-import { useState } from 'react';
-import { useStore } from '@/lib/store';
+import { useState, useEffect } from 'react';
 
-export default function ExerciseLogger({ exerciseId, setId, previousData, onLog }) {
-    const [weight, setWeight] = useState('');
-    const [reps, setReps] = useState('');
-    const [rpe, setRpe] = useState('');
-    const [isLogged, setIsLogged] = useState(false);
+export default function ExerciseLogger({ exerciseId, setId, previousData, onLog, initialData }) {
+    // Initialize state from existing data if possible, converting 0 to '' for inputs
+    const [weight, setWeight] = useState((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '');
+    const [reps, setReps] = useState((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '');
+    const [rpe, setRpe] = useState(initialData?.rpe || '');
+
+    const [isLogged, setIsLogged] = useState(initialData?.completed || false);
     const [isPR, setIsPR] = useState(false);
 
+    // Update local state if initialData changes (e.g. from parent re-render)
+    useEffect(() => {
+        if (initialData) {
+            setWeight((initialData.weight !== undefined && initialData.weight !== 0) ? initialData.weight : '');
+            setReps((initialData.reps !== undefined && initialData.reps !== 0) ? initialData.reps : '');
+            if (initialData.rpe !== undefined) setRpe(initialData.rpe);
+            setIsLogged(!!initialData.completed);
+        }
+    }, [initialData]);
+
     const handleLog = () => {
+        if (isLogged) {
+            // UNCHECK / EDIT
+            setIsLogged(false);
+            // We update the store to uncompleted, but keep values
+            onLog({ weight, reps, rpe, completed: false });
+            return;
+        }
+
         if (!weight || !reps) return;
 
         // Convert to numbers
@@ -21,11 +40,13 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog 
         const currentVolume = w * r;
         const previousVolume = previousData ? previousData.lastWeight * previousData.lastReps : 0;
 
-        if (currentVolume > previousVolume) {
+        if (previousVolume > 0 && currentVolume > previousVolume) {
             setIsPR(true);
+        } else {
+            setIsPR(false);
         }
 
-        onLog({ weight: w, reps: r, rpe });
+        onLog({ weight: w, reps: r, rpe, completed: true });
         setIsLogged(true);
     };
 
@@ -44,7 +65,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog 
                 <input
                     type="number"
                     placeholder={previousData ? previousData.lastWeight : '-'}
-                    value={weight}
+                    value={isLogged ? ((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '') : weight}
                     onChange={(e) => setWeight(e.target.value)}
                     disabled={isLogged}
                     style={{
@@ -65,7 +86,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog 
                 <input
                     type="number"
                     placeholder={previousData ? previousData.lastReps : '-'}
-                    value={reps}
+                    value={isLogged ? ((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '') : reps}
                     onChange={(e) => setReps(e.target.value)}
                     disabled={isLogged}
                     style={{
@@ -82,7 +103,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog 
             {/* RPE Input */}
             <input
                 type="number"
-                placeholder="8"
+                placeholder="RIR"
                 value={rpe}
                 onChange={(e) => setRpe(e.target.value)}
                 disabled={isLogged}
@@ -100,7 +121,6 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog 
             {/* Action Button */}
             <button
                 onClick={handleLog}
-                disabled={isLogged}
                 style={{
                     background: isLogged ? 'var(--success)' : 'var(--primary)',
                     color: isLogged ? '#FFF' : '#000',
@@ -109,7 +129,8 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog 
                     height: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    cursor: 'pointer'
                 }}
             >
                 {isLogged ? '✓' : '+'}

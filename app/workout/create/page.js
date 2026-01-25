@@ -7,30 +7,33 @@ import { useStore } from '@/lib/store';
 
 export default function CreateRoutinePage() {
     const router = useRouter();
-    const { exercises, addWorkoutTemplate, addCustomExercise } = useStore();
+    const { exercises, addWorkoutTemplate, addCustomExercise, deleteCustomExercise } = useStore();
     const [routineName, setRoutineName] = useState('');
-    // selectedExercises: Array of { ...exercise, sets: [{ reps: 10 }, { reps: 10 }, ... ] }
+    // selectedExercises: Array of { ...exercise, sets: [{}, {}, ... ] }
     const [selectedExercises, setSelectedExercises] = useState([]);
     const [isSelecting, setIsSelecting] = useState(false);
+
+    // Filter State
+    const [selectedMuscle, setSelectedMuscle] = useState('All');
+    const MUSCLES = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Cardio', 'Other'];
 
     // Custom Exercise State
     const [customExerciseName, setCustomExerciseName] = useState('');
     const [customMuscle, setCustomMuscle] = useState('Other');
 
-    const MUSCLES = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Cardio', 'Other'];
+    // Filtered Exercises
+    const filteredExercises = selectedMuscle === 'All'
+        ? exercises
+        : exercises.filter(ex => ex.muscle === selectedMuscle);
 
-    const handleAddCustom = () => {
+    const handleAddCustom = async () => {
         if (!customExerciseName.trim()) return;
-        const newEx = addCustomExercise(customExerciseName, customMuscle);
+        const newEx = await addCustomExercise(customExerciseName, customMuscle);
 
         // Auto-select with 3 default sets
         const exerciseWithDefaults = {
             ...newEx,
-            sets: [
-                { reps: 10 },
-                { reps: 10 },
-                { reps: 10 }
-            ]
+            sets: [{}, {}, {}] // Empty objects, just counting sets
         };
         setSelectedExercises(prev => [...prev, exerciseWithDefaults]);
 
@@ -61,11 +64,7 @@ export default function CreateRoutinePage() {
             // Add with 3 default sets
             setSelectedExercises(prev => [...prev, {
                 ...ex,
-                sets: [
-                    { reps: 10 },
-                    { reps: 10 },
-                    { reps: 10 }
-                ]
+                sets: [{}, {}, {}]
             }]);
         }
     };
@@ -73,11 +72,9 @@ export default function CreateRoutinePage() {
     const addSet = (exId) => {
         setSelectedExercises(prev => prev.map(ex => {
             if (ex.id !== exId) return ex;
-            // Add new set copying previous reps or default 10
-            const lastSet = ex.sets[ex.sets.length - 1];
             return {
                 ...ex,
-                sets: [...ex.sets, { reps: lastSet ? lastSet.reps : 10 }]
+                sets: [...ex.sets, {}]
             };
         }));
     };
@@ -93,15 +90,6 @@ export default function CreateRoutinePage() {
         }));
     };
 
-    const updateSetReps = (exId, setIndex, value) => {
-        setSelectedExercises(prev => prev.map(ex => {
-            if (ex.id !== exId) return ex;
-            const newSets = [...ex.sets];
-            newSets[setIndex] = { ...newSets[setIndex], reps: parseInt(value) || 0 };
-            return { ...ex, sets: newSets };
-        }));
-    };
-
     if (isSelecting) {
         return (
             <div className="container" style={{ paddingBottom: '100px' }}>
@@ -109,6 +97,28 @@ export default function CreateRoutinePage() {
                     <button onClick={() => setIsSelecting(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: 'var(--text-muted)' }}>←</button>
                     <h1 style={{ fontSize: '1.5rem' }}>Select Exercises</h1>
                 </header>
+
+                {/* Muscle Filter */}
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '16px', marginBottom: '16px', scrollbarWidth: 'none' }}>
+                    {MUSCLES.map(muscle => (
+                        <button
+                            key={muscle}
+                            onClick={() => setSelectedMuscle(muscle)}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '100px',
+                                border: selectedMuscle === muscle ? '1px solid var(--primary)' : '1px solid var(--border)',
+                                background: selectedMuscle === muscle ? 'var(--primary-dim)' : 'var(--surface)',
+                                color: selectedMuscle === muscle ? 'var(--primary)' : 'var(--text-muted)',
+                                whiteSpace: 'nowrap',
+                                fontSize: '0.9rem'
+                            }}
+                        >
+                            {muscle}
+                        </button>
+                    ))}
+                </div>
+
                 <div style={{ display: 'grid', gap: '12px', paddingBottom: '100px' }}>
                     {/* Custom Exercise Input */}
                     <div style={{
@@ -144,7 +154,7 @@ export default function CreateRoutinePage() {
                                         borderRadius: '4px'
                                     }}
                                 >
-                                    {MUSCLES.map(m => <option key={m} value={m}>{m}</option>)}
+                                    {MUSCLES.filter(m => m !== 'All').map(m => <option key={m} value={m}>{m}</option>)}
                                 </select>
                             </div>
                             <button
@@ -166,29 +176,59 @@ export default function CreateRoutinePage() {
                         </div>
                     </div>
 
-                    {exercises.map(ex => {
+                    {filteredExercises.map(ex => {
                         const isSelected = selectedExercises.find(e => e.id === ex.id);
                         return (
-                            <button
+                            <div
                                 key={ex.id}
-                                onClick={() => toggleExercise(ex)}
                                 style={{
-                                    background: isSelected ? 'var(--surface-highlight)' : 'var(--surface)',
-                                    border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
-                                    padding: '16px',
-                                    borderRadius: 'var(--radius-md)',
-                                    textAlign: 'left',
                                     display: 'flex',
-                                    justifyContent: 'space-between',
+                                    gap: '8px',
                                     alignItems: 'center'
                                 }}
                             >
-                                <div>
-                                    <div style={{ fontWeight: '500' }}>{ex.name}</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{ex.muscle}</div>
-                                </div>
-                                {isSelected && <span style={{ color: 'var(--primary)' }}>✓</span>}
-                            </button>
+                                <button
+                                    onClick={() => toggleExercise(ex)}
+                                    style={{
+                                        flex: 1,
+                                        background: isSelected ? 'var(--surface-highlight)' : 'var(--surface)',
+                                        border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                                        padding: '16px',
+                                        borderRadius: 'var(--radius-md)',
+                                        textAlign: 'left',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <div>
+                                        <div style={{ fontWeight: '500' }}>{ex.name}</div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{ex.muscle}</div>
+                                    </div>
+                                    {isSelected && <span style={{ color: 'var(--primary)' }}>✓</span>}
+                                </button>
+
+                                {(ex.isCustom || ex.user_id) && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm('Delete custom exercise permanently?')) {
+                                                deleteCustomExercise(ex.id);
+                                            }
+                                        }}
+                                        style={{
+                                            padding: '16px',
+                                            background: 'var(--surface)',
+                                            border: '1px solid var(--error-dim)',
+                                            color: 'var(--error)',
+                                            borderRadius: 'var(--radius-md)',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
                         );
                     })}
                 </div>
@@ -263,7 +303,7 @@ export default function CreateRoutinePage() {
                                         </button>
                                     </div>
 
-                                    {/* Sets List */}
+                                    {/* Sets List (Count Only) */}
                                     <div style={{ marginBottom: '16px' }}>
                                         {ex.sets.map((set, setIdx) => (
                                             <div key={setIdx} style={{
@@ -274,23 +314,7 @@ export default function CreateRoutinePage() {
                                                 borderBottom: setIdx < ex.sets.length - 1 ? '1px solid var(--border)' : 'none'
                                             }}>
                                                 <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Set {setIdx + 1}</span>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <input
-                                                        type="number"
-                                                        value={set.reps}
-                                                        onChange={(e) => updateSetReps(ex.id, setIdx, e.target.value)}
-                                                        style={{
-                                                            width: '60px',
-                                                            padding: '8px',
-                                                            borderRadius: '4px',
-                                                            border: '1px solid var(--border)',
-                                                            background: 'var(--background)',
-                                                            color: 'var(--foreground)',
-                                                            textAlign: 'center'
-                                                        }}
-                                                    />
-                                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Reps</span>
-                                                </div>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>
                                             </div>
                                         ))}
                                     </div>

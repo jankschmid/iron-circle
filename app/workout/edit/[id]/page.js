@@ -141,9 +141,13 @@ export default function EditRoutinePage({ params }) {
         }));
     };
 
+    // ... (rest of the file remains similar until return)
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
     if (isLoading) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
 
     if (isSelecting) {
+        // ... (existing selection UI code)
         return (
             <div className="container" style={{ paddingBottom: '100px' }}>
                 <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -261,7 +265,7 @@ export default function EditRoutinePage({ params }) {
                 <Link href="/workout" style={{ fontSize: '1.5rem', color: 'var(--text-muted)' }}>←</Link>
                 <div style={{ flex: 1 }}></div>
                 <button
-                    onClick={handleDelete}
+                    onClick={() => setShowDeleteConfirm(true)}
                     style={{ color: 'var(--warning)', background: 'none', border: 'none' }}
                 >
                     Delete
@@ -417,6 +421,53 @@ export default function EditRoutinePage({ params }) {
                     {selectedExercises.length > 0 ? '+ Add More Exercises' : '+ Add Exercises'}
                 </button>
             </section>
+
+            {/* DELETE CONFIRMATION MODAL */}
+            {showDeleteConfirm && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)',
+                    zIndex: 1000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        padding: '24px',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '320px',
+                        textAlign: 'center',
+                        border: '1px solid var(--border)'
+                    }}>
+                        <h3 style={{ marginBottom: '16px' }}>Delete Routine?</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                            Are you sure you want to delete this routine permanently?
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    deleteWorkoutTemplate(id);
+                                    router.push('/workout');
+                                }}
+                                style={{ flex: 1, padding: '12px', background: 'var(--error)', border: 'none', color: '#FFF', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
+
 }

@@ -76,9 +76,23 @@ export default function TemplateSelector() {
                     color: 'var(--text-muted)',
                     borderRadius: 'var(--radius-md)',
                     background: 'transparent',
-                    textAlign: 'center'
+                    textAlign: 'center',
+                    marginBottom: '16px'
                 }}>
                     + Create Custom Routine
+                </Link>
+
+                <Link href="/workout/history" style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '16px',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-main)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--surface)',
+                    textAlign: 'center'
+                }}>
+                    📜 View Workout History
                 </Link>
             </div>
         </div>
