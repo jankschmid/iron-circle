@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 export default function ChatPage() {
-    const { user } = useStore();
+    const { user, joinSession } = useStore();
     const router = useRouter();
     const params = useParams();
     const supabase = createClient();
@@ -438,7 +438,63 @@ export default function ChatPage() {
                                 fontSize: '0.95rem',
                                 lineHeight: '1.4'
                             }}>
-                                {msg.content}
+                                {msg.type === 'invite' || msg.type === 'workout_invite' ? (
+                                    <div style={{ minWidth: '200px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>🏋️</span>
+                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Gym Session Invite</span>
+                                        </div>
+                                        <div style={{ marginBottom: '12px', fontSize: '0.9rem' }}>
+                                            {msg.content}
+                                        </div>
+                                        {!isMe && (
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button
+                                                    onClick={async () => {
+                                                        const success = await joinSession(msg.metadata?.groupId, msg.metadata?.gymId);
+                                                        if (success) {
+                                                            router.push('/tracker');
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '10px',
+                                                        background: 'var(--brand-yellow)',
+                                                        color: '#000',
+                                                        border: 'none',
+                                                        borderRadius: '8px',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.9rem'
+                                                    }}
+                                                >
+                                                    Join
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        // Just dismiss - could add a "declined" state to message
+                                                        console.log("Declined invite");
+                                                    }}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '10px',
+                                                        background: 'rgba(255,255,255,0.1)',
+                                                        color: 'var(--text-muted)',
+                                                        border: '1px solid var(--border)',
+                                                        borderRadius: '8px',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.9rem'
+                                                    }}
+                                                >
+                                                    Decline
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    msg.content
+                                )}
                             </div>
                             {!isSequence && (
                                 <div style={{

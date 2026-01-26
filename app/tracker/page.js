@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 function TrackerContent() {
-    const { user, saveUserGym, removeUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity } = useStore();
+    const { user, saveUserGym, removeUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity, deleteSession, updateSession, friends, inviteToSession } = useStore();
     const { status, currentLocation, distanceToGym, isAtGym, workoutSession, startTracking, stopTracking, warning } = useGeoTracker();
     const searchParams = useSearchParams();
     const [elapsed, setElapsed] = useState(0);
@@ -29,6 +29,9 @@ function TrackerContent() {
     const [communities, setCommunities] = useState([]);
     const [communitySearchQuery, setCommunitySearchQuery] = useState('');
     const [joiningCommunity, setJoiningCommunity] = useState(null);
+    const [editingSession, setEditingSession] = useState(null); // For Edit Modal
+    const [deletingSessionId, setDeletingSessionId] = useState(null);
+    const [showInviteModal, setShowInviteModal] = useState(false);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -88,21 +91,116 @@ function TrackerContent() {
         return () => clearInterval(interval);
     }, [workoutSession]);
 
-    // Fetch History
-    useEffect(() => {
+    // Fetch History & Participants
+    const fetchHistory = async () => {
         if (!user) return;
-        const fetchHistory = async () => {
-            const { data } = await supabase
-                .from('workout_sessions')
-                .select('*, gyms(name)')
-                .eq('user_id', user.id)
-                .not('end_time', 'is', null)
-                .order('start_time', { ascending: false })
-                .limit(10);
-            if (data) setHistory(data);
-        };
+
+        const { data } = await supabase
+            .from('workout_sessions')
+            .select('*, gyms(name)')
+            .eq('user_id', user.id)
+            .not('end_time', 'is', null)
+            .order('start_time', { ascending: false })
+            .limit(20);
+
+        if (data) {
+            // Fetch participants for group sessions individually to avoid URL length issues
+            const enrichedData = await Promise.all(data.map(async (session) => {
+                let matchedFriends = [];
+
+                if (session.group_id) {
+                    try {
+                        // Simpler query - just get user_ids first
+                        const { data: participants, error: participantsError } = await supabase
+                            .from('workout_sessions')
+                            .select('user_id')
+                            .eq('group_id', session.group_id)
+                            .neq('user_id', user.id)
+                            .limit(10);
+
+                        if (participantsError) {
+                            // Only log if there's an actual error message (not just empty results)
+                            if (participantsError.message) {
+                                console.error("Error fetching participants for group:", session.group_id, participantsError.message);
+                            }
+                        } else if (participants && participants.length > 0) {
+                            // Fetch profiles separately
+                            const userIds = participants.map(p => p.user_id);
+                            const { data: profiles } = await supabase
+                                .from('profiles')
+                                .select('id, name, avatar_url')
+                                .in('id', userIds);
+
+                            if (profiles) {
+                                matchedFriends = profiles.map(p => ({
+                                    id: p.id,
+                                    name: p.name,
+                                    avatar: p.avatar_url
+                                }));
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Exception fetching participants:", err);
+                    }
+                }
+
+                return {
+                    ...session,
+                    matchedFriends
+                };
+            }));
+
+            setHistory(enrichedData);
+        }
+    };
+
+    useEffect(() => {
         fetchHistory();
     }, [user, workoutSession]);
+
+    const handleEditSave = async (e) => {
+        e.preventDefault();
+        if (!editingSession) return;
+
+        try {
+            // Convert inputs to ISO strings or keep as is?
+            // editingSession should have ISO.
+            await updateSession(editingSession.id, {
+                start_time: new Date(editingSession.start_time).toISOString(),
+                end_time: new Date(editingSession.end_time).toISOString()
+            });
+            setEditingSession(null);
+            // Refresh history handled by store or local setHistory update? 
+            // store.updateSession updates 'recentSessions' in store but here we use local fetch?
+            // Ideally we re-fetch or update local state.
+            // Let's manually update local state for immediate feedback
+            setHistory(prev => prev.map(s => s.id === editingSession.id ? { ...s, ...editingSession } : s));
+            alert("Session updated");
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        setDeletingSessionId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deletingSessionId) return;
+        try {
+            const success = await deleteSession(deletingSessionId);
+            if (success) {
+                // Refetch from database to ensure persistence
+                await fetchHistory();
+                setDeletingSessionId(null);
+            } else {
+                alert("Failed to delete session");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete session");
+        }
+    };
 
     const formatTime = (sec) => {
         const h = Math.floor(sec / 3600);
@@ -965,6 +1063,28 @@ function TrackerContent() {
                             {workoutSession ? 'Stop Workout' : ((!user.gyms || user.gyms.length === 0) ? 'Add a Gym First' : 'Start Workout')}
                         </button>
 
+                        {/* Invite Friends Button - Only show when session is active */}
+                        {workoutSession && (
+                            <button
+                                onClick={() => setShowInviteModal(true)}
+                                style={{
+                                    padding: '12px 24px',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
+                                    borderRadius: '100px',
+                                    border: '1px solid var(--primary)',
+                                    background: 'transparent',
+                                    color: 'var(--primary)',
+                                    cursor: 'pointer',
+                                    width: '100%',
+                                    marginTop: '12px',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                👥 Invite Friends
+                            </button>
+                        )}
+
                         {!user.gymId && (
                             <button onClick={() => setShowManage(true)} style={{ color: 'var(--brand-yellow)', fontSize: '0.9rem', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', marginTop: '8px' }}>
                                 Set Home Gym Required
@@ -1003,6 +1123,13 @@ function TrackerContent() {
                                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                         {formatRange(session.start_time, session.end_time)}
                                     </div>
+                                    {/* Gym Location */}
+                                    {session.gyms?.name && (
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <span>📍</span>
+                                            <span>{session.gyms.name}</span>
+                                        </div>
+                                    )}
                                     {/* Matched Friends */}
                                     {session.matchedFriends && session.matchedFriends.length > 0 && (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}>
@@ -1028,15 +1155,253 @@ function TrackerContent() {
                                             Auto
                                         </div>
                                     )}
+                                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px', justifyContent: 'flex-end' }}>
+                                        <button
+                                            onClick={() => setEditingSession(session)}
+                                            style={{
+                                                background: 'var(--surface-highlight)',
+                                                border: '1px solid var(--border)',
+                                                borderRadius: '6px',
+                                                padding: '6px 12px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.8rem',
+                                                color: 'var(--text-main)',
+                                                fontWeight: '500'
+                                            }}
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(session.id)}
+                                            style={{
+                                                background: 'rgba(255, 0, 0, 0.1)',
+                                                border: '1px solid rgba(255, 0, 0, 0.3)',
+                                                borderRadius: '6px',
+                                                padding: '6px 12px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.8rem',
+                                                color: 'var(--error)',
+                                                fontWeight: '500'
+                                            }}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                </section>
+
+                    {/* Edit Modal */}
+                    {editingSession && (
+                        <div style={{
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            background: 'rgba(0,0,0,0.8)', zIndex: 10000,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                        }} onClick={() => setEditingSession(null)}>
+                            <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+                                <h3 style={{ marginBottom: '16px' }}>Edit Session</h3>
+                                <form onSubmit={handleEditSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '4px', color: 'var(--text-muted)' }}>Start Time</label>
+                                        <input
+                                            type="datetime-local"
+                                            value={new Date(editingSession.start_time).toISOString().slice(0, 16)}
+                                            onChange={e => setEditingSession({ ...editingSession, start_time: new Date(e.target.value).toISOString() })}
+                                            style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '4px', color: 'var(--text-muted)' }}>End Time</label>
+                                        <input
+                                            type="datetime-local"
+                                            value={new Date(editingSession.end_time).toISOString().slice(0, 16)}
+                                            onChange={e => setEditingSession({ ...editingSession, end_time: new Date(e.target.value).toISOString() })}
+                                            style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px' }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                                        <button type="button" onClick={() => setEditingSession(null)} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
+                                        <button type="submit" style={{ flex: 1, padding: '12px', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+
+                    {/* Invite Friend Modal */}
+                    {
+                        showInviteModal && (
+                            <div style={{
+                                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                                background: 'rgba(0,0,0,0.8)', zIndex: 10000,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                            }} onClick={() => setShowInviteModal(false)}>
+                                <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '400px', maxHeight: '70vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                                    <h3 style={{ marginBottom: '16px' }}>Invite Friend</h3>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {friends && friends.length > 0 ? (
+                                            friends.map(friend => (
+                                                <div key={friend.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'var(--background)', borderRadius: '8px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                        <img src={friend.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.id}`} style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                                                        <span style={{ fontWeight: 'bold' }}>{friend.name}</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={async () => {
+                                                            const success = await inviteToSession(friend.id);
+                                                            if (success) {
+                                                                alert(`Invited ${friend.name}!`);
+                                                                setShowInviteModal(false);
+                                                            } else {
+                                                                alert("Failed to invite.");
+                                                            }
+                                                        }}
+                                                        style={{ padding: '8px 16px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '100px', fontWeight: 'bold', cursor: 'pointer' }}
+                                                    >
+                                                        Invite
+                                                    </button>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                                                No friends found. Add friends in the Social tab!
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button onClick={() => setShowInviteModal(false)} style={{ width: '100%', padding: '12px', marginTop: '16px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}>Close</button>
+                                </div>
+                            </div>
+                        )
+                    }
+
+                    {/* Delete Confirmation Modal */}
+                    {deletingSessionId && (
+                        <div style={{
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            background: 'rgba(0,0,0,0.8)', zIndex: 10000,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                        }} onClick={() => setDeletingSessionId(null)}>
+                            <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '350px' }} onClick={e => e.stopPropagation()}>
+                                <h3 style={{ marginBottom: '16px', color: 'var(--error)' }}>Delete Session?</h3>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                                    This cannot be undone. Are you sure?
+                                </p>
+                                <div style={{ display: 'flex', gap: '12px' }}>
+                                    <button
+                                        onClick={() => setDeletingSessionId(null)}
+                                        style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmDelete}
+                                        style={{ flex: 1, padding: '12px', background: 'var(--error)', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </section >
+            )}
+
+            {/* Invite Friends Modal */}
+            {showInviteModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', zIndex: 10000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }} onClick={() => setShowInviteModal(false)}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        padding: '24px',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '400px',
+                        maxHeight: '80vh',
+                        overflowY: 'auto'
+                    }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ marginBottom: '16px', fontSize: '1.3rem' }}>Invite Friends</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '20px', fontSize: '0.9rem' }}>
+                            Select friends to invite to your workout session
+                        </p>
+
+                        {friends && friends.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {friends.map(friend => (
+                                    <div
+                                        key={friend.id}
+                                        onClick={async () => {
+                                            const success = await inviteToSession(friend.id, workoutSession?.id);
+                                            setShowInviteModal(false);
+                                            if (success) {
+                                                setSuccessMessage(`Invite sent to ${friend.name}!`);
+                                            } else {
+                                                alert("Failed to send invite");
+                                            }
+                                        }}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            padding: '12px',
+                                            background: 'var(--background)',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            border: '1px solid var(--border)',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <img
+                                            src={friend.avatar || '/default-avatar.png'}
+                                            alt={friend.name}
+                                            style={{
+                                                width: '40px',
+                                                height: '40px',
+                                                borderRadius: '50%',
+                                                objectFit: 'cover'
+                                            }}
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: '600' }}>{friend.name}</div>
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                Tap to invite
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                                No friends yet. Add friends to invite them!
+                            </div>
+                        )}
+
+                        <button
+                            onClick={() => setShowInviteModal(false)}
+                            style={{
+                                width: '100%',
+                                marginTop: '20px',
+                                padding: '12px',
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-main)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontSize: '1rem'
+                            }}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
             )}
 
             <BottomNav />
-        </div>
+        </div >
     );
 }
 

@@ -22,38 +22,68 @@ export default function NotificationsPage() {
     const fetchRequests = async () => {
         setLoading(true);
         try {
-            // Step 1: Fetch pending friendship records where I am the recipient
-            const { data: friendshipData, error: friendshipError } = await supabase
-                .from('friendships')
-                .select('id, user_id, created_at')
-                .eq('friend_id', user.id)
-                .eq('status', 'pending');
+            // Fetch both friend requests and workout invites
+            const [friendRequests, workoutInvites] = await Promise.all([
+                // Friend requests
+                (async () => {
+                    const { data: friendshipData, error: friendshipError } = await supabase
+                        .from('friendships')
+                        .select('id, user_id, created_at')
+                        .eq('friend_id', user.id)
+                        .eq('status', 'pending');
 
-            if (friendshipError) throw friendshipError;
+                    if (friendshipError) throw friendshipError;
+                    if (!friendshipData || friendshipData.length === 0) return [];
 
-            if (!friendshipData || friendshipData.length === 0) {
-                setRequests([]);
-                setLoading(false);
-                return;
-            }
+                    const senderIds = friendshipData.map(f => f.user_id);
+                    const { data: profilesData } = await supabase
+                        .from('profiles')
+                        .select('id, name, username, avatar_url')
+                        .in('id', senderIds);
 
-            // Step 2: Fetch profiles for the senders (user_id)
-            const senderIds = friendshipData.map(f => f.user_id);
-            const { data: profilesData, error: profilesError } = await supabase
-                .from('profiles')
-                .select('id, name, username, avatar_url')
-                .in('id', senderIds);
+                    return friendshipData.map(f => {
+                        const senderProfile = profilesData?.find(p => p.id === f.user_id);
+                        return {
+                            ...f,
+                            type: 'friend_request',
+                            sender: senderProfile || { name: 'Unknown', username: 'unknown', avatar_url: null }
+                        };
+                    });
+                })(),
+                // Workout invites
+                (async () => {
+                    const { data: notifData, error: notifError } = await supabase
+                        .from('notifications')
+                        .select('*')
+                        .eq('user_id', user.id)
+                        .eq('type', 'workout_invite')
+                        .eq('read', false)
+                        .order('created_at', { ascending: false });
 
-            if (profilesError) throw profilesError;
+                    if (notifError) throw notifError;
+                    if (!notifData || notifData.length === 0) return [];
 
-            // Combine data: Map profile to friendship
-            const combined = friendshipData.map(f => {
-                const senderProfile = profilesData.find(p => p.id === f.user_id);
-                return {
-                    ...f,
-                    sender: senderProfile || { name: 'Unknown', username: 'unknown', avatar_url: null }
-                };
-            });
+                    const inviterIds = notifData.map(n => n.data?.inviterId).filter(Boolean);
+                    const { data: profilesData } = await supabase
+                        .from('profiles')
+                        .select('id, name, username, avatar_url')
+                        .in('id', inviterIds);
+
+                    return notifData.map(n => {
+                        const senderProfile = profilesData?.find(p => p.id === n.data?.inviterId);
+                        return {
+                            ...n,
+                            type: 'workout_invite',
+                            sender: senderProfile || { name: 'Unknown', username: 'unknown', avatar_url: null }
+                        };
+                    });
+                })()
+            ]);
+
+            // Combine and sort by created_at
+            const combined = [...friendRequests, ...workoutInvites].sort(
+                (a, b) => new Date(b.created_at) - new Date(a.created_at)
+            );
 
             setRequests(combined);
         } catch (err) {
@@ -63,26 +93,49 @@ export default function NotificationsPage() {
         }
     };
 
-    const handleAction = async (requestId, action) => {
-        if (action === 'accept') {
-            const { error } = await supabase
-                .from('friendships')
-                .update({ status: 'accepted' })
-                .eq('id', requestId);
+    const handleAction = async (request, action) => {
+        if (request.type === 'friend_request') {
+            if (action === 'accept') {
+                const { error } = await supabase
+                    .from('friendships')
+                    .update({ status: 'accepted' })
+                    .eq('id', request.id);
 
-            if (!error) {
-                // Remove from list
-                setRequests(prev => prev.filter(r => r.id !== requestId));
-                router.refresh(); // Refresh to update friend list eventually
+                if (!error) {
+                    setRequests(prev => prev.filter(r => r.id !== request.id));
+                    router.refresh();
+                }
+            } else if (action === 'decline') {
+                const { error } = await supabase
+                    .from('friendships')
+                    .delete()
+                    .eq('id', request.id);
+
+                if (!error) {
+                    setRequests(prev => prev.filter(r => r.id !== request.id));
+                }
             }
-        } else if (action === 'decline') {
-            const { error } = await supabase
-                .from('friendships')
-                .delete()
-                .eq('id', requestId);
+        } else if (request.type === 'workout_invite') {
+            if (action === 'join') {
+                // Mark notification as read
+                await supabase
+                    .from('notifications')
+                    .update({ read: true })
+                    .eq('id', request.id);
 
-            if (!error) {
-                setRequests(prev => prev.filter(r => r.id !== requestId));
+                // Navigate to tracker - joinSession will be called there
+                router.push(`/tracker?join=${request.data.groupId}&gym=${request.data.gymId}`);
+                setRequests(prev => prev.filter(r => r.id !== request.id));
+            } else if (action === 'decline') {
+                // Mark as read
+                const { error } = await supabase
+                    .from('notifications')
+                    .update({ read: true })
+                    .eq('id', request.id);
+
+                if (!error) {
+                    setRequests(prev => prev.filter(r => r.id !== request.id));
+                }
             }
         }
     };
@@ -117,39 +170,81 @@ export default function NotificationsPage() {
                             />
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: '600' }}>{req.sender.name || req.sender.username}</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{req.sender.username} • sent a friend request</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                    {req.type === 'friend_request'
+                                        ? `@${req.sender.username} • sent a friend request`
+                                        : `@${req.sender.username} • invited you to workout at ${req.data?.gymName || 'the gym'}`
+                                    }
+                                </div>
 
                                 <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                                    <button
-                                        onClick={() => handleAction(req.id, 'accept')}
-                                        style={{
-                                            flex: 1,
-                                            padding: '8px',
-                                            background: 'var(--primary)',
-                                            color: '#000',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            fontWeight: '600',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Accept
-                                    </button>
-                                    <button
-                                        onClick={() => handleAction(req.id, 'decline')}
-                                        style={{
-                                            flex: 1,
-                                            padding: '8px',
-                                            background: 'var(--surface-highlight)',
-                                            color: 'var(--text-dim)',
-                                            border: '1px solid var(--border)',
-                                            borderRadius: '8px',
-                                            fontWeight: '600',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Decline
-                                    </button>
+                                    {req.type === 'friend_request' ? (
+                                        <>
+                                            <button
+                                                onClick={() => handleAction(req, 'accept')}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px',
+                                                    background: 'var(--primary)',
+                                                    color: '#000',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Accept
+                                            </button>
+                                            <button
+                                                onClick={() => handleAction(req, 'decline')}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px',
+                                                    background: 'var(--surface-highlight)',
+                                                    color: 'var(--text-dim)',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '8px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Decline
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={() => handleAction(req, 'join')}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px',
+                                                    background: 'var(--brand-yellow)',
+                                                    color: '#000',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                🏋️ Join Workout
+                                            </button>
+                                            <button
+                                                onClick={() => handleAction(req, 'decline')}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px',
+                                                    background: 'var(--surface-highlight)',
+                                                    color: 'var(--text-dim)',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '8px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Decline
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

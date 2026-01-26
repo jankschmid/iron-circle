@@ -8,12 +8,14 @@ import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
 export default function SocialPage() {
-    const { friends, user, getWeeklyStats } = useStore();
+    const { friends, user, getWeeklyStats, joinSession, removeFriend } = useStore();
     const { weeklyVolume, weeklyWorkouts, weeklyTime } = getWeeklyStats(); // User's own weekly stats
     const router = useRouter();
     const supabase = createClient();
     const [isLongLoading, setIsLongLoading] = useState(false);
 
+    const [showFriendsModal, setShowFriendsModal] = useState(false);
+    const [removingFriendId, setRemovingFriendId] = useState(null);
     const [sortBy, setSortBy] = useState('Volume');
 
     useEffect(() => {
@@ -227,6 +229,28 @@ export default function SocialPage() {
                                 {friend.status === 'active' && (
                                     <div style={{ position: 'absolute', bottom: 0, right: 0, width: '12px', height: '12px', background: 'var(--success)', borderRadius: '50%', border: '2px solid var(--background)' }} />
                                 )}
+                                {/* Party indicator - show if friend is in a group workout */}
+                                {friend.status === 'active' && friend.activity?.group_id && friend.activity?.partySize > 1 && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '-4px',
+                                        right: '-4px',
+                                        background: 'var(--brand-yellow)',
+                                        color: '#000',
+                                        borderRadius: '50%',
+                                        width: '20px',
+                                        height: '20px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 'bold',
+                                        border: '2px solid var(--background)',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                                    }}>
+                                        {friend.activity.partySize}
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <Link href={`/profile/${friend.id}`}>
@@ -236,17 +260,45 @@ export default function SocialPage() {
                                     {friend.status === 'active' ? `Training ${friend.activity?.detail}` : `Last active ${friend.lastActive}`}
                                 </div>
                                 {friend.status === 'active' && (
-                                    <div style={{ marginTop: '8px' }}>
+                                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
                                         <button style={{
                                             fontSize: '0.8rem',
                                             padding: '4px 12px',
                                             background: 'var(--primary-dim)',
                                             color: '#000',
                                             borderRadius: '100px',
-                                            fontWeight: '600'
+                                            fontWeight: '600',
+                                            border: 'none',
+                                            cursor: 'pointer'
                                         }}>
                                             Send 🔥
                                         </button>
+
+                                        {/* Show Join button if they are in a tracker session and we are not */}
+                                        {friend.activity?.type === 'tracker' && !useStore.getState?.()?.workoutSession && (
+                                            <button
+                                                onClick={() => {
+                                                    if (friend.activity?.group_id) {
+                                                        // Join the session
+                                                        joinSession(friend.activity.group_id, friend.activity.gym_id);
+                                                        router.push('/workout/active');
+                                                    } else {
+                                                        alert("Cannot join this session (No Group ID)");
+                                                    }
+                                                }}
+                                                style={{
+                                                    fontSize: '0.8rem',
+                                                    padding: '4px 12px',
+                                                    background: 'var(--brand-yellow)',
+                                                    color: '#000',
+                                                    borderRadius: '100px',
+                                                    fontWeight: '600',
+                                                    border: 'none',
+                                                    cursor: 'pointer'
+                                                }}>
+                                                Valhalla ⚔️
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -254,6 +306,134 @@ export default function SocialPage() {
                     ))}
                 </div>
             </section>
+
+            {/* Custom Circle Modal Trigger */}
+            <section style={{ marginTop: '32px', textAlign: 'center' }}>
+                <button
+                    onClick={() => setShowFriendsModal(true)}
+                    style={{
+                        padding: '12px 24px',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-main)',
+                        borderRadius: '100px',
+                        fontWeight: '600',
+                        fontSize: '0.9rem',
+                        cursor: 'pointer'
+                    }}
+                >
+                    View Your Circle ({friends.length})
+                </button>
+            </section>
+
+            {/* Friends Modal */}
+            {showFriendsModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', zIndex: 9999,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }} onClick={() => setShowFriendsModal(false)}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        width: '100%',
+                        maxWidth: '500px',
+                        maxHeight: '80vh',
+                        borderRadius: '16px',
+                        padding: '24px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '16px'
+                    }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Your Circle</h2>
+                            <button onClick={() => setShowFriendsModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}>×</button>
+                        </div>
+
+                        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                            {friends.length === 0 ? (
+                                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                    No friends yet. <Link href="/social/add" style={{ color: 'var(--primary)' }}>Find some!</Link>
+                                </div>
+                            ) : (
+                                friends.map(friend => (
+                                    <div key={friend.id} style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        background: 'var(--surface-highlight)',
+                                        padding: '12px 16px',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: '1px solid var(--border)'
+                                    }}>
+                                        <Link href={`/profile/${friend.id}`} onClick={() => setShowFriendsModal(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', color: 'inherit', flex: 1 }}>
+                                            <img src={friend.avatar} style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                                            <div>
+                                                <div style={{ fontWeight: '600' }}>{friend.name}</div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{friend.handle}</div>
+                                            </div>
+                                        </Link>
+
+                                        <button
+                                            onClick={() => setRemovingFriendId(friend.id)}
+                                            style={{
+                                                background: 'rgba(255, 0, 0, 0.1)',
+                                                border: '1px solid rgba(255, 0, 0, 0.3)',
+                                                borderRadius: '6px',
+                                                padding: '6px 12px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.8rem',
+                                                color: 'var(--error)',
+                                                fontWeight: '600'
+                                            }}
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Remove Friend Confirmation Modal */}
+            {removingFriendId && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', zIndex: 10000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }} onClick={() => setRemovingFriendId(null)}>
+                    <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '350px' }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ marginBottom: '16px', color: 'var(--error)' }}>Remove Friend?</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                            Are you sure you want to remove this person from your circle?
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                onClick={() => setRemovingFriendId(null)}
+                                style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    console.log("Remove button clicked, friendId:", removingFriendId);
+                                    const success = await removeFriend(removingFriendId);
+                                    console.log("removeFriend result:", success);
+                                    if (success) {
+                                        setRemovingFriendId(null);
+                                    } else {
+                                        alert("Failed to remove friend.");
+                                    }
+                                }}
+                                style={{ flex: 1, padding: '12px', background: 'var(--error)', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                            >
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <BottomNav />
         </div>

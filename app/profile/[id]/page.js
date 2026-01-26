@@ -39,11 +39,14 @@ export default function FriendProfilePage() {
 
                 // If not friend, fetch basic profile
                 if (!friendData) {
+                    console.log("Profile: User not in friends, fetching from DB...");
                     const { data, error } = await supabase
                         .from('profiles')
                         .select('id, name, username, avatar_url, bio')
                         .eq('id', friendId)
                         .single();
+
+                    if (error) console.error("Profile fetch error:", error);
 
                     if (data) {
                         friendData = {
@@ -60,18 +63,24 @@ export default function FriendProfilePage() {
 
                 // Fetch Workouts
                 if (fetchFriendWorkouts) {
-                    const userWorkouts = await fetchFriendWorkouts(friendId);
-                    setWorkouts(userWorkouts);
+                    console.log("Profile: Fetching workouts...");
+                    try {
+                        const userWorkouts = await fetchFriendWorkouts(friendId);
+                        console.log("Profile: Workouts loaded", userWorkouts?.length);
+                        setWorkouts(userWorkouts || []);
 
-                    // valid stats from workouts
-                    let totalVol = 0;
-                    // Mock streak calculation or use dates
-                    userWorkouts.forEach(w => totalVol += w.volume || 0);
-
-                    setStats({
-                        volume: totalVol,
-                        streak: userWorkouts.length // simplified
-                    });
+                        // valid stats from workouts
+                        let totalVol = 0;
+                        if (userWorkouts) {
+                            userWorkouts.forEach(w => totalVol += w.volume || 0);
+                            setStats({
+                                volume: totalVol,
+                                streak: userWorkouts.length // simplified
+                            });
+                        }
+                    } catch (wErr) {
+                        console.error("Profile: Error fetching workouts", wErr);
+                    }
                 }
 
             } catch (err) {
