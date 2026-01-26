@@ -7,9 +7,12 @@ import Link from 'next/link';
 import { useEffect, useState, Suspense } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const MapPicker = dynamic(() => import('../../components/MapPicker'), { ssr: false, loading: () => <div className="spinner"></div> });
 
 function TrackerContent() {
-    const { user, saveUserGym, removeUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity, deleteSession, updateSession, friends, inviteToSession } = useStore();
+    const { user, saveUserGym, removeUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity, deleteSession, updateSession, friends, inviteToSession, joinSession, updateGym, deleteGlobalGym } = useStore();
     const { status, currentLocation, distanceToGym, isAtGym, workoutSession, startTracking, stopTracking, warning } = useGeoTracker();
     const searchParams = useSearchParams();
     const [elapsed, setElapsed] = useState(0);
@@ -32,6 +35,11 @@ function TrackerContent() {
     const [editingSession, setEditingSession] = useState(null); // For Edit Modal
     const [deletingSessionId, setDeletingSessionId] = useState(null);
     const [showInviteModal, setShowInviteModal] = useState(false);
+    const [editingGym, setEditingGym] = useState(null); // For Gym Edit Modal
+
+    // Map State
+    const [showMapPicker, setShowMapPicker] = useState(false);
+    const [mapCoordinates, setMapCoordinates] = useState(null); // { lat, lng }
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -73,6 +81,44 @@ function TrackerContent() {
         }
     }, [searchParams]);
 
+    // Handle Join Session via URL (e.g. from Invite)
+    useEffect(() => {
+        const joinGroupId = searchParams.get('join');
+        const joinGymId = searchParams.get('gym');
+
+        if (joinGroupId && user) {
+            // Check if we are already in this session to avoid loop
+            if (workoutSession && workoutSession.group_id === joinGroupId) {
+                // Remove params to clean URL
+                const url = new URL(window.location.href);
+                url.searchParams.delete('join');
+                url.searchParams.delete('gym');
+                window.history.replaceState({}, '', url);
+                return;
+            }
+
+            // Verify session is active before joining
+            const verifyAndJoin = async () => {
+                // Simple status check via Supabase directly or trust joinSession return
+                // joinSession already checks for active status!
+                const success = await joinSession(joinGroupId, joinGymId);
+                if (success) {
+                    setSuccessMessage("Joined workout session!");
+                } else {
+                    // Alert handled in joinSession usually, but we can prevent auto-retry
+                }
+
+                // Clean URL
+                const url = new URL(window.location.href);
+                url.searchParams.delete('join');
+                url.searchParams.delete('gym');
+                window.history.replaceState({}, '', url);
+            };
+
+            verifyAndJoin();
+        }
+    }, [searchParams, user, workoutSession]);
+
 
 
     // Timer Logic
@@ -90,6 +136,20 @@ function TrackerContent() {
         }
         return () => clearInterval(interval);
     }, [workoutSession]);
+
+    // Helper to parse POINT(lng lat) string
+    const parsePoint = (pointStr) => {
+        if (!pointStr || typeof pointStr !== 'string') return null;
+        try {
+            const matches = pointStr.match(/POINT\(([-\d\.]+) ([-\d\.]+)\)/);
+            if (matches && matches.length === 3) {
+                return { lng: parseFloat(matches[1]), lat: parseFloat(matches[2]) };
+            }
+        } catch (e) {
+            console.error("Error parsing POINT:", e);
+        }
+        return null;
+    };
 
     // Fetch History & Participants
     const fetchHistory = async () => {
@@ -655,12 +715,35 @@ function TrackerContent() {
                                             Set Default
                                         </button>
                                     )}
+                                    {/* Edit Button for Creators */}
+                                    {gym.createdBy === user.id && (
+                                        <button
+                                            onClick={() => setEditingGym({
+                                                id: gym.id,
+                                                newName: gym.name,
+                                                newAddress: gym.address,
+                                                location: gym.location // Pass current location string
+                                            })}
+                                            style={{ padding: '8px', fontSize: '0.8rem', background: 'var(--surface-highlight)', color: 'var(--primary)', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                        >
+                                            Edit
+                                        </button>
+                                    )}
+
+                                    {/* Delete/Remove Button */}
                                     <button onClick={async () => {
-                                        if (confirm(`Delete ${gym.label || gym.name}? This will remove it for all users.`)) {
-                                            await removeUserGym(gym.id);
+                                        const isCreator = gym.createdBy === user.id;
+                                        if (isCreator) {
+                                            if (confirm(`Delete "${gym.label || gym.name}" PERMANENTLY? \n\nThis will remove it for ALL users.`)) {
+                                                await deleteGlobalGym(gym.id);
+                                            }
+                                        } else {
+                                            if (confirm(`Remove "${gym.label || gym.name}" from your list?`)) {
+                                                await removeUserGym(gym.id);
+                                            }
                                         }
                                     }} style={{ padding: '8px', fontSize: '0.8rem', background: 'rgba(255, 23, 68, 0.1)', color: 'var(--error)', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-                                        Delete
+                                        {gym.createdBy === user.id ? 'Delete' : 'Remove'}
                                     </button>
                                 </div>
                             </div>
@@ -705,219 +788,508 @@ function TrackerContent() {
                             <span>👥</span> Find Communities
                         </button>
                     </div>
-                )}
+                )
+                }
 
-                {addMode === 'select' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <button onClick={() => setAddMode('gps')} style={{ padding: '24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '1.1rem', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span style={{ fontSize: '1.5rem' }}>📍</span>
-                            <div>
-                                <div style={{ fontWeight: 'bold' }}>Use GPS Location</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Auto-detect where you are now</div>
-                            </div>
-                        </button>
-                        <button onClick={() => setAddMode('manual')} style={{ padding: '24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '1.1rem', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span style={{ fontSize: '1.5rem' }}>🗺️</span>
-                            <div>
-                                <div style={{ fontWeight: 'bold' }}>Search Address</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Find by name or street</div>
-                            </div>
-                        </button>
-                        <button onClick={() => setAddMode(false)} style={{ padding: '12px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Cancel</button>
-                    </div>
-                )}
-
-                {addMode === 'gps' && (
-                    <div style={{ textAlign: 'center' }}>
-                        <p style={{ marginBottom: '16px' }}>
-                            {currentLocation ? `Found: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : "Locating..."}
-                        </p>
-                        {warning && <p style={{ color: 'var(--error)', fontSize: '0.9rem', marginBottom: '16px' }}>{warning}</p>}
-
-                        <input
-                            type="text"
-                            placeholder="Label (e.g. Work Gym)"
-                            value={newGymLabel}
-                            onChange={(e) => setNewGymLabel(e.target.value)}
-                            style={{ display: 'block', width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
-                        />
-
-                        {currentLocation ? (
-                            <button
-                                onClick={() => handleSaveGym('GPS Location', currentLocation.lat, currentLocation.lng, null, 'gps')}
-                                style={{ width: '100%', padding: '16px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '100px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
-                            >
-                                Save This Location
+                {
+                    addMode === 'select' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <button onClick={() => setAddMode('gps')} style={{ padding: '24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '1.1rem', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '1.5rem' }}>📍</span>
+                                <div>
+                                    <div style={{ fontWeight: 'bold' }}>Use GPS Location</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Auto-detect where you are now</div>
+                                </div>
                             </button>
-                        ) : (
-                            <div className="spinner" style={{ margin: '0 auto' }}></div>
-                        )}
-                        <button onClick={() => setAddMode(false)} style={{ marginTop: '16px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>Cancel</button>
-                    </div>
-                )}
-
-                {addMode === 'manual' && (
-                    <div>
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                            <input
-                                type="text"
-                                placeholder="Search gym by name..."
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    handleSearchGym(e.target.value);
-                                }}
-                                style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
-                            />
+                            <button onClick={() => setAddMode('manual')} style={{ padding: '24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '1.1rem', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '1.5rem' }}>🗺️</span>
+                                <div>
+                                    <div style={{ fontWeight: 'bold' }}>Search Address</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Find by name or street</div>
+                                </div>
+                            </button>
+                            <button onClick={() => setAddMode(false)} style={{ padding: '12px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Cancel</button>
                         </div>
+                    )
+                }
 
-                        {/* Search Results */}
-                        {searchResults.length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
-                                {searchResults.map(result => (
-                                    <div
-                                        key={result.isExisting ? result.id : result.place_id}
-                                        onClick={() => {
-                                            if (result.isExisting) {
-                                                // Join existing gym
-                                                handleJoinExistingGym(result.id, result.name);
-                                            } else {
-                                                // Select address for new gym
-                                                setManualLocation({ lat: result.lat, lng: result.lng, name: result.display_name });
+                {/* Gym Edit Modal */}
+                {
+                    editingGym && (
+                        <div style={{
+                            position: 'fixed',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            background: 'rgba(0,0,0,0.8)',
+                            zIndex: 10000,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '20px'
+                        }}>
+                            <div style={{
+                                background: 'var(--surface)',
+                                width: '100%',
+                                maxWidth: '400px',
+                                borderRadius: '16px',
+                                padding: '24px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '16px'
+                            }}>
+                                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Edit Gym</h2>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Gym Name</label>
+                                    <input
+                                        type="text"
+                                        value={editingGym.newName}
+                                        onChange={(e) => setEditingGym({ ...editingGym, newName: e.target.value })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            border: '1px solid var(--border)',
+                                            background: 'var(--background)',
+                                            color: 'var(--text-main)'
+                                        }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Address</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Type to search..."
+                                        value={editingGym.newAddress || ''}
+                                        onChange={(e) => {
+                                            setEditingGym({ ...editingGym, newAddress: e.target.value });
+                                            // Update the search query state used by existing hook
+                                            setAddressSearchQuery(e.target.value);
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            border: '1px solid var(--border)',
+                                            background: 'var(--background)',
+                                            color: 'var(--text-main)'
+                                        }}
+                                    />
+                                    {/* Address Search Results in Modal */}
+                                    {editingGym && addressSearchQuery.length > 2 && searchResults.length > 0 && (
+                                        <div style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '8px',
+                                            maxHeight: '150px',
+                                            overflowY: 'auto',
+                                            marginTop: '8px',
+                                            background: 'var(--surface-highlight)',
+                                            borderRadius: '8px',
+                                            padding: '8px'
+                                        }}>
+                                            {searchResults.map(result => (
+                                                <div
+                                                    key={result.place_id}
+                                                    onClick={() => {
+                                                        setEditingGym({ ...editingGym, newAddress: result.display_name });
+                                                        setSearchResults([]); // Clear results
+                                                        setAddressSearchQuery(''); // Stop searching
+                                                    }}
+                                                    style={{
+                                                        padding: '8px',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer',
+                                                        borderBottom: '1px solid var(--border)'
+                                                    }}
+                                                >
+                                                    {result.display_name}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Map Picker Toggle in Edit Modal */}
+                                <div style={{ marginTop: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                        <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Location (Pin)</label>
+                                        <button
+                                            onClick={() => setShowMapPicker(!showMapPicker)}
+                                            style={{ fontSize: '0.8rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                                        >
+                                            {showMapPicker ? 'Hide Map' : 'Adjust Pin on Map'}
+                                        </button>
+                                    </div>
+
+                                    {showMapPicker && (
+                                        <div style={{ marginBottom: '16px' }}>
+                                            <MapPicker
+                                                initialLat={parsePoint(editingGym.location)?.lat || 51.1657}
+                                                initialLng={parsePoint(editingGym.location)?.lng || 10.4515}
+                                                onLocationSelect={(lat, lng) => {
+                                                    if (editingGym.newLocation?.lat === lat && editingGym.newLocation?.lng === lng) return;
+                                                    setEditingGym(prev => ({ ...prev, newLocation: { lat, lng } }));
+                                                }}
+                                            />
+                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                                                Drag the marker to the exact gym entrance.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                    <button
+                                        onClick={() => { setEditingGym(null); setShowMapPicker(false); }}
+                                        style={{
+                                            flex: 1,
+                                            padding: '12px',
+                                            background: 'transparent',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: '8px',
+                                            color: 'var(--text-muted)',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            if (!editingGym.newName) return alert("Name is required");
+                                            try {
+                                                const updates = {
+                                                    name: editingGym.newName,
+                                                    address: editingGym.newAddress
+                                                };
+                                                // If location was changed via map
+                                                if (editingGym.newLocation) {
+                                                    updates.location = `POINT(${editingGym.newLocation.lng} ${editingGym.newLocation.lat})`;
+                                                    console.log("Applying new location:", updates.location);
+                                                } else {
+                                                    console.log("No new location selected via map.");
+                                                }
+                                                console.log("Final updates payload:", updates);
+
+                                                await updateGym(editingGym.id, updates);
+                                                setEditingGym(null);
+                                                setShowMapPicker(false);
+                                                setSuccessMessage("Gym updated!");
+                                                // window.location.reload(); // Hard refresh removed to prevent loop/crash
+                                            } catch (err) {
+                                                alert("Failed to update: " + err.message);
                                             }
                                         }}
                                         style={{
+                                            flex: 1,
                                             padding: '12px',
-                                            background: 'var(--surface)',
-                                            border: `1px solid ${result.isExisting ? 'var(--primary)' : 'var(--border)'}`,
+                                            background: 'var(--primary)',
+                                            border: 'none',
                                             borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s'
+                                            color: '#000',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-highlight)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface)'}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            {result.isExisting && <span style={{ color: 'var(--primary)', fontSize: '1.2rem' }}>🏋️</span>}
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: result.isExisting ? 'bold' : 'normal', color: result.isExisting ? 'var(--primary)' : 'var(--text-main)' }}>
-                                                    {result.name || result.display_name}
-                                                </div>
-                                                {result.isExisting && result.display_name && (
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{result.display_name}</div>
-                                                )}
-                                            </div>
-                                            {result.isExisting && <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 'bold' }}>JOIN</span>}
-                                        </div>
-                                    </div>
-                                ))}
+                                        Save Details
+                                    </button>
+                                </div>
                             </div>
-                        )}
+                        </div>
+                    )
+                }
 
-                        {/* No results - offer to create new gym */}
-                        {searchQuery.length >= 2 && searchResults.length === 0 && !manualLocation && (
-                            <div style={{ textAlign: 'center', padding: '24px', background: 'var(--surface)', borderRadius: '8px', marginBottom: '16px' }}>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>No gyms found with that name</p>
-                                <button
-                                    onClick={handleCreateNewGym}
-                                    style={{ padding: '12px 24px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
-                                >
-                                    Create New Gym
-                                </button>
-                                <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '12px' }}>
-                                    Create a new gym location
-                                </p>
-                            </div>
-                        )}
 
-                        {/* Selected location - create new gym */}
-                        {manualLocation && (
-                            <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                                <p style={{ fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-muted)' }}>Creating new gym at:</p>
-                                <p style={{ fontSize: '0.9rem', marginBottom: '16px', fontWeight: 'bold' }}>{manualLocation.name}</p>
-                                <input
-                                    type="text"
-                                    placeholder="Gym Name (e.g. Gold's Gym)"
-                                    value={newGymLabel}
-                                    onChange={(e) => setNewGymLabel(e.target.value)}
-                                    style={{ display: 'block', width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
-                                />
+                {
+                    addMode === 'gps' && (
+                        <div style={{ textAlign: 'center' }}>
+                            <p style={{ marginBottom: '16px' }}>
+                                {currentLocation ? `Found: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : "Locating..."}
+                            </p>
+                            {warning && <p style={{ color: 'var(--error)', fontSize: '0.9rem', marginBottom: '16px' }}>{warning}</p>}
+
+                            <input
+                                type="text"
+                                placeholder="Label (e.g. Work Gym)"
+                                value={newGymLabel}
+                                onChange={(e) => setNewGymLabel(e.target.value)}
+                                style={{ display: 'block', width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
+                            />
+
+                            {currentLocation ? (
                                 <button
-                                    onClick={() => handleSaveGym(newGymLabel || manualLocation.name.split(',')[0], manualLocation.lat, manualLocation.lng, manualLocation.name, 'manual')}
+                                    onClick={() => handleSaveGym('GPS Location', currentLocation.lat, currentLocation.lng, null, 'gps')}
                                     style={{ width: '100%', padding: '16px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '100px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
                                 >
-                                    Create & Add Gym
+                                    Save This Location
                                 </button>
-                            </div>
-                        )}
-                        <button onClick={() => { setAddMode(false); setSearchQuery(''); setSearchResults([]); setManualLocation(null); }} style={{ width: '100%', marginTop: '16px', padding: '12px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>Cancel</button>
-                    </div>
-                )}
+                            ) : (
+                                <div className="spinner" style={{ margin: '0 auto' }}></div>
+                            )}
+                            <button onClick={() => setAddMode(false)} style={{ marginTop: '16px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>Cancel</button>
+                        </div>
+                    )
+                }
 
-                {/* New Create Mode: Name First, Then Address */}
-                {addMode === 'create' && (
-                    <div>
-                        <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-main)' }}>Create New Gym</h3>
-
-                        {/* Step 1: Enter Gym Name */}
-                        <input
-                            type="text"
-                            placeholder="Gym Name (e.g. Gold's Gym Downtown)"
-                            value={newGymName}
-                            onChange={(e) => setNewGymName(e.target.value)}
-                            style={{ display: 'block', width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
-                        />
-
-                        {/* Step 2: Search for Address */}
-                        {newGymName && (
-                            <>
+                {
+                    addMode === 'manual' && (
+                        <div>
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                                 <input
                                     type="text"
-                                    placeholder="Search address (e.g. 123 Main St, City)"
-                                    value={addressSearchQuery}
-                                    onChange={(e) => setAddressSearchQuery(e.target.value)}
-                                    style={{ width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
+                                    placeholder="Search gym by name..."
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        handleSearchGym(e.target.value);
+                                    }}
+                                    style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
                                 />
-                                {addressSearchQuery.length > 0 && addressSearchQuery.length < 3 && (
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '-12px', marginBottom: '16px' }}>Type at least 3 characters to search...</p>
-                                )}
+                            </div>
 
-                                {/* Address Search Results */}
-                                {searchResults.length > 0 && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
-                                        {searchResults.map(result => (
-                                            <div
-                                                key={result.place_id}
-                                                onClick={() => setManualLocation({ lat: result.lat, lng: result.lng, name: result.display_name })}
-                                                style={{ padding: '12px', background: manualLocation?.lat === result.lat ? 'var(--primary-dim)' : 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}
-                                            >
-                                                <div style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{result.display_name}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Save Button */}
-                                {manualLocation && (
-                                    <div style={{ marginTop: '16px', padding: '16px', background: 'var(--surface)', borderRadius: '8px' }}>
-                                        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Ready to create:</p>
-                                        <p style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '4px' }}>{newGymName}</p>
-                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '16px' }}>{manualLocation.name}</p>
-                                        <button
-                                            onClick={() => handleSaveGym(newGymName, manualLocation.lat, manualLocation.lng, manualLocation.name, 'manual')}
-                                            style={{ width: '100%', padding: '16px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '100px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
+                            {/* Search Results */}
+                            {searchResults.length > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
+                                    {searchResults.map(result => (
+                                        <div
+                                            key={result.isExisting ? result.id : result.place_id}
+                                            onClick={() => {
+                                                if (result.isExisting) {
+                                                    // Join existing gym
+                                                    handleJoinExistingGym(result.id, result.name);
+                                                } else {
+                                                    // Select address for new gym
+                                                    setManualLocation({ lat: result.lat, lng: result.lng, name: result.display_name });
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '12px',
+                                                background: 'var(--surface)',
+                                                border: `1px solid ${result.isExisting ? 'var(--primary)' : 'var(--border)'}`,
+                                                borderRadius: '8px',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-highlight)'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface)'}
                                         >
-                                            Create & Add Gym
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {result.isExisting && <span style={{ color: 'var(--primary)', fontSize: '1.2rem' }}>🏋️</span>}
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: result.isExisting ? 'bold' : 'normal', color: result.isExisting ? 'var(--primary)' : 'var(--text-main)' }}>
+                                                        {result.name || result.display_name}
+                                                    </div>
+                                                    {result.isExisting && result.display_name && (
+                                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{result.display_name}</div>
+                                                    )}
+                                                </div>
+                                                {result.isExisting && <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 'bold' }}>JOIN</span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* No results - offer to create new gym */}
+                            {searchQuery.length >= 2 && searchResults.length === 0 && !manualLocation && (
+                                <div style={{ textAlign: 'center', padding: '24px', background: 'var(--surface)', borderRadius: '8px', marginBottom: '16px' }}>
+                                    <p style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>No gyms found with that name</p>
+                                    <button
+                                        onClick={handleCreateNewGym}
+                                        style={{ padding: '12px 24px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                                    >
+                                        Create New Gym
+                                    </button>
+                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '12px' }}>
+                                        Create a new gym location
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Selected location - create new gym */}
+                            {manualLocation && (
+                                <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                                    <p style={{ fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-muted)' }}>Creating new gym at:</p>
+                                    <p style={{ fontSize: '0.9rem', marginBottom: '16px', fontWeight: 'bold' }}>{manualLocation.name}</p>
+                                    <input
+                                        type="text"
+                                        placeholder="Gym Name (e.g. Gold's Gym)"
+                                        value={newGymLabel}
+                                        onChange={(e) => setNewGymLabel(e.target.value)}
+                                        style={{ display: 'block', width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
+                                    />
+
+                                    {/* Map Picker for New Gym - Always Visible in Manual Mode */}
+                                    <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surface)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                                📍 Location Pin
+                                                <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                                                    {manualLocation?.lat ? `${manualLocation.lat.toFixed(4)}, ${manualLocation.lng.toFixed(4)}` : 'No location set'}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setShowMapPicker(!showMapPicker)}
+                                                style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline', fontWeight: 'bold' }}
+                                            >
+                                                {showMapPicker ? 'Hide Map' : (manualLocation ? 'Adjust Pin' : 'Set Pin on Map')}
+                                            </button>
+                                        </div>
+
+                                        {showMapPicker && (
+                                            <MapPicker
+                                                initialLat={manualLocation?.lat || 51.1657}
+                                                initialLng={manualLocation?.lng || 10.4515}
+                                                onLocationSelect={(lat, lng) => {
+                                                    setManualLocation(prev => ({ ...prev, lat, lng, name: prev?.name || 'Custom Location' }));
+                                                }}
+                                            />
+                                        )}
+                                    </div>
+
+
+                                    <button
+                                        onClick={() => handleSaveGym(newGymLabel || manualLocation.name.split(',')[0], manualLocation.lat, manualLocation.lng, manualLocation.name, 'manual')}
+                                        style={{ width: '100%', padding: '16px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '100px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
+                                    >
+                                        Create & Add Gym
+                                    </button>
+                                </div>
+                            )}
+                            <button onClick={() => { setAddMode(false); setSearchQuery(''); setSearchResults([]); setManualLocation(null); }} style={{ width: '100%', marginTop: '16px', padding: '12px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>Cancel</button>
+                        </div>
+                    )
+                }
+
+                {/* New Create Mode: Name First, Then Address */}
+                {
+                    addMode === 'create' && (
+                        <div>
+                            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-main)' }}>Create New Gym</h3>
+
+                            {/* Step 1: Enter Gym Name */}
+                            <input
+                                type="text"
+                                placeholder="Gym Name (e.g. Gold's Gym Downtown)"
+                                value={newGymName}
+                                onChange={(e) => setNewGymName(e.target.value)}
+                                style={{ display: 'block', width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
+                            />
+
+                            {/* Step 2: Search for Address or Use Map */}
+                            {newGymName && (
+                                <>
+                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Search address (e.g. 123 Main St, City)"
+                                            value={addressSearchQuery}
+                                            onChange={(e) => setAddressSearchQuery(e.target.value)}
+                                            style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                // If no location set yet, default to central Europe or user location? 
+                                                // Ideally we just open the map and let them pick.
+                                                // We need to set manualLocation to something to trigger the map view if not already set?
+                                                // Or toggle a map view separate from the confirmation.
+                                                // Let's toggle map view directly here.
+                                                if (!manualLocation) {
+                                                    setManualLocation({ lat: 51.1657, lng: 10.4515, name: 'Custom Location' });
+                                                }
+                                                setShowMapPicker(!showMapPicker);
+                                            }}
+                                            style={{ padding: '0 16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: '1.2rem' }}
+                                            title="Pick on Map"
+                                        >
+                                            🗺️
                                         </button>
                                     </div>
-                                )}
-                            </>
-                        )}
 
-                        <button onClick={() => { setAddMode(false); setSearchQuery(''); setSearchResults([]); setManualLocation(null); setNewGymName(''); setAddressSearchQuery(''); }} style={{ width: '100%', marginTop: '16px', padding: '12px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>Cancel</button>
-                    </div>
-                )}
-            </div>
+                                    {showMapPicker && (
+                                        <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surface)' }}>
+                                            <MapPicker
+                                                initialLat={Number(manualLocation?.lat || 51.1657)}
+                                                initialLng={Number(manualLocation?.lng || 10.4515)}
+                                                onLocationSelect={(lat, lng) => {
+                                                    setManualLocation(prev => ({ ...prev, lat, lng, name: prev?.name || 'Custom Location' }));
+                                                }}
+                                            />
+                                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px', textAlign: 'center' }}>
+                                                Tip: Drag the pin to your exact gym location.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {addressSearchQuery.length > 0 && addressSearchQuery.length < 3 && (
+                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '-12px', marginBottom: '16px' }}>Type at least 3 characters to search...</p>
+                                    )}
+
+                                    {/* Address Search Results */}
+                                    {searchResults.length > 0 && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
+                                            {searchResults.map(result => (
+                                                <div
+                                                    key={result.place_id}
+                                                    onClick={() => setManualLocation({ lat: result.lat, lng: result.lng, name: result.display_name })}
+                                                    style={{ padding: '12px', background: manualLocation?.lat === result.lat ? 'var(--primary-dim)' : 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}
+                                                >
+                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{result.display_name}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Save Button */}
+                                    {manualLocation && (
+                                        <div style={{ marginTop: '16px', padding: '16px', background: 'var(--surface)', borderRadius: '8px' }}>
+                                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Ready to create:</p>
+                                            <p style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '4px' }}>{newGymName}</p>
+                                            <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '16px' }}>{manualLocation.name}</p>
+
+                                            {/* Map Picker for Refinement */}
+                                            <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--background)' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                    <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                                        📍 Location Pin
+                                                        <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                                                            {Number(manualLocation.lat).toFixed(4)}, {Number(manualLocation.lng).toFixed(4)}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setShowMapPicker(!showMapPicker)}
+                                                        style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline', fontWeight: 'bold' }}
+                                                    >
+                                                        {showMapPicker ? 'Hide Map' : 'Adjust Pin'}
+                                                    </button>
+                                                </div>
+
+                                                {showMapPicker && (
+                                                    <MapPicker
+                                                        initialLat={manualLocation.lat}
+                                                        initialLng={manualLocation.lng}
+                                                        onLocationSelect={(lat, lng) => {
+                                                            setManualLocation(prev => ({ ...prev, lat, lng }));
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => handleSaveGym(newGymName, manualLocation.lat, manualLocation.lng, manualLocation.name, 'manual')}
+                                                style={{ width: '100%', padding: '16px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '100px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
+                                            >
+                                                Create & Add Gym
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            <button onClick={() => { setAddMode(false); setSearchQuery(''); setSearchResults([]); setManualLocation(null); setNewGymName(''); setAddressSearchQuery(''); }} style={{ width: '100%', marginTop: '16px', padding: '12px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>Cancel</button>
+                        </div>
+                    )
+                }
+            </div >
         );
     }
 
