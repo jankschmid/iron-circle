@@ -18,6 +18,7 @@ export default function EditRoutinePage({ params }) {
 
     const [isLoading, setIsLoading] = useState(true);
     const [routineName, setRoutineName] = useState('');
+    const [visibility, setVisibility] = useState('private');
     const [selectedExercises, setSelectedExercises] = useState([]);
     const [isSelecting, setIsSelecting] = useState(false);
 
@@ -32,6 +33,7 @@ export default function EditRoutinePage({ params }) {
         const template = workoutTemplates.find(t => t.id === id);
         if (template) {
             setRoutineName(template.name);
+            setVisibility(template.visibility || 'private');
             // Hydrate exercises with defaults if missing sets array
             const hydratedExercises = template.exercises.map(ex => {
                 // Find full exercise details to get the name
@@ -78,6 +80,7 @@ export default function EditRoutinePage({ params }) {
 
         updateWorkoutTemplate(id, {
             name: routineName,
+            visibility: visibility,
             exercises: selectedExercises.map(ex => ({
                 id: ex.id,
                 name: ex.name,
@@ -289,9 +292,29 @@ export default function EditRoutinePage({ params }) {
                             border: '1px solid var(--border)',
                             borderRadius: 'var(--radius-md)',
                             color: 'var(--foreground)',
-                            fontSize: '1rem'
+                            fontSize: '1rem',
+                            marginBottom: '12px'
                         }}
                     />
+
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <label style={{ color: 'var(--text-muted)' }}>Visibility:</label>
+                        <select
+                            value={visibility}
+                            onChange={(e) => setVisibility(e.target.value)}
+                            style={{
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                background: 'var(--surface)',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-main)',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <option value="public">Public (Friends can copy)</option>
+                            <option value="private">Private (Only me)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div style={{ marginBottom: '32px' }}>

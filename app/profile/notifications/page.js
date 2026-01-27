@@ -56,14 +56,14 @@ export default function NotificationsPage() {
                         .from('notifications')
                         .select('*')
                         .eq('user_id', user.id)
-                        .eq('type', 'workout_invite')
+                        .in('type', ['workout_invite', 'template_share', 'workout_share']) // Fetch all types
                         .eq('read', false)
                         .order('created_at', { ascending: false });
 
                     if (notifError) throw notifError;
                     if (!notifData || notifData.length === 0) return [];
 
-                    const inviterIds = notifData.map(n => n.data?.inviterId).filter(Boolean);
+                    const inviterIds = notifData.map(n => n.data?.inviterId || n.data?.sharerId).filter(Boolean);
                     const { data: profilesData } = await supabase
                         .from('profiles')
                         .select('id, name, username, avatar_url')
@@ -73,7 +73,7 @@ export default function NotificationsPage() {
                         const senderProfile = profilesData?.find(p => p.id === n.data?.inviterId);
                         return {
                             ...n,
-                            type: 'workout_invite',
+                            type: n.type, // Keep original type
                             sender: senderProfile || { name: 'Unknown', username: 'unknown', avatar_url: null }
                         };
                     });
@@ -173,7 +173,11 @@ export default function NotificationsPage() {
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                     {req.type === 'friend_request'
                                         ? `@${req.sender.username} • sent a friend request`
-                                        : `@${req.sender.username} • invited you to workout at ${req.data?.gymName || 'the gym'}`
+                                        : req.type === 'workout_invite'
+                                            ? `@${req.sender.username} • invited you to workout at ${req.data?.gymName || 'the gym'}`
+                                            : req.type === 'template_share'
+                                                ? `@${req.sender.username} • shared a workout routine with you`
+                                                : `@${req.sender.username} • shared a finished workout`
                                     }
                                 </div>
 
@@ -244,6 +248,24 @@ export default function NotificationsPage() {
                                                 Decline
                                             </button>
                                         </>
+                                    )}
+
+                                    {(req.type === 'template_share' || req.type === 'workout_share') && (
+                                        <button
+                                            onClick={() => handleAction(req, 'view')}
+                                            style={{
+                                                flex: 1,
+                                                padding: '8px',
+                                                background: 'var(--surface-highlight)',
+                                                color: 'var(--text-main)',
+                                                border: '1px solid var(--border)',
+                                                borderRadius: '8px',
+                                                fontWeight: '600',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            Dismiss
+                                        </button>
                                     )}
                                 </div>
                             </div>

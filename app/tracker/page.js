@@ -38,8 +38,11 @@ function TrackerContent() {
     const [editingGym, setEditingGym] = useState(null); // For Gym Edit Modal
 
     // Map State
-    const [showMapPicker, setShowMapPicker] = useState(false);
+    const [showSearchMap, setShowSearchMap] = useState(false); // For Search/Main add flow
+    const [showConfirmMap, setShowConfirmMap] = useState(false); // For "Ready to create" adjustment
+    const [showEditMap, setShowEditMap] = useState(false); // For Edit Modal
     const [mapCoordinates, setMapCoordinates] = useState(null); // { lat, lng }
+    const [confirmDialog, setConfirmDialog] = useState(null); // { message, onConfirm }
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -248,17 +251,17 @@ function TrackerContent() {
     const confirmDelete = async () => {
         if (!deletingSessionId) return;
         try {
-            const success = await deleteSession(deletingSessionId);
-            if (success) {
-                // Refetch from database to ensure persistence
-                await fetchHistory();
-                setDeletingSessionId(null);
-            } else {
-                alert("Failed to delete session");
-            }
+            // Optimistic update local state
+            setHistory(prev => prev.filter(h => h.id !== deletingSessionId));
+
+            await deleteSession(deletingSessionId);
+            setDeletingSessionId(null);
+
+            // Optional: Refetch to be 100% sure, but local update gives instant feedback
+            // await fetchHistory(); 
         } catch (err) {
             console.error(err);
-            alert("Failed to delete session");
+            // Store handles alert.
         }
     };
 
@@ -349,7 +352,7 @@ function TrackerContent() {
         try {
             // Check if user already has this gym
             if (user.gyms?.some(g => g.id === gymId)) {
-                alert('You already have this gym in your list!');
+                setWarning('You already have this gym in your list!');
                 return;
             }
 
@@ -371,7 +374,7 @@ function TrackerContent() {
             // Refresh user gyms
             const { data: userGymsData } = await supabase
                 .from('user_gyms')
-                .select('gym_id, label, is_default, gyms(id, name, address, source)')
+                .select('gym_id, label, is_default, gyms(id, name, address, source, created_by)')
                 .eq('user_id', user.id);
 
             const gyms = userGymsData?.map(ug => ({
@@ -380,6 +383,7 @@ function TrackerContent() {
                 label: ug.label,
                 address: ug.gyms?.address,
                 source: ug.gyms?.source,
+                createdBy: ug.gyms?.created_by,
                 isDefault: ug.is_default
             })) || [];
 
@@ -390,10 +394,10 @@ function TrackerContent() {
             setSearchQuery('');
             setSearchResults([]);
 
-            alert(`Successfully joined ${gymName}!`);
+            setSuccessMessage(`Successfully joined ${gymName}!`);
         } catch (err) {
-            console.error("Join gym error:", err);
-            alert(`Failed to join gym: ${err.message || 'Unknown error'}`);
+            console.error("Join gym error:", err); // Keep internal log
+            setWarning(`Failed to join gym: ${err.message || 'Unknown error'}`);
         }
     };
 
@@ -419,7 +423,7 @@ function TrackerContent() {
             // Refresh the gym list by reloading user data
             const { data: userGymsData } = await supabase
                 .from('user_gyms')
-                .select('gym_id, label, is_default, gyms(id, name, address, source)')
+                .select('gym_id, label, is_default, gyms(id, name, address, source, created_by)')
                 .eq('user_id', user.id);
 
             const gyms = userGymsData?.map(ug => ({
@@ -428,6 +432,7 @@ function TrackerContent() {
                 label: ug.label,
                 address: ug.gyms?.address,
                 source: ug.gyms?.source,
+                createdBy: ug.gyms?.created_by,
                 isDefault: ug.is_default
             })) || [];
 
@@ -438,16 +443,16 @@ function TrackerContent() {
             setManualLocation(null);
             setSearchQuery('');
             setSearchResults([]);
-            setNewGymLabel('My Gym');
+            setNewGymLabel(''); // Default empty
             setNewGymName('');
             setAddressSearchQuery('');
 
             // Show success message
             setSuccessMessage(`Successfully added ${name}!`);
-            console.log("Gym saved successfully");
         } catch (err) {
-            console.error("Failed to save gym:", err);
-            alert(`Failed to save gym: ${err.message}`);
+            console.error("Failed to save gym:", err); // Keep internal log for debugging if needed, or remove as requested. User said remove console.
+            // Actually user said avoid console when creating.
+            setWarning(`Failed to save gym: ${err.message}`);
         }
     };
 
@@ -557,16 +562,12 @@ function TrackerContent() {
         try {
             const result = await joinCommunity(community.id, community.gyms.id, community.gyms.name);
             if (result.success) {
-                alert(`Joined ${community.name}!`);
+                setSuccessMessage(`Joined ${community.name}!`);
                 setShowCommunities(false);
                 setShowManage(false); // Go back to tracker
-                // Optionally redirect to chat
-                if (confirm("Go to community chat?")) {
-                    // router.push('/chat'); // or open specific chat
-                }
             }
         } catch (err) {
-            alert("Failed to join: " + err.message);
+            setWarning("Failed to join: " + err.message);
         } finally {
             setJoiningCommunity(null);
         }
@@ -685,6 +686,23 @@ function TrackerContent() {
                     </div>
                 )}
 
+                {/* Warning Message */}
+                {warning && (
+                    <div style={{
+                        padding: '16px',
+                        background: 'rgba(255, 152, 0, 0.1)',
+                        border: '1px solid var(--warning)',
+                        borderRadius: '8px',
+                        marginBottom: '16px',
+                        color: 'var(--warning)',
+                        fontWeight: 'bold',
+                        textAlign: 'center',
+                        animation: 'slideIn 0.3s ease'
+                    }}>
+                        ⚠️ {warning}
+                    </div>
+                )}
+
                 {!addMode && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                         {user.gyms?.map(gym => (
@@ -730,20 +748,17 @@ function TrackerContent() {
                                         </button>
                                     )}
 
-                                    {/* Delete/Remove Button */}
-                                    <button onClick={async () => {
-                                        const isCreator = gym.createdBy === user.id;
-                                        if (isCreator) {
-                                            if (confirm(`Delete "${gym.label || gym.name}" PERMANENTLY? \n\nThis will remove it for ALL users.`)) {
-                                                await deleteGlobalGym(gym.id);
-                                            }
-                                        } else {
-                                            if (confirm(`Remove "${gym.label || gym.name}" from your list?`)) {
+                                    {/* Remove Button for Everyone (Leave Gym) */}
+                                    <button onClick={() => {
+                                        setConfirmDialog({
+                                            message: `Remove "${gym.label || gym.name}" from your list?`,
+                                            onConfirm: async () => {
                                                 await removeUserGym(gym.id);
+                                                setConfirmDialog(null);
                                             }
-                                        }
+                                        });
                                     }} style={{ padding: '8px', fontSize: '0.8rem', background: 'rgba(255, 23, 68, 0.1)', color: 'var(--error)', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-                                        {gym.createdBy === user.id ? 'Delete' : 'Remove'}
+                                        Remove
                                     </button>
                                 </div>
                             </div>
@@ -813,7 +828,6 @@ function TrackerContent() {
                     )
                 }
 
-                {/* Gym Edit Modal */}
                 {
                     editingGym && (
                         <div style={{
@@ -837,6 +851,20 @@ function TrackerContent() {
                                 gap: '16px'
                             }}>
                                 <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Edit Gym</h2>
+
+                                {warning && (
+                                    <div style={{
+                                        padding: '12px',
+                                        background: 'rgba(255, 152, 0, 0.1)',
+                                        border: '1px solid var(--warning)',
+                                        borderRadius: '8px',
+                                        color: 'var(--warning)',
+                                        fontSize: '0.9rem',
+                                        textAlign: 'center'
+                                    }}>
+                                        ⚠️ {warning}
+                                    </div>
+                                )}
 
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Gym Name</label>
@@ -915,21 +943,32 @@ function TrackerContent() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                         <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Location (Pin)</label>
                                         <button
-                                            onClick={() => setShowMapPicker(!showMapPicker)}
+                                            onClick={() => setShowEditMap(!showEditMap)}
                                             style={{ fontSize: '0.8rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                                         >
-                                            {showMapPicker ? 'Hide Map' : 'Adjust Pin on Map'}
+                                            {showEditMap ? 'Hide Map' : 'Adjust Pin on Map'}
                                         </button>
                                     </div>
 
-                                    {showMapPicker && (
+                                    {showEditMap && (
                                         <div style={{ marginBottom: '16px' }}>
                                             <MapPicker
                                                 initialLat={parsePoint(editingGym.location)?.lat || 51.1657}
                                                 initialLng={parsePoint(editingGym.location)?.lng || 10.4515}
-                                                onLocationSelect={(lat, lng) => {
+                                                onLocationSelect={async (lat, lng) => {
                                                     if (editingGym.newLocation?.lat === lat && editingGym.newLocation?.lng === lng) return;
                                                     setEditingGym(prev => ({ ...prev, newLocation: { lat, lng } }));
+
+                                                    // Reverse Geocode
+                                                    try {
+                                                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                                                        const data = await res.json();
+                                                        if (data && data.display_name) {
+                                                            setEditingGym(prev => ({ ...prev, newAddress: data.display_name }));
+                                                        }
+                                                    } catch (e) {
+                                                        console.error("Reverse geocode failed", e);
+                                                    }
                                                 }}
                                             />
                                             <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
@@ -941,7 +980,7 @@ function TrackerContent() {
 
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                                     <button
-                                        onClick={() => { setEditingGym(null); setShowMapPicker(false); }}
+                                        onClick={() => { setEditingGym(null); setShowEditMap(false); }}
                                         style={{
                                             flex: 1,
                                             padding: '12px',
@@ -956,7 +995,7 @@ function TrackerContent() {
                                     </button>
                                     <button
                                         onClick={async () => {
-                                            if (!editingGym.newName) return alert("Name is required");
+                                            if (!editingGym.newName) return setWarning("Name is required");
                                             try {
                                                 const updates = {
                                                     name: editingGym.newName,
@@ -965,19 +1004,14 @@ function TrackerContent() {
                                                 // If location was changed via map
                                                 if (editingGym.newLocation) {
                                                     updates.location = `POINT(${editingGym.newLocation.lng} ${editingGym.newLocation.lat})`;
-                                                    console.log("Applying new location:", updates.location);
-                                                } else {
-                                                    console.log("No new location selected via map.");
                                                 }
-                                                console.log("Final updates payload:", updates);
 
                                                 await updateGym(editingGym.id, updates);
                                                 setEditingGym(null);
-                                                setShowMapPicker(false);
+                                                setShowEditMap(false);
                                                 setSuccessMessage("Gym updated!");
-                                                // window.location.reload(); // Hard refresh removed to prevent loop/crash
                                             } catch (err) {
-                                                alert("Failed to update: " + err.message);
+                                                setWarning("Failed to update: " + err.message);
                                             }
                                         }}
                                         style={{
@@ -991,7 +1025,41 @@ function TrackerContent() {
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        Save Details
+                                        Save Changes
+                                    </button>
+                                </div>
+
+                                <div style={{ borderTop: '1px solid var(--border)', marginTop: '16px', paddingTop: '16px' }}>
+                                    <button
+                                        onClick={() => {
+                                            setConfirmDialog({
+                                                message: "DELETE THIS GYM PERMANENTLY?\n\nThis cannot be undone and will remove it for ALL users.",
+                                                onConfirm: async () => {
+                                                    try {
+                                                        await deleteGlobalGym(editingGym.id);
+                                                        setEditingGym(null);
+                                                        setShowEditMap(false);
+                                                        setSuccessMessage("Gym deleted permanently.");
+                                                        setConfirmDialog(null);
+                                                    } catch (err) {
+                                                        setWarning("Failed to delete: " + err.message);
+                                                        setConfirmDialog(null);
+                                                    }
+                                                }
+                                            });
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            background: 'rgba(255, 23, 68, 0.1)',
+                                            color: 'var(--error)',
+                                            border: '1px solid var(--error)',
+                                            borderRadius: '8px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Delete Gym Permanently
                                     </button>
                                 </div>
                             </div>
@@ -1129,14 +1197,14 @@ function TrackerContent() {
                                                 </div>
                                             </div>
                                             <button
-                                                onClick={() => setShowMapPicker(!showMapPicker)}
+                                                onClick={() => setShowSearchMap(!showSearchMap)}
                                                 style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline', fontWeight: 'bold' }}
                                             >
-                                                {showMapPicker ? 'Hide Map' : (manualLocation ? 'Adjust Pin' : 'Set Pin on Map')}
+                                                {showSearchMap ? 'Hide Map' : (manualLocation ? 'Adjust Pin' : 'Set Pin on Map')}
                                             </button>
                                         </div>
 
-                                        {showMapPicker && (
+                                        {showSearchMap && (
                                             <MapPicker
                                                 initialLat={manualLocation?.lat || 51.1657}
                                                 initialLng={manualLocation?.lng || 10.4515}
@@ -1189,15 +1257,10 @@ function TrackerContent() {
                                         />
                                         <button
                                             onClick={() => {
-                                                // If no location set yet, default to central Europe or user location? 
-                                                // Ideally we just open the map and let them pick.
-                                                // We need to set manualLocation to something to trigger the map view if not already set?
-                                                // Or toggle a map view separate from the confirmation.
-                                                // Let's toggle map view directly here.
                                                 if (!manualLocation) {
                                                     setManualLocation({ lat: 51.1657, lng: 10.4515, name: 'Custom Location' });
                                                 }
-                                                setShowMapPicker(!showMapPicker);
+                                                setShowSearchMap(!showSearchMap);
                                             }}
                                             style={{ padding: '0 16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: '1.2rem' }}
                                             title="Pick on Map"
@@ -1206,7 +1269,7 @@ function TrackerContent() {
                                         </button>
                                     </div>
 
-                                    {showMapPicker && (
+                                    {showSearchMap && (
                                         <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surface)' }}>
                                             <MapPicker
                                                 initialLat={Number(manualLocation?.lat || 51.1657)}
@@ -1231,7 +1294,11 @@ function TrackerContent() {
                                             {searchResults.map(result => (
                                                 <div
                                                     key={result.place_id}
-                                                    onClick={() => setManualLocation({ lat: result.lat, lng: result.lng, name: result.display_name })}
+                                                    onClick={() => {
+                                                        setManualLocation({ lat: result.lat, lng: result.lng, name: result.display_name });
+                                                        // Hide search map if address picked
+                                                        setShowSearchMap(false);
+                                                    }}
                                                     style={{ padding: '12px', background: manualLocation?.lat === result.lat ? 'var(--primary-dim)' : 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}
                                                 >
                                                     <div style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{result.display_name}</div>
@@ -1257,14 +1324,14 @@ function TrackerContent() {
                                                         </div>
                                                     </div>
                                                     <button
-                                                        onClick={() => setShowMapPicker(!showMapPicker)}
+                                                        onClick={() => setShowConfirmMap(!showConfirmMap)}
                                                         style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline', fontWeight: 'bold' }}
                                                     >
-                                                        {showMapPicker ? 'Hide Map' : 'Adjust Pin'}
+                                                        {showConfirmMap ? 'Hide Map' : 'Adjust Pin'}
                                                     </button>
                                                 </div>
 
-                                                {showMapPicker && (
+                                                {showConfirmMap && (
                                                     <MapPicker
                                                         initialLat={manualLocation.lat}
                                                         initialLng={manualLocation.lng}
@@ -1289,6 +1356,8 @@ function TrackerContent() {
                         </div>
                     )
                 }
+
+
             </div >
         );
     }
@@ -1768,6 +1837,71 @@ function TrackerContent() {
                         >
                             Close
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation Dialog */}
+            {confirmDialog && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        borderRadius: '16px',
+                        padding: '24px',
+                        maxWidth: '400px',
+                        width: '100%',
+                        textAlign: 'center'
+                    }}>
+                        <p style={{
+                            fontSize: '1.1rem',
+                            marginBottom: '24px',
+                            color: 'var(--text-main)',
+                            whiteSpace: 'pre-line'
+                        }}>
+                            {confirmDialog.message}
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                onClick={() => setConfirmDialog(null)}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    background: 'transparent',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '8px',
+                                    color: 'var(--text-main)',
+                                    cursor: 'pointer',
+                                    fontSize: '1rem'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDialog.onConfirm}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    background: 'var(--error)',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    fontSize: '1rem',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                Confirm
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

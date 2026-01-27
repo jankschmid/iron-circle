@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 export default function ChatPage() {
-    const { user, joinSession } = useStore();
+    const { user, joinSession, acceptSharedTemplate } = useStore();
     const router = useRouter();
     const params = useParams();
     const supabase = createClient();
@@ -22,8 +22,19 @@ export default function ChatPage() {
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [conversation, setConversation] = useState(null);
+    const [isMember, setIsMember] = useState(true); // Track if user is a community member
     const messagesEndRef = useRef(null);
     const initializingRef = useRef(false);
+
+    // UI States
+    const [savedTemplates, setSavedTemplates] = useState(new Set());
+    const [toast, setToast] = useState(null); // { message, type }
+    const [confirmModal, setConfirmModal] = useState(null); // { message, onConfirm, onCancel }
+
+    const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
 
     // Initial Fetch
     useEffect(() => {
@@ -127,6 +138,32 @@ export default function ChatPage() {
 
                 setConversation(convoData);
 
+                // Check if user is a member (for communities)
+                let memberStatus = true;
+                if (convoData.type === 'community' || convoData.type === 'gym') {
+                    // First get the community ID from gym_id
+                    const { data: communityData } = await supabase
+                        .from('communities')
+                        .select('id')
+                        .eq('gym_id', convoData.gym_id)
+                        .maybeSingle();
+
+                    if (communityData) {
+                        const { data: memberCheck } = await supabase
+                            .from('community_members')
+                            .select('user_id')
+                            .eq('community_id', communityData.id)
+                            .eq('user_id', user.id)
+                            .maybeSingle();
+
+                        memberStatus = !!memberCheck;
+                    } else {
+                        memberStatus = false;
+                    }
+                }
+
+                setIsMember(memberStatus);
+
                 // 2. Fetch Messages
                 const { data: msgs, error: msgError } = await supabase
                     .from('messages')
@@ -166,32 +203,35 @@ export default function ChatPage() {
 
                 setMessages(hydratedMessages);
 
-                // 4. Subscribe
-                const channel = supabase
-                    .channel(`chat:${targetConvoId}`)
-                    .on('postgres_changes', {
-                        event: 'INSERT',
-                        schema: 'public',
-                        table: 'messages',
-                        filter: `conversation_id=eq.${targetConvoId}`
-                    }, async (payload) => {
-                        const newMsg = payload.new;
+                // 4. Subscribe (only if member) - use local variable!
+                let channel = null;
+                if (memberStatus) {
+                    channel = supabase
+                        .channel(`chat:${targetConvoId}`)
+                        .on('postgres_changes', {
+                            event: 'INSERT',
+                            schema: 'public',
+                            table: 'messages',
+                            filter: `conversation_id=eq.${targetConvoId}`
+                        }, async (payload) => {
+                            const newMsg = payload.new;
 
-                        // Don't add if I sent it (Optimistic UI handles it)
-                        if (newMsg.sender_id === user.id) return;
+                            // Don't add if I sent it (Optimistic UI handles it)
+                            if (newMsg.sender_id === user.id) return;
 
-                        const { data: senderProfile } = await supabase
-                            .from('profiles')
-                            .select('name, username, avatar_url')
-                            .eq('id', newMsg.sender_id)
-                            .single();
+                            const { data: senderProfile } = await supabase
+                                .from('profiles')
+                                .select('name, username, avatar_url')
+                                .eq('id', newMsg.sender_id)
+                                .single();
 
-                        setMessages(prev => [...prev, { ...newMsg, sender: senderProfile }]);
-                    })
-                    .subscribe();
+                            setMessages(prev => [...prev, { ...newMsg, sender: senderProfile }]);
+                        })
+                        .subscribe();
+                }
 
                 return () => {
-                    supabase.removeChannel(channel);
+                    if (channel) supabase.removeChannel(channel);
                 };
 
             } catch (err) {
@@ -211,7 +251,7 @@ export default function ChatPage() {
 
     const handleSend = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim() || !conversation) return;
+        if (!newMessage.trim() || !conversation || !isMember) return;
 
         const text = newMessage.trim();
         setNewMessage('');
@@ -391,7 +431,7 @@ export default function ChatPage() {
                     )}
                 </div>
 
-                {conversation && conversation.type === 'group' && (
+                {conversation && (conversation.type === 'group' || conversation.type === 'gym' || conversation.type === 'community') && (
                     <Link href={`/social/chat/${conversation.id}/info`} style={{ fontSize: '1.5rem', textDecoration: 'none', opacity: 0.8 }}>
                         ℹ️
                     </Link>
@@ -438,7 +478,72 @@ export default function ChatPage() {
                                 fontSize: '0.95rem',
                                 lineHeight: '1.4'
                             }}>
-                                {msg.type === 'invite' || msg.type === 'workout_invite' ? (
+                                {msg.type === 'template_share' ? (
+                                    <div style={{ minWidth: '200px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>📋</span>
+                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Workout Routine</span>
+                                        </div>
+                                        <div style={{ marginBottom: '8px', fontSize: '0.9rem' }}>
+                                            {msg.metadata?.name || 'Shared Routine'}
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                                            {msg.metadata?.exercisesCount || 0} Exercises
+                                        </div>
+                                        {!isMe && (
+                                            <button
+                                                onClick={() => {
+                                                    if (savedTemplates.has(msg.metadata?.templateId)) return;
+
+                                                    setConfirmModal({
+                                                        message: `Save "${msg.metadata?.name}" to your library?`,
+                                                        onConfirm: async () => {
+                                                            const success = await acceptSharedTemplate(msg.metadata, msg.sender?.name);
+                                                            if (success) {
+                                                                showToast("Routine added to your library!", 'success');
+                                                                setSavedTemplates(prev => new Set(prev).add(msg.metadata?.templateId));
+                                                            } else {
+                                                                showToast("Failed to save routine.", 'error');
+                                                            }
+                                                            setConfirmModal(null);
+                                                        },
+                                                        onCancel: () => setConfirmModal(null)
+                                                    });
+                                                }}
+                                                disabled={savedTemplates.has(msg.metadata?.templateId)}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '10px',
+                                                    background: savedTemplates.has(msg.metadata?.templateId) ? 'var(--surface-highlight)' : 'var(--primary)',
+                                                    color: savedTemplates.has(msg.metadata?.templateId) ? 'var(--text-muted)' : '#000',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    fontWeight: 'bold',
+                                                    cursor: savedTemplates.has(msg.metadata?.templateId) ? 'default' : 'pointer',
+                                                    fontSize: '0.9rem'
+                                                }}
+                                            >
+                                                {savedTemplates.has(msg.metadata?.templateId) ? 'Saved' : 'Save to Library'}
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : msg.type === 'workout_share' ? (
+                                    <div style={{ minWidth: '200px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>🏁</span>
+                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Finished Workout</span>
+                                        </div>
+                                        <div style={{ marginBottom: '8px', fontSize: '0.9rem' }}>
+                                            {msg.metadata?.name || 'Workout'}
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                                            Volume: {Math.round(msg.metadata?.volume || 0)} kg
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            Date: {new Date(msg.metadata?.date).toLocaleDateString()}
+                                        </div>
+                                    </div>
+                                ) : msg.type === 'invite' || msg.type === 'workout_invite' ? (
                                     <div style={{ minWidth: '200px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
                                             <span style={{ fontSize: '1.2rem' }}>🏋️</span>
@@ -537,39 +642,54 @@ export default function ChatPage() {
                         alignItems: 'center'
                     }}
                 >
-                    <input
-                        value={newMessage}
-                        onChange={e => setNewMessage(e.target.value)}
-                        placeholder="Type a message..."
-                        style={{
+                    {!isMember && (conversation?.type === 'community' || conversation?.type === 'gym') ? (
+                        <div style={{
                             flex: 1,
                             padding: '12px 20px',
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--foreground)',
-                            outline: 'none',
-                            fontSize: '1rem'
-                        }}
-                    />
-                    <button
-                        type="submit"
-                        disabled={!newMessage.trim()}
-                        style={{
-                            width: '44px',
-                            height: '44px',
-                            borderRadius: '50%',
-                            background: newMessage.trim() ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                            color: newMessage.trim() ? '#000' : 'rgba(255,255,255,0.3)',
-                            border: 'none',
-                            cursor: newMessage.trim() ? 'pointer' : 'default',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.2s',
-                            transform: newMessage.trim() ? 'scale(1)' : 'scale(0.95)'
+                            textAlign: 'center',
+                            color: 'var(--text-muted)',
+                            fontSize: '0.9rem'
                         }}>
-                        <span style={{ fontSize: '1.2rem', transform: 'rotate(-45deg)', display: 'block', marginTop: '-2px' }}>✈️</span>
-                    </button>
+                            🚫 You left this community. Messages are read-only.
+                        </div>
+                    ) : (
+                        <>
+                            <input
+                                value={newMessage}
+                                onChange={e => setNewMessage(e.target.value)}
+                                placeholder="Type a message..."
+                                disabled={!isMember}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px 20px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--foreground)',
+                                    outline: 'none',
+                                    fontSize: '1rem'
+                                }}
+                            />
+                            <button
+                                type="submit"
+                                disabled={!newMessage.trim() || !isMember}
+                                style={{
+                                    width: '44px',
+                                    height: '44px',
+                                    borderRadius: '50%',
+                                    background: newMessage.trim() && isMember ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+                                    color: newMessage.trim() && isMember ? '#000' : 'rgba(255,255,255,0.3)',
+                                    border: 'none',
+                                    cursor: newMessage.trim() && isMember ? 'pointer' : 'default',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s',
+                                    transform: newMessage.trim() && isMember ? 'scale(1)' : 'scale(0.95)'
+                                }}>
+                                <span style={{ fontSize: '1.2rem', transform: 'rotate(-45deg)', display: 'block', marginTop: '-2px' }}>✈️</span>
+                            </button>
+                        </>
+                    )}
                 </form>
             </div>
 
@@ -579,6 +699,69 @@ export default function ChatPage() {
                     to { opacity: 1; transform: translateY(0); }
                 }
             `}</style>
-        </div>
+
+            {/* Toast Notification */}
+            {
+                toast && (
+                    <div style={{
+                        position: 'fixed',
+                        bottom: '100px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: toast.type === 'error' ? 'var(--error)' : 'var(--success)',
+                        color: '#000',
+                        padding: '12px 24px',
+                        borderRadius: '100px',
+                        fontWeight: 'bold',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        zIndex: 2000,
+                        animation: 'fadeIn 0.3s ease-out'
+                    }}>
+                        {toast.message}
+                    </div>
+                )
+            }
+
+            {/* Confirmation Modal */}
+            {
+                confirmModal && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.8)', zIndex: 2000,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '20px'
+                    }}>
+                        <div style={{
+                            background: 'var(--surface)',
+                            padding: '24px',
+                            borderRadius: '16px',
+                            width: '100%',
+                            maxWidth: '320px',
+                            textAlign: 'center',
+                            border: '1px solid var(--border)'
+                        }}>
+                            <h3 style={{ marginBottom: '16px' }}>Confirm</h3>
+                            <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                                {confirmModal.message}
+                            </p>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    onClick={confirmModal.onCancel}
+                                    style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmModal.onConfirm}
+                                    style={{ flex: 1, padding: '12px', background: 'var(--primary)', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                    Confirm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 }

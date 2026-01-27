@@ -7,38 +7,90 @@ import { useStore } from '@/lib/store';
 
 export default function CreateRoutinePage() {
     const router = useRouter();
-    const { exercises, addWorkoutTemplate, addCustomExercise, deleteCustomExercise } = useStore();
+    const { exercises, addWorkoutTemplate, addCustomExercise, deleteCustomExercise, updateCustomExercise } = useStore();
     const [routineName, setRoutineName] = useState('');
-    // selectedExercises: Array of { ...exercise, sets: [{}, {}, ... ] }
+    const [visibility, setVisibility] = useState('public');
     const [selectedExercises, setSelectedExercises] = useState([]);
     const [isSelecting, setIsSelecting] = useState(false);
 
-    // Filter State
+    // Search & Filter State
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectedMuscle, setSelectedMuscle] = useState('All');
-    const MUSCLES = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Cardio', 'Other'];
+    const MUSCLES = ['All', 'Custom', 'Chest', 'Back', 'Legs', 'Calves', 'Shoulders', 'Biceps', 'Triceps', 'Traps', 'Neck', 'Core', 'Cardio', 'Other'];
 
-    // Custom Exercise State
-    const [customExerciseName, setCustomExerciseName] = useState('');
-    const [customMuscle, setCustomMuscle] = useState('Other');
+    // Custom Exercise Modal State
+    const [showCustomModal, setShowCustomModal] = useState(false);
+    const [editingExercise, setEditingExercise] = useState(null); // If set, we are editing
+    const [customFormName, setCustomFormName] = useState('');
+    const [customFormMuscle, setCustomFormMuscle] = useState('Other');
+
+    // Delete Confirmation State
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [exerciseToDelete, setExerciseToDelete] = useState(null);
 
     // Filtered Exercises
-    const filteredExercises = selectedMuscle === 'All'
-        ? exercises
-        : exercises.filter(ex => ex.muscle === selectedMuscle);
+    const filteredExercises = exercises.filter(ex => {
+        const matchesSearch = ex.name.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const handleAddCustom = async () => {
-        if (!customExerciseName.trim()) return;
-        const newEx = await addCustomExercise(customExerciseName, customMuscle);
+        let matchesMuscle = true;
+        if (selectedMuscle === 'Custom') {
+            matchesMuscle = ex.isCustom || ex.user_id;
+        } else if (selectedMuscle !== 'All') {
+            matchesMuscle = ex.muscle === selectedMuscle;
+        }
 
-        // Auto-select with 3 default sets
-        const exerciseWithDefaults = {
-            ...newEx,
-            sets: [{}, {}, {}] // Empty objects, just counting sets
-        };
-        setSelectedExercises(prev => [...prev, exerciseWithDefaults]);
+        return matchesMuscle && matchesSearch;
+    });
 
-        setCustomExerciseName('');
-        setCustomMuscle('Other');
+    const openAddModal = () => {
+        setEditingExercise(null);
+        setCustomFormName('');
+        setCustomFormMuscle('Other');
+        setShowCustomModal(true);
+    };
+
+    const openEditModal = (ex) => {
+        setEditingExercise(ex);
+        setCustomFormName(ex.name);
+        setCustomFormMuscle(ex.muscle);
+        setShowCustomModal(true);
+    };
+
+    const confirmDelete = (ex) => {
+        setExerciseToDelete(ex);
+        setShowDeleteConfirm(true);
+    };
+
+    const handleDelete = async () => {
+        if (exerciseToDelete) {
+            await deleteCustomExercise(exerciseToDelete.id);
+            // If it was selected, remove it
+            setSelectedExercises(prev => prev.filter(e => e.id !== exerciseToDelete.id));
+            setShowDeleteConfirm(false);
+            setExerciseToDelete(null);
+        }
+    };
+
+    const handleSaveCustom = async () => {
+        if (!customFormName.trim()) return;
+
+        if (editingExercise) {
+            // Update
+            const success = await updateCustomExercise(editingExercise.id, customFormName, customFormMuscle);
+            if (success) {
+                // Update selection if it was selected
+                setSelectedExercises(prev => prev.map(e => e.id === editingExercise.id ? { ...e, name: customFormName, muscle: customFormMuscle } : e));
+                setShowCustomModal(false);
+            }
+        } else {
+            // Create
+            const newEx = await addCustomExercise(customFormName, customFormMuscle);
+            if (newEx) {
+                // Auto-select
+                setSelectedExercises(prev => [...prev, newEx]);
+                setShowCustomModal(false);
+            }
+        }
     };
 
     const handleCreate = () => {
@@ -46,10 +98,11 @@ export default function CreateRoutinePage() {
 
         const newTemplate = {
             name: routineName,
+            visibility,
             exercises: selectedExercises.map(ex => ({
                 id: ex.id,
                 name: ex.name,
-                sets: ex.sets // Save the explicit list of sets
+                // Sets default to 3 logic in store
             }))
         };
 
@@ -61,45 +114,62 @@ export default function CreateRoutinePage() {
         if (selectedExercises.find(e => e.id === ex.id)) {
             setSelectedExercises(prev => prev.filter(e => e.id !== ex.id));
         } else {
-            // Add with 3 default sets
-            setSelectedExercises(prev => [...prev, {
-                ...ex,
-                sets: [{}, {}, {}]
-            }]);
+            setSelectedExercises(prev => [...prev, ex]);
         }
-    };
-
-    const addSet = (exId) => {
-        setSelectedExercises(prev => prev.map(ex => {
-            if (ex.id !== exId) return ex;
-            return {
-                ...ex,
-                sets: [...ex.sets, {}]
-            };
-        }));
-    };
-
-    const removeLastSet = (exId) => {
-        setSelectedExercises(prev => prev.map(ex => {
-            if (ex.id !== exId) return ex;
-            if (ex.sets.length <= 1) return ex; // Keep at least one set
-            return {
-                ...ex,
-                sets: ex.sets.slice(0, -1)
-            };
-        }));
     };
 
     if (isSelecting) {
         return (
             <div className="container" style={{ paddingBottom: '100px' }}>
-                <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <header style={{ padding: '24px 0 16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button onClick={() => setIsSelecting(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: 'var(--text-muted)' }}>←</button>
                     <h1 style={{ fontSize: '1.5rem' }}>Select Exercises</h1>
                 </header>
 
-                {/* Muscle Filter */}
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '16px', marginBottom: '16px', scrollbarWidth: 'none' }}>
+                {/* Search & Add Custom */}
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search exercises..."
+                        style={{
+                            flex: 1,
+                            padding: '12px',
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-md)',
+                            color: 'var(--foreground)',
+                            fontSize: '1rem'
+                        }}
+                    />
+                    <button
+                        onClick={openAddModal}
+                        style={{
+                            padding: '0 16px',
+                            background: 'var(--primary-dim)',
+                            color: 'var(--primary)',
+                            border: 'none',
+                            borderRadius: 'var(--radius-md)',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        + Custom
+                    </button>
+                </div>
+
+                {/* Muscle Filter - Improved Scroll */}
+                <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    overflowX: 'auto',
+                    paddingBottom: '8px', // Slightly adjusted
+                    marginBottom: '16px',
+                    whiteSpace: 'nowrap',
+                    scrollbarWidth: 'thin', // Show thin scrollbar
+                    scrollbarColor: 'var(--border) transparent'
+                }}>
                     {MUSCLES.map(muscle => (
                         <button
                             key={muscle}
@@ -110,8 +180,9 @@ export default function CreateRoutinePage() {
                                 border: selectedMuscle === muscle ? '1px solid var(--primary)' : '1px solid var(--border)',
                                 background: selectedMuscle === muscle ? 'var(--primary-dim)' : 'var(--surface)',
                                 color: selectedMuscle === muscle ? 'var(--primary)' : 'var(--text-muted)',
-                                whiteSpace: 'nowrap',
-                                fontSize: '0.9rem'
+                                display: 'inline-block', // Ensure inline block
+                                fontSize: '0.9rem',
+                                flexShrink: 0 // Prevent shrinking
                             }}
                         >
                             {muscle}
@@ -120,64 +191,10 @@ export default function CreateRoutinePage() {
                 </div>
 
                 <div style={{ display: 'grid', gap: '12px', paddingBottom: '100px' }}>
-                    {/* Custom Exercise Input */}
-                    <div style={{
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        padding: '16px',
-                        borderRadius: 'var(--radius-md)',
-                        marginBottom: '16px'
-                    }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <input
-                                    value={customExerciseName}
-                                    onChange={(e) => setCustomExerciseName(e.target.value)}
-                                    placeholder="Add custom exercise..."
-                                    style={{
-                                        flex: 1,
-                                        background: 'transparent',
-                                        border: 'none',
-                                        borderBottom: '1px solid var(--border)',
-                                        color: 'var(--foreground)',
-                                        padding: '8px'
-                                    }}
-                                />
-                                <select
-                                    value={customMuscle}
-                                    onChange={(e) => setCustomMuscle(e.target.value)}
-                                    style={{
-                                        background: 'var(--surface-highlight)',
-                                        border: 'none',
-                                        color: 'var(--foreground)',
-                                        padding: '8px',
-                                        borderRadius: '4px'
-                                    }}
-                                >
-                                    {MUSCLES.filter(m => m !== 'All').map(m => <option key={m} value={m}>{m}</option>)}
-                                </select>
-                            </div>
-                            <button
-                                onClick={handleAddCustom}
-                                disabled={!customExerciseName.trim()}
-                                style={{
-                                    alignSelf: 'flex-end',
-                                    background: 'var(--primary-dim)',
-                                    color: 'var(--primary)',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '8px 16px',
-                                    fontWeight: '600',
-                                    fontSize: '0.9rem'
-                                }}
-                            >
-                                + Add & Select
-                            </button>
-                        </div>
-                    </div>
-
                     {filteredExercises.map(ex => {
                         const isSelected = selectedExercises.find(e => e.id === ex.id);
+                        const isCustom = ex.isCustom || ex.user_id;
+
                         return (
                             <div
                                 key={ex.id}
@@ -208,30 +225,51 @@ export default function CreateRoutinePage() {
                                     {isSelected && <span style={{ color: 'var(--primary)' }}>✓</span>}
                                 </button>
 
-                                {(ex.isCustom || ex.user_id) && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (confirm('Delete custom exercise permanently?')) {
-                                                deleteCustomExercise(ex.id);
-                                            }
-                                        }}
-                                        style={{
-                                            padding: '16px',
-                                            background: 'var(--surface)',
-                                            border: '1px solid var(--error-dim)',
-                                            color: 'var(--error)',
-                                            borderRadius: 'var(--radius-md)',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        ✕
-                                    </button>
+                                {isCustom && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                openEditModal(ex);
+                                            }}
+                                            style={{
+                                                padding: '8px',
+                                                background: 'var(--surface)',
+                                                border: '1px solid var(--border)',
+                                                color: 'var(--text-main)',
+                                                borderRadius: 'var(--radius-sm)',
+                                                cursor: 'pointer',
+                                                fontSize: '0.8rem'
+                                            }}
+                                        >
+                                            ✏️
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                confirmDelete(ex);
+                                            }}
+                                            style={{
+                                                padding: '8px',
+                                                background: 'var(--surface)',
+                                                border: '1px solid var(--error-dim)',
+                                                color: 'var(--error)',
+                                                borderRadius: 'var(--radius-sm)',
+                                                cursor: 'pointer',
+                                                fontSize: '0.8rem'
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         );
                     })}
                 </div>
+
+
+
                 <button
                     onClick={() => setIsSelecting(false)}
                     style={{
@@ -250,9 +288,165 @@ export default function CreateRoutinePage() {
                 >
                     Done ({selectedExercises.length})
                 </button>
+
+                {/* Custom Exercise Modal */}
+                {showCustomModal && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.8)', zIndex: 1000,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '20px'
+                    }} onClick={() => setShowCustomModal(false)}>
+                        <div style={{
+                            background: 'var(--surface)',
+                            padding: '24px',
+                            borderRadius: '16px',
+                            width: '100%',
+                            maxWidth: '400px',
+                            border: '1px solid var(--border)'
+                        }} onClick={e => e.stopPropagation()}>
+                            <h3 style={{ marginBottom: '16px', fontSize: '1.2rem' }}>
+                                {editingExercise ? 'Edit Exercise' : 'New Custom Exercise'}
+                            </h3>
+
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Name</label>
+                                <input
+                                    value={customFormName}
+                                    onChange={(e) => setCustomFormName(e.target.value)}
+                                    placeholder="e.g. Weighted Dips"
+                                    autoFocus
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '8px',
+                                        color: 'var(--text-main)',
+                                        fontSize: '1rem'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ marginBottom: '24px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Muscle Group</label>
+                                <select
+                                    value={customFormMuscle}
+                                    onChange={(e) => setCustomFormMuscle(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        background: 'var(--background)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '8px',
+                                        color: 'var(--text-main)',
+                                        fontSize: '1rem'
+                                    }}
+                                >
+                                    {MUSCLES.filter(m => m !== 'All').map(m => (
+                                        <option key={m} value={m}>{m}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    onClick={() => setShowCustomModal(false)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        background: 'transparent',
+                                        border: '1px solid var(--border)',
+                                        color: 'var(--text-main)',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveCustom}
+                                    disabled={!customFormName.trim()}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        background: 'var(--primary)',
+                                        border: 'none',
+                                        color: '#000',
+                                        fontWeight: 'bold',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        opacity: customFormName.trim() ? 1 : 0.5
+                                    }}
+                                >
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Delete Confirmation Modal */}
+                {showDeleteConfirm && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.8)', zIndex: 1001,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '20px'
+                    }} onClick={() => setShowDeleteConfirm(false)}>
+                        <div style={{
+                            background: 'var(--surface)',
+                            padding: '24px',
+                            borderRadius: '16px',
+                            width: '100%',
+                            maxWidth: '350px',
+                            border: '1px solid var(--border)',
+                            textAlign: 'center'
+                        }} onClick={e => e.stopPropagation()}>
+                            <h3 style={{ marginBottom: '12px', fontSize: '1.2rem' }}>Delete Exercise?</h3>
+                            <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                                Are you sure you want to permanently delete <strong>{exerciseToDelete?.name}</strong>? This cannot be undone.
+                            </p>
+
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        background: 'transparent',
+                                        border: '1px solid var(--border)',
+                                        color: 'var(--text-main)',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        background: 'var(--error)',
+                                        border: 'none',
+                                        color: '#fff',
+                                        fontWeight: 'bold',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
+
+
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
@@ -276,9 +470,29 @@ export default function CreateRoutinePage() {
                             border: '1px solid var(--border)',
                             borderRadius: 'var(--radius-md)',
                             color: 'var(--foreground)',
-                            fontSize: '1rem'
+                            fontSize: '1rem',
+                            marginBottom: '12px'
                         }}
                     />
+
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <label style={{ color: 'var(--text-muted)' }}>Visibility:</label>
+                        <select
+                            value={visibility}
+                            onChange={(e) => setVisibility(e.target.value)}
+                            style={{
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                background: 'var(--surface)',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-main)',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <option value="public">Public (Friends can copy)</option>
+                            <option value="private">Private (Only me)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div style={{ marginBottom: '32px' }}>
@@ -293,64 +507,17 @@ export default function CreateRoutinePage() {
                                     borderRadius: 'var(--radius-sm)',
                                     border: '1px solid var(--border)'
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0px' }}>
                                         <span style={{ fontWeight: '600', fontSize: '1.1rem' }}>{ex.name}</span>
                                         <button
                                             onClick={() => toggleExercise(ex)}
                                             style={{ color: 'var(--warning)', background: 'none', border: 'none', fontSize: '0.9rem' }}
                                         >
-                                            Remove Exercise
+                                            Remove
                                         </button>
                                     </div>
-
-                                    {/* Sets List (Count Only) */}
-                                    <div style={{ marginBottom: '16px' }}>
-                                        {ex.sets.map((set, setIdx) => (
-                                            <div key={setIdx} style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                padding: '8px 0',
-                                                borderBottom: setIdx < ex.sets.length - 1 ? '1px solid var(--border)' : 'none'
-                                            }}>
-                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Set {setIdx + 1}</span>
-                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Add/Remove Buttons */}
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <button
-                                            onClick={() => addSet(ex.id)}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px',
-                                                background: 'var(--primary-dim)',
-                                                color: 'var(--primary)',
-                                                border: 'none',
-                                                borderRadius: '4px',
-                                                fontWeight: '600'
-                                            }}
-                                        >
-                                            + Add Set
-                                        </button>
-                                        <button
-                                            onClick={() => removeLastSet(ex.id)}
-                                            disabled={ex.sets.length <= 1}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px',
-                                                background: 'var(--surface-highlight)',
-                                                color: ex.sets.length <= 1 ? 'var(--text-muted)' : 'var(--warning)',
-                                                border: 'none',
-                                                borderRadius: '4px',
-                                                fontWeight: '600',
-                                                opacity: ex.sets.length <= 1 ? 0.5 : 1
-                                            }}
-                                        >
-                                            - Remove Set
-                                        </button>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                        Default: 3 Sets (Adjustable during workout)
                                     </div>
                                 </div>
                             ))}

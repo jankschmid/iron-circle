@@ -8,12 +8,13 @@ import { useEffect, useState } from 'react';
 export default function HistoryDetailPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { history, exercises, deleteWorkoutHistory, updateWorkoutHistory } = useStore();
+    const { history, exercises, deleteWorkoutHistory, updateWorkoutHistory, shareWorkout, friends } = useStore();
     const [session, setSession] = useState(null);
     const [editSession, setEditSession] = useState(null); // Local editing copy
     const [isEditing, setIsEditing] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
 
     useEffect(() => {
         if (history && id) {
@@ -101,9 +102,53 @@ export default function HistoryDetailPage() {
                         <span style={{ color: 'var(--text-muted)' }}>Volume: </span>
                         <span style={{ fontWeight: 'bold' }}>{Math.round(session.volume || 0)} kg</span>
                     </div>
+                    <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Visibility: </span>
+                        {isEditing ? (
+                            <select
+                                value={editSession.visibility || 'private'}
+                                onChange={e => setEditSession({ ...editSession, visibility: e.target.value })}
+                                style={{
+                                    background: 'var(--surface-highlight)',
+                                    color: 'var(--foreground)',
+                                    border: '1px solid var(--border)',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.9rem'
+                                }}
+                            >
+                                <option value="private">Private</option>
+                                <option value="friends">Friends Only</option>
+                                <option value="public">Public</option>
+                            </select>
+                        ) : (
+                            <span style={{
+                                fontWeight: 'bold',
+                                color: (session.visibility || 'private') === 'public' ? 'var(--success)' : (session.visibility === 'friends' ? 'var(--primary)' : 'var(--text-muted)')
+                            }}>
+                                {(session.visibility || 'private').charAt(0).toUpperCase() + (session.visibility || 'private').slice(1)}
+                            </span>
+                        )}
+                    </div>
 
                     {!isEditing ? (
                         <>
+                            <button
+                                onClick={() => setShowShareModal(true)}
+                                style={{
+                                    marginLeft: 'auto',
+                                    background: 'var(--surface-highlight)',
+                                    color: 'var(--primary)',
+                                    border: '1px solid var(--border)',
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    marginRight: '8px'
+                                }}
+                            >
+                                Share
+                            </button>
                             <button
                                 onClick={handleEditStart}
                                 style={{
@@ -284,6 +329,84 @@ export default function HistoryDetailPage() {
                     );
                 })}
             </div>
+            {/* Share Modal */}
+            {showShareModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '20px'
+                }} onClick={() => setShowShareModal(false)}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        padding: '24px',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '350px',
+                        border: '1px solid var(--border)',
+                        maxHeight: '80vh',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ marginBottom: '16px', fontSize: '1.2rem' }}>Share Workout</h3>
+
+                        <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {friends.length === 0 ? (
+                                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>
+                                    No friends found to share with.
+                                </p>
+                            ) : (
+                                friends.map(friend => (
+                                    <button
+                                        key={friend.id}
+                                        onClick={async () => {
+                                            const success = await shareWorkout(session, friend.id);
+                                            if (success) {
+                                                alert(`Shared with ${friend.name}!`);
+                                                setShowShareModal(false);
+                                            } else {
+                                                alert("Failed to share.");
+                                            }
+                                        }}
+                                        style={{
+                                            padding: '12px',
+                                            background: 'var(--background)',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: '8px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            color: 'var(--foreground)',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--border)', overflow: 'hidden' }}>
+                                            {friend.avatar_url && <img src={friend.avatar_url} style={{ width: '100%', height: '100%' }} />}
+                                        </div>
+                                        <span>{friend.name}</span>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+
+                        <button
+                            onClick={() => setShowShareModal(false)}
+                            style={{
+                                marginTop: '16px',
+                                padding: '12px',
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-main)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                width: '100%'
+                            }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

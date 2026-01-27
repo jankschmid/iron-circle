@@ -61,26 +61,52 @@ export default function FriendProfilePage() {
 
                 setProfile(friendData);
 
-                // Fetch Workouts
-                if (fetchFriendWorkouts) {
-                    console.log("Profile: Fetching workouts...");
-                    try {
-                        const userWorkouts = await fetchFriendWorkouts(friendId);
-                        console.log("Profile: Workouts loaded", userWorkouts?.length);
-                        setWorkouts(userWorkouts || []);
+                // Fetch Workouts (Actually Templates per user request)
+                console.log("Profile: Fetching templates...");
+                try {
+                    // Determine visibility filters
+                    // If is friend (we need to know isFriend here, calculating early)
+                    const isFriend = friends.some(f => f.id.toString() === friendId);
 
-                        // valid stats from workouts
-                        let totalVol = 0;
-                        if (userWorkouts) {
-                            userWorkouts.forEach(w => totalVol += w.volume || 0);
-                            setStats({
-                                volume: totalVol,
-                                streak: userWorkouts.length // simplified
-                            });
-                        }
-                    } catch (wErr) {
-                        console.error("Profile: Error fetching workouts", wErr);
+                    let query = supabase
+                        .from('workout_templates')
+                        .select('*')
+                        .eq('user_id', friendId);
+
+                    if (isFriend) {
+                        query = query.in('visibility', ['public', 'friends']);
+                    } else {
+                        query = query.eq('visibility', 'public');
                     }
+
+                    const { data: userTemplates, error: tError } = await query;
+
+                    if (tError) throw tError;
+
+                    console.log("Profile: Templates loaded", userTemplates?.length);
+                    setWorkouts(userTemplates || []); // reused 'workouts' state variable for templates to minimize refactor
+
+                    // Calculate stats from templates? No, stats should probably still come from history or be hidden.
+                    // For now, let's trigger a history fetch JUST for stats if we want to keep them?
+                    // The user said "display created workouts", but implied specific replacement of the list.
+                    // The stats (Volume/Workouts) usually refer to History. 
+                    // Let's keep stats fetching separate if possible, or just zero them if not fetching history.
+                    // To keep it simple and safe: We will NOT fetch history for stats to avoid the confusion.
+                    // Or we could do a lightweight count query. 
+                    // Let's Try to fetch history count efficiently for stats.
+
+                    const { count, error: countError } = await supabase
+                        .from('workouts')
+                        .select('*', { count: 'exact', head: true }) // head: true only returns count
+                        .eq('user_id', friendId);
+
+                    setStats({
+                        volume: 0, // Cannot calc volume without fetching all data
+                        streak: count || 0
+                    });
+
+                } catch (wErr) {
+                    console.error("Profile: Error fetching templates", wErr);
                 }
 
             } catch (err) {
@@ -95,11 +121,11 @@ export default function FriendProfilePage() {
 
     const handleCopyWorkout = (workout) => {
         const newTemplate = {
-            name: `${workout.name} (Copy)`,
-            exercises: workout.exercises.map(exName => ({
-                id: exName.toLowerCase().replace(/\s+/g, '-'), // simplistic mapping
-                name: exName,
-                sets: [{ reps: 10 }] // default
+            name: `${workout.name} (From ${profile?.name || 'Friend'})`,
+            exercises: workout.exercises.map(ex => ({
+                id: ex.id,
+                name: ex.name,
+                sets: ex.sets || [{ reps: 10 }]
             }))
         };
         addWorkoutTemplate(newTemplate);
@@ -278,13 +304,13 @@ export default function FriendProfilePage() {
             </section>
 
             <section>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Recent Workouts</h3>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Created Routines</h3>
                 <div style={{ display: 'grid', gap: '12px' }}>
                     {workouts.length === 0 ? (
-                        <div style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No workouts yet.</div>
+                        <div style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No public routines found.</div>
                     ) : (
-                        workouts.map((w) => (
-                            <div key={w.id} style={{
+                        workouts.map((t) => (
+                            <div key={t.id} style={{
                                 background: 'var(--surface)',
                                 padding: '16px',
                                 borderRadius: 'var(--radius-md)',
@@ -294,13 +320,13 @@ export default function FriendProfilePage() {
                                 alignItems: 'center'
                             }}>
                                 <div>
-                                    <div style={{ fontWeight: '600' }}>{w.name}</div>
+                                    <div style={{ fontWeight: '600' }}>{t.name}</div>
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                        {new Date(w.endTime).toLocaleDateString()} • {w.volume}kg
+                                        {t.exercises?.length || 0} Exercises • {t.visibility}
                                     </div>
                                 </div>
                                 <button
-                                    onClick={() => handleCopyWorkout(w)}
+                                    onClick={() => handleCopyWorkout(t)}
                                     style={{
                                         padding: '6px 12px',
                                         background: 'var(--primary-dim)',
@@ -310,7 +336,7 @@ export default function FriendProfilePage() {
                                         fontWeight: '600'
                                     }}
                                 >
-                                    Copy
+                                    Save
                                 </button>
                             </div>
                         ))

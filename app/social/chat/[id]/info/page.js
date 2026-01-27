@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 
 export default function GroupInfoPage() {
-    const { user, friends, addMemberToGroup, renameGroup, leaveGroup } = useStore();
+    const { user, friends, addMemberToGroup, renameGroup, leaveGroup, saveUserGym } = useStore();
     const router = useRouter();
     const params = useParams();
     const supabase = createClient();
@@ -15,10 +15,16 @@ export default function GroupInfoPage() {
 
     const [chat, setChat] = useState(null);
     const [participants, setParticipants] = useState([]);
+    const [inactiveMembers, setInactiveMembers] = useState([]);
+    const [showInactive, setShowInactive] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState('');
     const [showAddMember, setShowAddMember] = useState(false);
+    const [community, setCommunity] = useState(null); // For community chats
+    const [gym, setGym] = useState(null); // Gym details
+    const [isMember, setIsMember] = useState(true); // Track if user is still a member
+    const [confirmDialog, setConfirmDialog] = useState(null);
 
     useEffect(() => {
         if (!chatId) return;
@@ -33,9 +39,12 @@ export default function GroupInfoPage() {
                 .from('conversations')
                 .select('*')
                 .eq('id', chatId)
-                .single();
+                .maybeSingle();
 
-            if (!convo) throw new Error("Chat not found");
+            if (!convo) {
+                // Chat might have been deleted or user doesn't have access
+                return;
+            }
             setChat(convo);
             setNewName(convo.name);
 
@@ -64,6 +73,103 @@ export default function GroupInfoPage() {
                 }
             } else {
                 setParticipants([]);
+            }
+
+            // 4. If community/gym chat, fetch community and gym details
+            if (convo.type === 'community' || convo.type === 'gym') {
+                const { data: communityData, error: commError } = await supabase
+                    .from('communities')
+                    .select('*, gyms(id, name, address)')
+                    .eq('gym_id', convo.gym_id)
+                    .maybeSingle();
+
+                if (communityData) {
+                    setCommunity(communityData);
+                    setGym(communityData.gyms);
+
+                    // Fetch ALL community members
+                    const { data: allMembers } = await supabase
+                        .from('community_members')
+                        .select('user_id')
+                        .eq('community_id', communityData.id);
+
+                    if (allMembers && allMembers.length > 0) {
+                        const allMemberIds = allMembers.map(m => m.user_id);
+                        const participantIds = parts?.map(p => p.user_id) || [];
+
+                        // Active members: in BOTH community_members AND conversation_participants
+                        const activeIds = allMemberIds.filter(id => participantIds.includes(id));
+                        // Inactive members: in conversation_participants but NOT in community_members
+                        const inactiveIds = participantIds.filter(id => !allMemberIds.includes(id));
+
+                        // Update participants to only show active members
+                        if (parts) {
+                            const activeProfiles = await supabase
+                                .from('profiles')
+                                .select('id, name, username, avatar_url')
+                                .in('id', activeIds);
+
+                            if (activeProfiles.data) {
+                                setParticipants(activeProfiles.data.map(p => ({
+                                    id: p.id,
+                                    name: p.name,
+                                    handle: '@' + p.username,
+                                    avatar: p.avatar_url
+                                })));
+                            }
+                        }
+
+                        // Fetch inactive member profiles
+                        if (inactiveIds.length > 0) {
+                            const { data: inactiveProfiles } = await supabase
+                                .from('profiles')
+                                .select('id, name, username, avatar_url')
+                                .in('id', inactiveIds);
+
+                            if (inactiveProfiles) {
+                                setInactiveMembers(inactiveProfiles.map(p => ({
+                                    id: p.id,
+                                    name: p.name,
+                                    handle: '@' + p.username,
+                                    avatar: p.avatar_url
+                                })));
+                            }
+                        }
+                    }
+                } else if (convo.gym_id) {
+                    // Fallback: fetch gym directly if community not found
+                    const { data: gymData } = await supabase
+                        .from('gyms')
+                        .select('id, name, address')
+                        .eq('id', convo.gym_id)
+                        .maybeSingle();
+
+                    if (gymData) setGym(gymData);
+                }
+
+                // Check if user is still a member (for communities)
+                if (convo.type === 'community' || convo.type === 'gym') {
+                    const { data: communityData } = await supabase
+                        .from('communities')
+                        .select('id')
+                        .eq('gym_id', convo.gym_id)
+                        .maybeSingle();
+
+                    if (communityData) {
+                        const { data: memberCheck } = await supabase
+                            .from('community_members')
+                            .select('user_id')
+                            .eq('community_id', communityData.id)
+                            .eq('user_id', user.id)
+                            .maybeSingle();
+
+                        console.log('Community membership check:', { communityId: communityData.id, userId: user.id, memberCheck, isMember: !!memberCheck });
+                        setIsMember(!!memberCheck);
+                    } else {
+                        console.log('No community found, setting isMember to false');
+                        setIsMember(false);
+                    }
+                }
             }
 
         } catch (err) {
@@ -98,12 +204,99 @@ export default function GroupInfoPage() {
     };
 
     const handleLeave = async () => {
-        if (!confirm("Are you sure you want to leave this group?")) return;
+        setConfirmDialog({
+            message: "Are you sure you want to leave this " + (chat.type === 'group' ? 'group' : 'community') + "?",
+            type: 'confirm',
+            onConfirm: async () => {
+                try {
+                    await leaveGroup(chatId);
+                    setConfirmDialog(null);
+                    router.push('/chat');
+                } catch (err) {
+                    setConfirmDialog({
+                        message: "Failed to leave: " + err.message,
+                        type: 'alert',
+                        onConfirm: () => setConfirmDialog(null)
+                    });
+                }
+            }
+        });
+    };
+
+    const handleDelete = async () => {
+        const isCommunity = chat.type === 'community' || chat.type === 'gym';
+
+        setConfirmDialog({
+            message: isCommunity && isMember
+                ? `Delete this chat?\n\nDo you also want to leave the community?`
+                : `Delete this chat from your list?`,
+            type: 'confirm',
+            showThreeOptions: isCommunity && isMember,
+            onConfirm: async () => {
+                try {
+                    // Just delete from conversation_participants
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
+                    await supabase
+                        .from('conversation_participants')
+                        .delete()
+                        .eq('conversation_id', chatId)
+                        .eq('user_id', authUser.id);
+
+                    setConfirmDialog(null);
+                    router.push('/chat');
+                } catch (err) {
+                    setConfirmDialog({
+                        message: "Failed to delete: " + err.message,
+                        type: 'alert',
+                        onConfirm: () => setConfirmDialog(null)
+                    });
+                }
+            },
+            onConfirmAndLeave: async () => {
+                try {
+                    // Delete and leave community
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
+
+                    // Leave community first
+                    if (community) {
+                        await useStore.getState().leaveCommunity(community.id);
+                    }
+
+                    // Then delete from conversation_participants
+                    await supabase
+                        .from('conversation_participants')
+                        .delete()
+                        .eq('conversation_id', chatId)
+                        .eq('user_id', authUser.id);
+
+                    setConfirmDialog(null);
+                    router.push('/chat');
+                } catch (err) {
+                    setConfirmDialog({
+                        message: "Failed: " + err.message,
+                        type: 'alert',
+                        onConfirm: () => setConfirmDialog(null)
+                    });
+                }
+            }
+        });
+    };
+
+    const handleAddGym = async () => {
+        if (!gym) return;
         try {
-            await leaveGroup(chatId);
-            router.push('/social/chat');
+            await saveUserGym(gym.name, null, null, gym.name, gym.address, 'manual');
+            setConfirmDialog({
+                message: `${gym.name} added to your gyms!`,
+                type: 'alert',
+                onConfirm: () => setConfirmDialog(null)
+            });
         } catch (err) {
-            alert("Failed to leave group");
+            setConfirmDialog({
+                message: "Failed to add gym: " + err.message,
+                type: 'alert',
+                onConfirm: () => setConfirmDialog(null)
+            });
         }
     };
 
@@ -118,7 +311,7 @@ export default function GroupInfoPage() {
                 <Link href={`/social/chat/${chatId}`} style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
                     ←
                 </Link>
-                <h1 style={{ fontSize: '1.5rem' }}>Group Info</h1>
+                <h1 style={{ fontSize: '1.5rem' }}>{chat.type === 'community' || chat.type === 'gym' ? 'Community Info' : 'Group Info'}</h1>
             </header>
 
             <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -162,7 +355,59 @@ export default function GroupInfoPage() {
                         </h2>
                     )}
                     <p style={{ color: 'var(--text-muted)' }}>{participants.length} members</p>
+                    {community && community.description && (
+                        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '8px', maxWidth: '400px', margin: '8px auto 0' }}>
+                            {community.description}
+                        </p>
+                    )}
                 </div>
+
+                {/* Gym Info Section (for communities) */}
+                {(chat.type === 'community' || chat.type === 'gym') && gym && (
+                    <div style={{ background: 'var(--surface)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                        <h3 style={{ fontSize: '1rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            🏋️ Gym Location
+                        </h3>
+                        <div style={{ marginBottom: '12px' }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{gym.name}</div>
+                            {gym.address && (
+                                <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                    📍 {gym.address}
+                                </div>
+                            )}
+                        </div>
+                        {user?.gyms?.some(g => g.id === gym.id) ? (
+                            <div style={{
+                                width: '100%',
+                                padding: '12px',
+                                background: 'var(--surface-highlight)',
+                                color: 'var(--text-muted)',
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                fontWeight: 'bold',
+                                textAlign: 'center'
+                            }}>
+                                ✓ Already Added
+                            </div>
+                        ) : (
+                            <button
+                                onClick={handleAddGym}
+                                style={{
+                                    width: '100%',
+                                    padding: '12px',
+                                    background: 'var(--primary)',
+                                    color: '#000',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                + Add This Gym to My List
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 {/* Participants */}
                 <div>
@@ -211,13 +456,71 @@ export default function GroupInfoPage() {
                                 {p.id === user?.id && <span style={{ marginLeft: 'auto', fontSize: '0.8rem', background: 'var(--surface-highlight)', padding: '2px 8px', borderRadius: '4px' }}>You</span>}
                             </div>
                         ))}
+
+                        {/* Inactive Members Dropdown */}
+                        {inactiveMembers.length > 0 && (
+                            <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                                <button
+                                    onClick={() => setShowInactive(!showInactive)}
+                                    style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        padding: '8px 0',
+                                        fontSize: '0.9rem'
+                                    }}
+                                >
+                                    <span>Inactive Members ({inactiveMembers.length})</span>
+                                    <span style={{ transform: showInactive ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                                </button>
+                                {showInactive && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                                        {inactiveMembers.map(p => (
+                                            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6 }}>
+                                                <img src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`} style={{ width: '40px', height: '40px', borderRadius: '50%', filter: 'grayscale(50%)' }} />
+                                                <div>
+                                                    <div style={{ fontWeight: '500' }}>{p.name}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{p.handle}</div>
+                                                </div>
+                                                <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--text-muted)' }}>Left</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 {/* Danger Zone */}
-                <div style={{ marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid var(--border)' }}>
+                <div style={{ marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {/* Leave Button - only show if member */}
+                    {isMember && (
+                        <button
+                            onClick={handleLeave}
+                            style={{
+                                width: '100%',
+                                padding: '16px',
+                                background: 'rgba(255, 152, 0, 0.1)',
+                                color: '#ff9800',
+                                border: '1px solid #ff9800',
+                                borderRadius: '12px',
+                                fontWeight: '600',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {chat.type === 'community' || chat.type === 'gym' ? 'Leave Community' : 'Leave Group'}
+                        </button>
+                    )}
+
+                    {/* Delete Chat Button */}
                     <button
-                        onClick={handleLeave}
+                        onClick={handleDelete}
                         style={{
                             width: '100%',
                             padding: '16px',
@@ -229,11 +532,125 @@ export default function GroupInfoPage() {
                             cursor: 'pointer'
                         }}
                     >
-                        Leave Group
+                        Delete Chat
                     </button>
                 </div>
 
             </div>
+
+            {/* Confirmation Dialog */}
+            {confirmDialog && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        borderRadius: '16px',
+                        padding: '24px',
+                        maxWidth: '400px',
+                        width: '100%',
+                        textAlign: 'center'
+                    }}>
+                        <p style={{
+                            fontSize: '1.1rem',
+                            marginBottom: '24px',
+                            color: 'var(--text-main)',
+                            whiteSpace: 'pre-line'
+                        }}>
+                            {confirmDialog.message}
+                        </p>
+                        {confirmDialog.showThreeOptions ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <button
+                                    onClick={() => setConfirmDialog(null)}
+                                    style={{
+                                        padding: '12px',
+                                        background: 'transparent',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '8px',
+                                        color: 'var(--text-main)',
+                                        cursor: 'pointer',
+                                        fontSize: '1rem'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDialog.onConfirm}
+                                    style={{
+                                        padding: '12px',
+                                        background: 'var(--error)',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        color: '#fff',
+                                        cursor: 'pointer',
+                                        fontSize: '1rem',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    Just Delete Chat
+                                </button>
+                                <button
+                                    onClick={confirmDialog.onConfirmAndLeave}
+                                    style={{
+                                        padding: '12px',
+                                        background: '#ff9800',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        color: '#000',
+                                        cursor: 'pointer',
+                                        fontSize: '1rem',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    Delete & Leave Community
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    onClick={() => setConfirmDialog(null)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        background: 'transparent',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '8px',
+                                        color: 'var(--text-main)',
+                                        cursor: 'pointer',
+                                        fontSize: '1rem'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDialog.onConfirm}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        background: confirmDialog.type === 'alert' ? 'var(--primary)' : 'var(--error)',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        color: confirmDialog.type === 'alert' ? '#000' : '#fff',
+                                        cursor: 'pointer',
+                                        fontSize: '1rem',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    {confirmDialog.type === 'alert' ? 'OK' : 'Confirm'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

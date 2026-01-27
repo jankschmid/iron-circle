@@ -16,6 +16,8 @@ function ChatListContent() {
     const [showCommunitiesModal, setShowCommunitiesModal] = useState(false);
     const searchParams = useSearchParams();
     const supabase = createClient();
+    const [confirmDialog, setConfirmDialog] = useState(null); // { message, onConfirm, type }
+    const [showInactiveCommunities, setShowInactiveCommunities] = useState(false);
 
     useEffect(() => {
         if (!user) return;
@@ -94,6 +96,29 @@ function ChatListContent() {
                     }
                 }
 
+                // Check if user is still a member (for communities)
+                let isMember = true;
+                if (convo.type === 'community' || convo.type === 'gym') {
+                    const { data: communityData } = await supabase
+                        .from('communities')
+                        .select('id')
+                        .eq('gym_id', convo.gym_id)
+                        .maybeSingle();
+
+                    if (communityData) {
+                        const { data: memberCheck } = await supabase
+                            .from('community_members')
+                            .select('user_id')
+                            .eq('community_id', communityData.id)
+                            .eq('user_id', user.id)
+                            .maybeSingle();
+
+                        isMember = !!memberCheck;
+                    } else {
+                        isMember = false;
+                    }
+                }
+
                 return {
                     id: convo.id,
                     type: convo.type,
@@ -102,7 +127,8 @@ function ChatListContent() {
                     gym_id: convo.gym_id,
                     lastMessage: lastMsg?.content || 'No messages yet',
                     timestamp: lastMsg?.created_at || participantInfo?.last_read_at || new Date().toISOString(),
-                    unread: false
+                    unread: false,
+                    isMember: isMember
                 };
             }))).filter(Boolean);
 
@@ -126,7 +152,16 @@ function ChatListContent() {
             });
 
             const deduplicated = Array.from(uniqueMap.values());
-            deduplicated.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            // Sort: Active chats first (by timestamp), then inactive chats (by timestamp)
+            deduplicated.sort((a, b) => {
+                // If one is inactive and the other is active, active comes first
+                if (a.isMember !== b.isMember) {
+                    return a.isMember ? -1 : 1;
+                }
+                // Otherwise sort by timestamp
+                return new Date(b.timestamp) - new Date(a.timestamp);
+            });
 
             setConversations(deduplicated);
 
@@ -144,6 +179,14 @@ function ChatListContent() {
         if (activeTab === 'communities') return c.type === 'gym' || c.type === 'community';
         return false;
     });
+
+    // For communities tab, separate active and inactive
+    const activeConversations = activeTab === 'communities'
+        ? filteredConversations.filter(c => c.isMember !== false)
+        : filteredConversations;
+    const inactiveConversations = activeTab === 'communities'
+        ? filteredConversations.filter(c => c.isMember === false)
+        : [];
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
@@ -190,9 +233,45 @@ function ChatListContent() {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {filteredConversations.map(chat => (
-                        <ChatCard key={chat.id} chat={chat} onUpdate={fetchConversations} />
+                    {/* Active chats */}
+                    {activeConversations.map(chat => (
+                        <ChatCard key={chat.id} chat={chat} onUpdate={fetchConversations} setConfirmDialog={setConfirmDialog} />
                     ))}
+
+                    {/* Inactive communities dropdown */}
+                    {inactiveConversations.length > 0 && (
+                        <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                            <button
+                                onClick={() => setShowInactiveCommunities(!showInactiveCommunities)}
+                                style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                    padding: '12px',
+                                    fontSize: '0.9rem',
+                                    borderRadius: '8px',
+                                    transition: 'background 0.2s'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-highlight)'}
+                                onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                            >
+                                <span>Inactive Communities ({inactiveConversations.length})</span>
+                                <span style={{ transform: showInactiveCommunities ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                            </button>
+                            {showInactiveCommunities && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                                    {inactiveConversations.map(chat => (
+                                        <ChatCard key={chat.id} chat={chat} onUpdate={fetchConversations} setConfirmDialog={setConfirmDialog} />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -219,58 +298,147 @@ function ChatListContent() {
                 />
             )}
 
+            {/* Confirmation Dialog */}
+            {confirmDialog && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        borderRadius: '16px',
+                        padding: '24px',
+                        maxWidth: '400px',
+                        width: '100%',
+                        textAlign: 'center'
+                    }}>
+                        <p style={{
+                            fontSize: '1.1rem',
+                            marginBottom: '24px',
+                            color: 'var(--text-main)',
+                            whiteSpace: 'pre-line'
+                        }}>
+                            {confirmDialog.message}
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                onClick={() => setConfirmDialog(null)}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    background: 'transparent',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '8px',
+                                    color: 'var(--text-main)',
+                                    cursor: 'pointer',
+                                    fontSize: '1rem'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDialog.onConfirm}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    background: confirmDialog.type === 'alert' ? 'var(--primary)' : 'var(--error)',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    color: confirmDialog.type === 'alert' ? '#000' : '#fff',
+                                    cursor: 'pointer',
+                                    fontSize: '1rem',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                {confirmDialog.type === 'alert' ? 'OK' : 'Confirm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <BottomNav />
         </div>
     );
 }
 
-function ChatCard({ chat, onUpdate }) {
+function ChatCard({ chat, onUpdate, setConfirmDialog }) {
     const { leaveCommunity } = useStore();
     const [showMenu, setShowMenu] = useState(false);
     const supabase = createClient();
 
     const handleLeave = async () => {
-        if (!confirm(`Leave ${chat.name}?`)) return;
+        setConfirmDialog({
+            message: `Leave ${chat.name}?`,
+            type: 'confirm',
+            onConfirm: async () => {
+                try {
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
 
-        try {
-            if (chat.type === 'community' || chat.type === 'gym') {
-                const { data: community } = await supabase
-                    .from('communities')
-                    .select('id')
-                    .eq('gym_id', chat.gym_id)
-                    .single();
+                    if (chat.type === 'community' || chat.type === 'gym') {
+                        const { data: community } = await supabase
+                            .from('communities')
+                            .select('id')
+                            .eq('gym_id', chat.gym_id)
+                            .maybeSingle();
 
-                if (community) await leaveCommunity(community.id);
-            } else if (chat.type === 'group') {
-                const { data: { user } } = await supabase.auth.getUser();
-                await supabase
-                    .from('conversation_participants')
-                    .delete()
-                    .eq('conversation_id', chat.id)
-                    .eq('user_id', user.id);
+                        if (community) await leaveCommunity(community.id);
+                    } else if (chat.type === 'group') {
+                        // For groups, remove from conversation_participants
+                        await supabase
+                            .from('conversation_participants')
+                            .delete()
+                            .eq('conversation_id', chat.id)
+                            .eq('user_id', authUser.id);
+                    }
+
+                    setConfirmDialog(null);
+                    await onUpdate();
+                } catch (err) {
+                    setConfirmDialog({
+                        message: `Failed to leave: ${err.message}`,
+                        type: 'alert',
+                        onConfirm: () => setConfirmDialog(null)
+                    });
+                }
             }
-
-            onUpdate();
-        } catch (err) {
-            alert(`Failed to leave: ${err.message}`);
-        }
+        });
     };
 
     const handleDelete = async () => {
-        if (!confirm(`Delete this chat?`)) return;
+        setConfirmDialog({
+            message: `Delete this chat?`,
+            type: 'confirm',
+            onConfirm: async () => {
+                try {
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
+                    const { error } = await supabase
+                        .from('conversation_participants')
+                        .delete()
+                        .eq('conversation_id', chat.id)
+                        .eq('user_id', authUser.id);
 
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            await supabase
-                .from('conversation_participants')
-                .delete()
-                .eq('conversation_id', chat.id)
-                .eq('user_id', user.id);
+                    if (error) {
+                        throw new Error(error.message || 'Failed to delete chat');
+                    }
 
-            onUpdate();
-        } catch (err) {
-            alert(`Failed to delete: ${err.message}`);
-        }
+                    setConfirmDialog(null);
+                    await onUpdate();
+                } catch (err) {
+                    setConfirmDialog({
+                        message: `Failed to delete: ${err.message}`,
+                        type: 'alert',
+                        onConfirm: () => setConfirmDialog(null)
+                    });
+                }
+            }
+        });
     };
 
     return (
@@ -285,7 +453,9 @@ function ChatCard({ chat, onUpdate }) {
                     alignItems: 'center',
                     border: '1px solid var(--border)',
                     cursor: 'pointer',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    opacity: chat.isMember === false ? 0.5 : 1,
+                    filter: chat.isMember === false ? 'grayscale(50%)' : 'none'
                 }}
                     onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-highlight)'}
                     onMouseOut={(e) => e.currentTarget.style.background = 'var(--surface)'}>
@@ -298,7 +468,21 @@ function ChatCard({ chat, onUpdate }) {
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                            <h3 style={{ fontSize: '1rem', fontWeight: 'bold', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chat.name}</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                <h3 style={{ fontSize: '1rem', fontWeight: 'bold', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chat.name}</h3>
+                                {chat.isMember === false && (
+                                    <span style={{
+                                        fontSize: '0.7rem',
+                                        padding: '2px 6px',
+                                        background: 'rgba(255,255,255,0.1)',
+                                        borderRadius: '4px',
+                                        color: 'var(--text-muted)',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        Inactive
+                                    </span>
+                                )}
+                            </div>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', whiteSpace: 'nowrap', marginLeft: '8px' }}>{new Date(chat.timestamp).toLocaleDateString()}</span>
                         </div>
                         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chat.lastMessage}</p>

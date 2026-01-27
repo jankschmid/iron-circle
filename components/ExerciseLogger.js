@@ -30,7 +30,10 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
             return;
         }
 
-        if (!weight || !reps) return;
+        if (!weight || !reps) {
+            console.warn("ExerciseLogger: Missing weight or reps", { weight, reps });
+            return;
+        }
 
         // Convert to numbers
         const w = parseFloat(weight);
@@ -50,6 +53,15 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
         setIsLogged(true);
     };
 
+    const handleBlur = () => {
+        // Auto-save on blur (even if not completed)
+        if (weight || reps || rpe) {
+            const w = parseFloat(weight) || 0;
+            const r = parseFloat(reps) || 0;
+            onLog({ weight: w, reps: r, rpe, completed: isLogged });
+        }
+    };
+
     return (
         <div style={{
             display: 'grid',
@@ -67,6 +79,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
                     placeholder={previousData ? previousData.lastWeight : '-'}
                     value={isLogged ? ((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '') : weight}
                     onChange={(e) => setWeight(e.target.value)}
+                    onBlur={handleBlur}
                     disabled={isLogged}
                     style={{
                         background: 'var(--surface-highlight)',
@@ -88,6 +101,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
                     placeholder={previousData ? previousData.lastReps : '-'}
                     value={isLogged ? ((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '') : reps}
                     onChange={(e) => setReps(e.target.value)}
+                    onBlur={handleBlur}
                     disabled={isLogged}
                     style={{
                         background: 'var(--surface-highlight)',
@@ -106,6 +120,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
                 placeholder="RIR"
                 value={rpe}
                 onChange={(e) => setRpe(e.target.value)}
+                onBlur={handleBlur}
                 disabled={isLogged}
                 style={{
                     background: 'var(--surface-highlight)',

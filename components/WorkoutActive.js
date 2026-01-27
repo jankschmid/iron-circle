@@ -6,13 +6,14 @@ import ExerciseLogger from './ExerciseLogger';
 import BottomNav from './BottomNav';
 
 export default function WorkoutActive() {
-    const { activeWorkout, finishWorkout, cancelWorkout, logSet, getExerciseHistory, getExercisePR, exercises } = useStore();
+    const { activeWorkout, finishWorkout, cancelWorkout, logSet, getExerciseHistory, getExercisePR, exercises, addSetToWorkout, removeSetFromWorkout } = useStore();
     const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+    const [isPrivate, setIsPrivate] = useState(false);
 
     if (!activeWorkout) return null;
 
     const handleFinish = () => {
-        finishWorkout();
+        finishWorkout({ visibility: isPrivate ? 'private' : 'public' });
         setShowFinishConfirm(false);
     };
 
@@ -90,9 +91,27 @@ export default function WorkoutActive() {
                         border: '1px solid var(--border)'
                     }}>
                         <h3 style={{ marginBottom: '16px' }}>Finish Workout?</h3>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>
                             Are you sure you want to finish and save this session?
                         </p>
+
+                        <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px' }}>
+                            <input
+                                type="checkbox"
+                                id="privateCheck"
+                                checked={isPrivate}
+                                onChange={(e) => setIsPrivate(e.target.checked)}
+                                style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    accentColor: 'var(--primary)',
+                                    cursor: 'pointer'
+                                }}
+                            />
+                            <label htmlFor="privateCheck" style={{ color: 'var(--text-main)', cursor: 'pointer', fontWeight: '500' }}>
+                                Mark as Private
+                            </label>
+                        </div>
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <button
                                 onClick={() => setShowFinishConfirm(false)}
@@ -160,6 +179,45 @@ export default function WorkoutActive() {
                                     />
                                 );
                             })}
+
+                            {/* Add/Remove Set Buttons */}
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                                <button
+                                    onClick={() => addSetToWorkout(log.exerciseId)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '8px',
+                                        background: 'var(--surface-highlight)',
+                                        color: 'var(--primary)',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        fontWeight: '600',
+                                        fontSize: '0.9rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    + Add Set
+                                </button>
+                                <button
+                                    onClick={() => removeSetFromWorkout(log.exerciseId, log.sets.length - 1)}
+                                    disabled={log.sets.length <= 1}
+                                    style={{
+                                        flex: 1,
+                                        padding: '8px',
+                                        background: 'var(--surface-highlight)',
+                                        color: log.sets.length <= 1 ? 'var(--text-muted)' : 'var(--warning)',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        fontWeight: '600',
+                                        fontSize: '0.9rem',
+                                        opacity: log.sets.length <= 1 ? 0.3 : 1,
+                                        pointerEvents: log.sets.length <= 1 ? 'none' : 'auto',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    - Remove Set
+                                </button>
+                            </div>
                         </div>
                     );
                 })}
