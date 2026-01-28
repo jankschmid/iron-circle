@@ -3,6 +3,7 @@
 import { useStore } from '@/lib/store';
 import { useGeoTracker } from '@/lib/hooks/useGeoTracker';
 import BottomNav from '@/components/BottomNav';
+import LiveStatus from '@/components/LiveStatus'; // Re-added Live Circle
 import Link from 'next/link';
 import { useEffect, useState, Suspense } from 'react';
 import { createClient } from '@/lib/supabase';
@@ -12,8 +13,9 @@ import dynamic from 'next/dynamic';
 const MapPicker = dynamic(() => import('../../components/MapPicker'), { ssr: false, loading: () => <div className="spinner"></div> });
 
 function TrackerContent() {
-    const { user, saveUserGym, removeUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity, deleteSession, updateSession, friends, inviteToSession, joinSession, updateGym, deleteGlobalGym } = useStore();
+    const { user, saveUserGym, removeUserGym, updateUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity, deleteSession, updateSession, friends, inviteToSession, joinSession, updateGym, deleteGlobalGym } = useStore();
     const { status, currentLocation, distanceToGym, isAtGym, workoutSession, startTracking, stopTracking, warning } = useGeoTracker();
+
     const searchParams = useSearchParams();
     const [elapsed, setElapsed] = useState(0);
     const supabase = createClient();
@@ -35,7 +37,9 @@ function TrackerContent() {
     const [editingSession, setEditingSession] = useState(null); // For Edit Modal
     const [deletingSessionId, setDeletingSessionId] = useState(null);
     const [showInviteModal, setShowInviteModal] = useState(false);
-    const [editingGym, setEditingGym] = useState(null); // For Gym Edit Modal
+    const [editingSettingsGym, setEditingSettingsGym] = useState(null); // For User Settings Modal (Radius)
+    // Removed unused editingGym state
+
 
     // Map State
     const [showSearchMap, setShowSearchMap] = useState(false); // For Search/Main add flow
@@ -43,6 +47,18 @@ function TrackerContent() {
     const [showEditMap, setShowEditMap] = useState(false); // For Edit Modal
     const [mapCoordinates, setMapCoordinates] = useState(null); // { lat, lng }
     const [confirmDialog, setConfirmDialog] = useState(null); // { message, onConfirm }
+
+    const [warningMsg, setWarningMsg] = useState(''); // Local UI warning
+
+    useEffect(() => {
+        if (warningMsg) {
+            const timer = setTimeout(() => setWarningMsg(''), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [warningMsg]);
+
+    // Use warning from useGeoTracker AND local warningMsg
+    const displayWarning = warning || warningMsg;
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -733,20 +749,24 @@ function TrackerContent() {
                                             Set Default
                                         </button>
                                     )}
-                                    {/* Edit Button for Creators */}
-                                    {gym.createdBy === user.id && (
-                                        <button
-                                            onClick={() => setEditingGym({
-                                                id: gym.id,
-                                                newName: gym.name,
-                                                newAddress: gym.address,
-                                                location: gym.location // Pass current location string
-                                            })}
-                                            style={{ padding: '8px', fontSize: '0.8rem', background: 'var(--surface-highlight)', color: 'var(--primary)', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                                        >
-                                            Edit
-                                        </button>
-                                    )}
+                                    {/* Settings Button (Personal & Global) */}
+                                    {/* Settings Button (Personal & Global) */}
+                                    <button
+                                        onClick={() => setEditingSettingsGym({
+                                            id: gym.id,
+                                            label: gym.label || gym.name,
+                                            radius: gym.radius || 200,
+                                            // Global fields (for creators)
+                                            isCreator: gym.createdBy === user.id,
+                                            name: gym.name,
+                                            address: gym.address,
+                                            location: gym.location // Pass current location string needed for updateGym
+                                        })}
+                                        style={{ padding: '8px', fontSize: '0.8rem', background: 'var(--surface-highlight)', color: 'var(--text-main)', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                                        title="Tracking Settings"
+                                    >
+                                        ⚙️
+                                    </button>
 
                                     {/* Remove Button for Everyone (Leave Gym) */}
                                     <button onClick={() => {
@@ -829,7 +849,7 @@ function TrackerContent() {
                 }
 
                 {
-                    editingGym && (
+                    editingSettingsGym && (
                         <div style={{
                             position: 'fixed',
                             top: 0, left: 0, right: 0, bottom: 0,
@@ -843,144 +863,123 @@ function TrackerContent() {
                             <div style={{
                                 background: 'var(--surface)',
                                 width: '100%',
-                                maxWidth: '400px',
+                                maxWidth: '350px',
                                 borderRadius: '16px',
                                 padding: '24px',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: '16px'
                             }}>
-                                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Edit Gym</h2>
+                                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Gym Settings</h2>
+                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                    Settings for <strong>{editingSettingsGym.label}</strong>
+                                </p>
 
-                                {warning && (
-                                    <div style={{
-                                        padding: '12px',
-                                        background: 'rgba(255, 152, 0, 0.1)',
-                                        border: '1px solid var(--warning)',
-                                        borderRadius: '8px',
-                                        color: 'var(--warning)',
-                                        fontSize: '0.9rem',
-                                        textAlign: 'center'
-                                    }}>
-                                        ⚠️ {warning}
+                                <div>
+                                    <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', marginBottom: '12px' }}>Personal Settings</h3>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                        Auto-Tracking Radius: {editingSettingsGym.radius}m
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="100"
+                                        max="1000"
+                                        step="10"
+                                        value={editingSettingsGym.radius}
+                                        onChange={(e) => setEditingSettingsGym({ ...editingSettingsGym, radius: parseInt(e.target.value) })}
+                                        style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--brand-yellow)' }}
+                                    />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                                        <span>100m</span>
+                                        <span>500m</span>
+                                        <span>1km</span>
+                                    </div>
+                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                                        Adjust this if auto-tracking stops while you are still at the gym. A larger radius covers more area.
+                                    </p>
+                                </div>
+
+                                {editingSettingsGym.isCreator && (
+                                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                                        <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', marginBottom: '12px' }}>Gym Details (Global)</h3>
+
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Gym Name</label>
+                                            <input
+                                                type="text"
+                                                value={editingSettingsGym.name}
+                                                onChange={(e) => setEditingSettingsGym({ ...editingSettingsGym, name: e.target.value })}
+                                                style={{
+                                                    width: '100%', padding: '10px', background: 'var(--surface-highlight)',
+                                                    border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-main)'
+                                                }}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Address</label>
+                                            <input
+                                                type="text"
+                                                value={editingSettingsGym.address || ''}
+                                                onChange={(e) => setEditingSettingsGym({ ...editingSettingsGym, address: e.target.value })}
+                                                style={{
+                                                    width: '100%', padding: '10px', background: 'var(--surface-highlight)',
+                                                    border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-main)'
+                                                }}
+                                            />
+                                        </div>
+
+                                        {/* Map Picker Toggle in Settings Modal */}
+                                        <div style={{ marginTop: '12px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Location (Pin)</label>
+                                                <button
+                                                    onClick={() => setShowEditMap(!showEditMap)}
+                                                    style={{ fontSize: '0.8rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                                                >
+                                                    {showEditMap ? 'Hide Map' : 'Adjust Pin on Map'}
+                                                </button>
+                                            </div>
+
+                                            {showEditMap && (
+                                                <div style={{ marginBottom: '16px' }}>
+                                                    <MapPicker
+                                                        initialLat={parsePoint(editingSettingsGym.location)?.lat || 51.1657}
+                                                        initialLng={parsePoint(editingSettingsGym.location)?.lng || 10.4515}
+                                                        onLocationSelect={async (lat, lng) => {
+                                                            // Update local state with new location string
+                                                            const newLoc = `POINT(${lng} ${lat})`;
+                                                            if (editingSettingsGym.location === newLoc) return;
+
+                                                            setEditingSettingsGym(prev => ({ ...prev, location: newLoc }));
+
+                                                            // Reverse Geocode
+                                                            try {
+                                                                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                                                                const data = await res.json();
+                                                                if (data && data.display_name) {
+                                                                    setEditingSettingsGym(prev => ({ ...prev, address: data.display_name }));
+                                                                }
+                                                            } catch (e) {
+                                                                console.error("Reverse geocode failed", e);
+                                                            }
+                                                        }}
+                                                    />
+                                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                                                        Drag the marker to the exact gym entrance.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                                            Changes to Name and Address affect <strong>all users</strong> of this gym.
+                                        </p>
                                     </div>
                                 )}
 
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Gym Name</label>
-                                    <input
-                                        type="text"
-                                        value={editingGym.newName}
-                                        onChange={(e) => setEditingGym({ ...editingGym, newName: e.target.value })}
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px',
-                                            borderRadius: '8px',
-                                            border: '1px solid var(--border)',
-                                            background: 'var(--background)',
-                                            color: 'var(--text-main)'
-                                        }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Address</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Type to search..."
-                                        value={editingGym.newAddress || ''}
-                                        onChange={(e) => {
-                                            setEditingGym({ ...editingGym, newAddress: e.target.value });
-                                            // Update the search query state used by existing hook
-                                            setAddressSearchQuery(e.target.value);
-                                        }}
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px',
-                                            borderRadius: '8px',
-                                            border: '1px solid var(--border)',
-                                            background: 'var(--background)',
-                                            color: 'var(--text-main)'
-                                        }}
-                                    />
-                                    {/* Address Search Results in Modal */}
-                                    {editingGym && addressSearchQuery.length > 2 && searchResults.length > 0 && (
-                                        <div style={{
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '8px',
-                                            maxHeight: '150px',
-                                            overflowY: 'auto',
-                                            marginTop: '8px',
-                                            background: 'var(--surface-highlight)',
-                                            borderRadius: '8px',
-                                            padding: '8px'
-                                        }}>
-                                            {searchResults.map(result => (
-                                                <div
-                                                    key={result.place_id}
-                                                    onClick={() => {
-                                                        setEditingGym({ ...editingGym, newAddress: result.display_name });
-                                                        setSearchResults([]); // Clear results
-                                                        setAddressSearchQuery(''); // Stop searching
-                                                    }}
-                                                    style={{
-                                                        padding: '8px',
-                                                        fontSize: '0.8rem',
-                                                        cursor: 'pointer',
-                                                        borderBottom: '1px solid var(--border)'
-                                                    }}
-                                                >
-                                                    {result.display_name}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Map Picker Toggle in Edit Modal */}
-                                <div style={{ marginTop: '8px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Location (Pin)</label>
-                                        <button
-                                            onClick={() => setShowEditMap(!showEditMap)}
-                                            style={{ fontSize: '0.8rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                                        >
-                                            {showEditMap ? 'Hide Map' : 'Adjust Pin on Map'}
-                                        </button>
-                                    </div>
-
-                                    {showEditMap && (
-                                        <div style={{ marginBottom: '16px' }}>
-                                            <MapPicker
-                                                initialLat={parsePoint(editingGym.location)?.lat || 51.1657}
-                                                initialLng={parsePoint(editingGym.location)?.lng || 10.4515}
-                                                onLocationSelect={async (lat, lng) => {
-                                                    if (editingGym.newLocation?.lat === lat && editingGym.newLocation?.lng === lng) return;
-                                                    setEditingGym(prev => ({ ...prev, newLocation: { lat, lng } }));
-
-                                                    // Reverse Geocode
-                                                    try {
-                                                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-                                                        const data = await res.json();
-                                                        if (data && data.display_name) {
-                                                            setEditingGym(prev => ({ ...prev, newAddress: data.display_name }));
-                                                        }
-                                                    } catch (e) {
-                                                        console.error("Reverse geocode failed", e);
-                                                    }
-                                                }}
-                                            />
-                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-                                                Drag the marker to the exact gym entrance.
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                                     <button
-                                        onClick={() => { setEditingGym(null); setShowEditMap(false); }}
+                                        onClick={() => setEditingSettingsGym(null)}
                                         style={{
                                             flex: 1,
                                             padding: '12px',
@@ -995,23 +994,42 @@ function TrackerContent() {
                                     </button>
                                     <button
                                         onClick={async () => {
-                                            if (!editingGym.newName) return setWarning("Name is required");
-                                            try {
-                                                const updates = {
-                                                    name: editingGym.newName,
-                                                    address: editingGym.newAddress
-                                                };
-                                                // If location was changed via map
-                                                if (editingGym.newLocation) {
-                                                    updates.location = `POINT(${editingGym.newLocation.lng} ${editingGym.newLocation.lat})`;
+                                            // 1. Update Personal Radius
+                                            const radiusResult = await updateUserGym(editingSettingsGym.id, { radius: editingSettingsGym.radius });
+
+                                            // 2. Update Global Details (if creator)
+                                            let globalResult = { success: true };
+                                            if (editingSettingsGym.isCreator) {
+                                                // Parse location string back to lat/lng? updateGym expects lat/lng
+                                                // editingSettingsGym.location is "POINT(lng lat)"
+                                                let lat = null, lng = null;
+                                                if (typeof editingSettingsGym.location === 'string') {
+                                                    const matches = editingSettingsGym.location.match(/POINT\(([-\d\.]+) ([-\d\.]+)\)/);
+                                                    if (matches) {
+                                                        lng = parseFloat(matches[1]);
+                                                        lat = parseFloat(matches[2]);
+                                                    }
                                                 }
 
-                                                await updateGym(editingGym.id, updates);
-                                                setEditingGym(null);
-                                                setShowEditMap(false);
-                                                setSuccessMessage("Gym updated!");
-                                            } catch (err) {
-                                                setWarning("Failed to update: " + err.message);
+                                                if (lat && lng) {
+                                                    const success = await updateGym(editingSettingsGym.id, {
+                                                        name: editingSettingsGym.name,
+                                                        location: `POINT(${lng} ${lat})`,
+                                                        address: editingSettingsGym.address
+                                                    });
+                                                    if (!success) globalResult = { success: false };
+                                                } else {
+                                                    console.error("Could not parse location for updateGym");
+                                                    globalResult = { success: false };
+                                                }
+                                            }
+
+                                            if (radiusResult && radiusResult.success && globalResult.success) {
+                                                setSuccessMessage("Settings updated!");
+                                                setEditingSettingsGym(null);
+                                            } else {
+                                                if (!radiusResult || !radiusResult.success) setWarningMsg("Failed to update radius.");
+                                                if (!globalResult.success) setWarningMsg("Failed to update gym details.");
                                             }
                                         }}
                                         style={{
@@ -1025,41 +1043,7 @@ function TrackerContent() {
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        Save Changes
-                                    </button>
-                                </div>
-
-                                <div style={{ borderTop: '1px solid var(--border)', marginTop: '16px', paddingTop: '16px' }}>
-                                    <button
-                                        onClick={() => {
-                                            setConfirmDialog({
-                                                message: "DELETE THIS GYM PERMANENTLY?\n\nThis cannot be undone and will remove it for ALL users.",
-                                                onConfirm: async () => {
-                                                    try {
-                                                        await deleteGlobalGym(editingGym.id);
-                                                        setEditingGym(null);
-                                                        setShowEditMap(false);
-                                                        setSuccessMessage("Gym deleted permanently.");
-                                                        setConfirmDialog(null);
-                                                    } catch (err) {
-                                                        setWarning("Failed to delete: " + err.message);
-                                                        setConfirmDialog(null);
-                                                    }
-                                                }
-                                            });
-                                        }}
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px',
-                                            background: 'rgba(255, 23, 68, 0.1)',
-                                            color: 'var(--error)',
-                                            border: '1px solid var(--error)',
-                                            borderRadius: '8px',
-                                            fontWeight: 'bold',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Delete Gym Permanently
+                                        Save
                                     </button>
                                 </div>
                             </div>
@@ -1358,6 +1342,71 @@ function TrackerContent() {
                 }
 
 
+                {/* Confirmation Dialog */}
+                {confirmDialog && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.8)',
+                        zIndex: 10000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '20px'
+                    }}>
+                        <div style={{
+                            background: 'var(--surface)',
+                            borderRadius: '16px',
+                            padding: '24px',
+                            maxWidth: '400px',
+                            width: '100%',
+                            textAlign: 'center'
+                        }}>
+                            <p style={{
+                                fontSize: '1.1rem',
+                                marginBottom: '24px',
+                                color: 'var(--text-main)',
+                                whiteSpace: 'pre-line'
+                            }}>
+                                {confirmDialog.message}
+                            </p>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    onClick={() => setConfirmDialog(null)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        background: 'transparent',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '8px',
+                                        color: 'var(--text-main)',
+                                        cursor: 'pointer',
+                                        fontSize: '1rem'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDialog.onConfirm}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        background: 'var(--error)',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        color: '#fff',
+                                        cursor: 'pointer',
+                                        fontSize: '1rem',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    Confirm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div >
         );
     }
@@ -1393,9 +1442,11 @@ function TrackerContent() {
                     animation: 'pulse 2s infinite'
                 }}>
                     <span>⚠️</span>
-                    {warning}
+                    {displayWarning}
                 </div>
             )}
+
+
 
             <div style={{
                 background: 'var(--surface)',
@@ -1501,7 +1552,7 @@ function TrackerContent() {
                                 transition: 'all 0.2s ease'
                             }}
                         >
-                            {workoutSession ? 'Stop Workout' : ((!user.gyms || user.gyms.length === 0) ? 'Add a Gym First' : 'Start Workout')}
+                            {workoutSession ? 'Stop Workout' : ((!user.gyms || user.gyms.length === 0) ? 'Add a Gym First' : 'Start Tracking')}
                         </button>
 
                         {/* Invite Friends Button - Only show when session is active */}
