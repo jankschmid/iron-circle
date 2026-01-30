@@ -108,8 +108,9 @@ export default function WorkoutActive() {
                                     cursor: 'pointer'
                                 }}
                             />
-                            <label htmlFor="privateCheck" style={{ color: 'var(--text-main)', cursor: 'pointer', fontWeight: '500' }}>
-                                Mark as Private
+                            <label htmlFor="privateCheck" style={{ color: 'var(--text-main)', cursor: 'pointer', fontWeight: '500', display: 'flex', flexDirection: 'column' }}>
+                                <span>Ghost Mode 👻</span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Hide from feed & leaderboards</span>
                             </label>
                         </div>
                         <div style={{ display: 'flex', gap: '12px' }}>

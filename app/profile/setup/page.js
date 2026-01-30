@@ -148,7 +148,24 @@ export default function ProfileSetupPage() {
                         {loading ? 'Claiming...' : 'Get Started'}
                     </button>
                 </form>
+
+
+                <div style={{ marginTop: '24px', textAlign: 'center', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px' }}>
+                        Already have an account?
+                    </p>
+                    <button
+                        onClick={async () => {
+                            const { error } = await supabase.auth.signOut();
+                            if (error) console.error(error);
+                            window.location.href = '/login';
+                        }}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                        Log in here
+                    </button>
+                </div>
             </div>
-        </div>
+        </div >
     );
 }

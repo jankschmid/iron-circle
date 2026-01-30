@@ -23,7 +23,7 @@ export default function CreateChatPage() {
         if (!groupName.trim() || selectedFriends.length === 0) return;
 
         const chatId = createGroupChat(groupName, selectedFriends);
-        router.push(`/social/chat/${chatId}`);
+        router.push(`/social/chat/conversation?id=${chatId}`);
     };
 
     return (

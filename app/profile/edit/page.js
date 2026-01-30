@@ -22,7 +22,7 @@ export default function EditProfilePage() {
     // Handlers
 
 
-    if (!user) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
+    if (!user) return <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>Loading...</div>;
 
     const handleSave = async () => {
         setIsLoading(true);

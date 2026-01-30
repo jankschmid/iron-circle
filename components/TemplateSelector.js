@@ -10,7 +10,7 @@ export default function TemplateSelector() {
     const [templateToShare, setTemplateToShare] = useState(null);
 
     return (
-        <div className="container" style={{ paddingTop: '40px' }}>
+        <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>
             <h1 style={{ marginBottom: '24px' }}>Start Workout</h1>
 
             <div style={{ display: 'grid', gap: '16px' }}>
@@ -69,7 +69,7 @@ export default function TemplateSelector() {
                                 📤
                             </button>
                             <Link
-                                href={`/workout/edit/${template.id}`}
+                                href={`/workout/edit?id=${template.id}`}
                                 style={{
                                     flex: 1,
                                     padding: '0 16px',

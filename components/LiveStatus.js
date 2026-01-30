@@ -3,7 +3,9 @@
 import { useStore } from '@/lib/store';
 import { useState } from 'react';
 
-export default function LiveStatus() {
+import ErrorBoundary from './ErrorBoundary';
+
+function LiveStatusContent() {
     const { friends, user, workoutSession, activeWorkout, exercises } = useStore();
     const [selectedFriend, setSelectedFriend] = useState(null);
 
@@ -296,5 +298,13 @@ export default function LiveStatus() {
                 </div>
             )}
         </section>
+    );
+}
+
+export default function LiveStatus() {
+    return (
+        <ErrorBoundary message="Live Circle unavailable">
+            <LiveStatusContent />
+        </ErrorBoundary>
     );
 }

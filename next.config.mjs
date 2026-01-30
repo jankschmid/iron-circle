@@ -6,12 +6,13 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    // Deine bisherigen Einstellungen...
+    reactStrictMode: false, // Fix double-mount AbortErrors in local dev
+    output: 'export',
+    images: {
+        unoptimized: true
+    },
     experimental: {
         // leaving experimental empty if not needed
-    },
-    turbopack: {
-        root: __dirname,
     },
 };
 

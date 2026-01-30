@@ -31,7 +31,8 @@ export default function BottomNav() {
             borderTop: '1px solid var(--border)',
             display: 'flex',
             justifyContent: 'space-around',
-            padding: '12px 0 24px', // Extra padding for safe area
+            paddingTop: '12px',
+            paddingBottom: 'calc(12px + var(--safe-bottom))',
             zIndex: 100
         }}>
             {navItems.map(item => (

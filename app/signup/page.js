@@ -12,7 +12,8 @@ export default function SignupPage() {
     const [loading, setLoading] = useState(false)
     const [success, setSuccess] = useState(false)
     const router = useRouter()
-    const supabase = createClient()
+    // Fix: Singleton client
+    const [supabase] = useState(() => createClient())
 
     const handleSignup = async (e) => {
         e.preventDefault()

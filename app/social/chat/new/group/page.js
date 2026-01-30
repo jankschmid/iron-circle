@@ -26,7 +26,7 @@ export default function NewGroupPage() {
 
         try {
             const newChatId = await createGroupChat(name, selectedFriends);
-            router.push(`/social/chat/${newChatId}`);
+            router.push(`/social/chat/conversation?id=${newChatId}`);
         } catch (err) {
             console.error("Failed to create group:", err);
             alert("Failed to create group.");

@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export default function PrivacyPolicyPage() {
     return (
-        <div className="container" style={{ paddingBottom: '100px', paddingTop: '40px' }}>
+        <div className="container" style={{ paddingBottom: '100px', paddingTop: 'calc(40px + var(--safe-top))' }}>
             <header style={{ marginBottom: '32px' }}>
                 <Link href="/profile" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>← Back</Link>
                 <h1 style={{ fontSize: '2rem', marginTop: '16px' }}>Privacy Policy</h1>

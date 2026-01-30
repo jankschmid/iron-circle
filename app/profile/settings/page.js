@@ -19,7 +19,7 @@ export default function SettingsPage() {
     const [newPassword, setNewPassword] = useState('');
 
     // Safety check - MUST be after hooks
-    if (!user) return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
+    if (!user) return <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>Loading...</div>;
 
 
     const handleUpdateProfile = async () => {

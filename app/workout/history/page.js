@@ -164,7 +164,7 @@ export default function HistoryPage() {
                 {history.map((session) => (
                     <div key={session.id} style={{ position: 'relative' }}>
                         <Link
-                            href={`/workout/history/${session.id}`}
+                            href={`/workout/history/view?id=${session.id}`}
                             style={{
                                 background: 'var(--surface)',
                                 border: '1px solid var(--border)',

@@ -196,7 +196,7 @@ export default function SocialPage() {
                             borderBottom: '1px solid var(--border)',
                             background: athlete.id === user.id ? 'var(--surface-highlight)' : 'transparent'
                         }}>
-                            <Link href={`/profile/${athlete.id}`} style={{ display: 'flex', alignItems: 'center', width: '100%', textDecoration: 'none', color: 'inherit' }}>
+                            <Link href={`/profile/view?id=${athlete.id}`} style={{ display: 'flex', alignItems: 'center', width: '100%', textDecoration: 'none', color: 'inherit' }}>
                                 <div style={{
                                     width: '24px',
                                     fontWeight: '700',
@@ -253,7 +253,7 @@ export default function SocialPage() {
                                 )}
                             </div>
                             <div>
-                                <Link href={`/profile/${friend.id}`}>
+                                <Link href={`/profile/view?id=${friend.id}`}>
                                     <div style={{ fontWeight: '600' }}>{friend.name}</div>
                                 </Link>
                                 <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
@@ -365,7 +365,7 @@ export default function SocialPage() {
                                         borderRadius: 'var(--radius-md)',
                                         border: '1px solid var(--border)'
                                     }}>
-                                        <Link href={`/profile/${friend.id}`} onClick={() => setShowFriendsModal(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', color: 'inherit', flex: 1 }}>
+                                        <Link href={`/profile/view?id=${friend.id}`} onClick={() => setShowFriendsModal(false)} style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', color: 'inherit', flex: 1 }}>
                                             <img src={friend.avatar} style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
                                             <div>
                                                 <div style={{ fontWeight: '600' }}>{friend.name}</div>

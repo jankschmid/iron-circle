@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">IronCircle</string>
+    <string name="title_activity_main">IronCircle</string>
+    <string name="package_name">com.ironcircle.app</string>
+    <string name="custom_url_scheme">com.ironcircle.app</string>
+</resources>

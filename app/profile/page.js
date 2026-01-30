@@ -11,7 +11,8 @@ import { useState, useEffect } from 'react';
 export default function ProfilePage() {
     const { user, getWeeklyStats, getPersonalBests, gyms, friends } = useStore();
     const router = useRouter();
-    const supabase = createClient();
+    // Fix: Create client once to avoid lock contention
+    const [supabase] = useState(() => createClient());
     const [isLongLoading, setIsLongLoading] = useState(false);
 
     useEffect(() => {
@@ -252,7 +253,7 @@ export default function ProfilePage() {
                         <span style={{ color: 'var(--text-dim)' }}>›</span>
                     </Link>
 
-                    <Link href="/privacy" style={{
+                    <Link href="/settings/privacy" style={{
                         width: '100%',
                         textAlign: 'left',
                         padding: '16px',
@@ -263,9 +264,46 @@ export default function ProfilePage() {
                         justifyContent: 'space-between',
                         alignItems: 'center'
                     }}>
-                        Privacy Policy
+                        Privacy & Ghost Mode 👻
                         <span style={{ color: 'var(--text-dim)' }}>›</span>
                     </Link>
+
+                    {/* Conditional Coach Panel */}
+                    {(user.is_super_admin) && (
+                        <Link href="/admin/master" style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '16px',
+                            background: 'rgba(255, 0, 0, 0.1)', // Red tint for Master Admin
+                            borderBottom: '1px solid var(--border)',
+                            color: '#ff4444',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontWeight: 'bold'
+                        }}>
+                            Master Admin Panel
+                            <span style={{ color: '#ff4444' }}>›</span>
+                        </Link>
+                    )}
+
+                    {(userGym?.role === 'trainer' || userGym?.role === 'admin') && (
+                        <Link href={`/trainer/dashboard?gymId=${userGym.id}`} style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '16px',
+                            background: 'rgba(255, 200, 0, 0.1)', // Gold tint
+                            borderBottom: '1px solid var(--border)',
+                            color: '#FFC800',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontWeight: 'bold'
+                        }}>
+                            Coach Panel
+                            <span style={{ color: '#FFC800' }}>›</span>
+                        </Link>
+                    )}
 
                     <button onClick={handleLogout} style={{
                         width: '100%',

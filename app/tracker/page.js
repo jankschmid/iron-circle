@@ -333,7 +333,7 @@ function TrackerContent() {
     const handleSearchAddress = async () => {
         if (!addressSearchQuery) return;
         try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressSearchQuery)}`);
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressSearchQuery)}`, { cache: 'no-store' });
             const data = await res.json();
 
             // Format address results as selectable locations
@@ -390,7 +390,7 @@ function TrackerContent() {
             // Refresh user gyms
             const { data: userGymsData } = await supabase
                 .from('user_gyms')
-                .select('gym_id, label, is_default, gyms(id, name, address, source, created_by)')
+                .select('gym_id, label, is_default, gyms(id, name, address, source, created_by, is_verified)')
                 .eq('user_id', user.id);
 
             const gyms = userGymsData?.map(ug => ({
@@ -400,6 +400,7 @@ function TrackerContent() {
                 address: ug.gyms?.address,
                 source: ug.gyms?.source,
                 createdBy: ug.gyms?.created_by,
+                isVerified: ug.gyms?.is_verified,
                 isDefault: ug.is_default
             })) || [];
 
@@ -439,7 +440,7 @@ function TrackerContent() {
             // Refresh the gym list by reloading user data
             const { data: userGymsData } = await supabase
                 .from('user_gyms')
-                .select('gym_id, label, is_default, gyms(id, name, address, source, created_by)')
+                .select('gym_id, label, is_default, gyms(id, name, address, source, created_by, is_verified)')
                 .eq('user_id', user.id);
 
             const gyms = userGymsData?.map(ug => ({
@@ -449,6 +450,7 @@ function TrackerContent() {
                 address: ug.gyms?.address,
                 source: ug.gyms?.source,
                 createdBy: ug.gyms?.created_by,
+                isVerified: ug.gyms?.is_verified,
                 isDefault: ug.is_default
             })) || [];
 
@@ -591,7 +593,7 @@ function TrackerContent() {
 
     if (showManage) {
         return (
-            <div className="container" style={{ paddingBottom: '100px', paddingTop: '20px', position: 'relative' }}>
+            <div className="container" style={{ paddingBottom: '100px', paddingTop: 'calc(20px + var(--safe-top))', position: 'relative' }}>
                 {showCommunities && (
                     <div style={{
                         position: 'fixed',
@@ -758,6 +760,7 @@ function TrackerContent() {
                                             radius: gym.radius || 200,
                                             // Global fields (for creators)
                                             isCreator: gym.createdBy === user.id,
+                                            isVerified: gym.isVerified,
                                             name: gym.name,
                                             address: gym.address,
                                             location: gym.location // Pass current location string needed for updateGym
@@ -899,7 +902,7 @@ function TrackerContent() {
                                     </p>
                                 </div>
 
-                                {editingSettingsGym.isCreator && (
+                                {editingSettingsGym.isCreator && !editingSettingsGym.isVerified && (
                                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                                         <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', marginBottom: '12px' }}>Gym Details (Global)</h3>
 
@@ -1412,7 +1415,7 @@ function TrackerContent() {
     }
 
     return (
-        <div className="container" style={{ paddingBottom: '100px', paddingTop: '40px' }}>
+        <div className="container" style={{ paddingBottom: '100px', paddingTop: 'calc(40px + var(--safe-top))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h1 style={{ fontSize: '2rem', marginBottom: '8px', color: 'var(--text-main)' }}>Gym Tracker</h1>
                 <button
@@ -1962,10 +1965,14 @@ function TrackerContent() {
     );
 }
 
+import ErrorBoundary from '@/components/ErrorBoundary';
+
 export default function TrackerPage() {
     return (
-        <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Tracker...</div>}>
-            <TrackerContent />
-        </Suspense>
+        <ErrorBoundary message="Tracker unavailable">
+            <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Tracker...</div>}>
+                <TrackerContent />
+            </Suspense>
+        </ErrorBoundary>
     );
 }

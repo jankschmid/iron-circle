@@ -16,7 +16,7 @@ export default function AddFriendPage() {
 
     // Guard: Wait for user to be loaded
     if (!user) {
-        return <div className="container" style={{ paddingTop: '40px' }}>Loading...</div>;
+        return <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>Loading...</div>;
     }
 
     const handleSearch = async (e) => {

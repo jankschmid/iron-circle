@@ -43,7 +43,7 @@ export default function NewChatPage() {
 
                 if (common) {
                     // Chat exists -> Redirect
-                    router.push(`/social/chat/${common.conversation_id}`);
+                    router.push(`/social/chat/conversation?id=${common.conversation_id}`);
                     return;
                 }
             }
@@ -71,7 +71,7 @@ export default function NewChatPage() {
             if (partError) throw partError;
 
             // 4. Redirect
-            router.push(`/social/chat/${newConvo.id}`);
+            router.push(`/social/chat/conversation?id=${newConvo.id}`);
 
         } catch (err) {
             console.error("Error starting chat:", err);
@@ -139,7 +139,7 @@ export default function NewChatPage() {
                         onSuccess={(conversationId) => {
                             setShowCommunitiesModal(false);
                             if (conversationId) {
-                                router.push(`/social/chat/${conversationId}`);
+                                router.push(`/social/chat/conversation?id=${conversationId}`);
                             } else {
                                 router.push('/chat');
                             }
