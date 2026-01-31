@@ -14,6 +14,14 @@ function GymAdminPage() {
     const [supabase] = useState(() => createClient());
     const router = useRouter();
 
+    const [origin, setOrigin] = useState('');
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setOrigin(window.location.origin);
+        }
+    }, []);
+
     const [gym, setGym] = useState(null);
     const [community, setCommunity] = useState(null);
     const [stats, setStats] = useState({ members: 0, todayVisits: 0 });
@@ -24,10 +32,73 @@ function GymAdminPage() {
     const [members, setMembers] = useState([]);
     const [memberSearch, setMemberSearch] = useState('');
 
+    // TV Linking State
+    const [connectingTv, setConnectingTv] = useState(false);
+    const [monitors, setMonitors] = useState([]); // List of connected TVs
+
     useEffect(() => {
         if (!user || !gymId) return;
         fetchGymDetails();
+        fetchMonitors();
     }, [user, gymId]);
+
+    const fetchMonitors = async () => {
+        const { data, error } = await supabase
+            .from('gym_monitors')
+            .select('*')
+            .eq('gym_id', gymId)
+            .eq('status', 'active');
+
+        if (data) setMonitors(data);
+        if (error) console.error("Error fetching monitors:", error);
+    };
+
+    const handleLinkTv = async () => {
+        const input = document.getElementById('tv-code-input');
+        if (!input) return;
+
+        const code = input.value.toUpperCase();
+        if (code.length < 6) return alert("Invalid Code");
+
+        setConnectingTv(true);
+        try {
+            // Add minimum delay for UX so user sees "Connecting..."
+            const [rpcRes] = await Promise.all([
+                supabase.rpc('link_gym_monitor', { p_code: code, p_gym_id: gym.id }),
+                new Promise(resolve => setTimeout(resolve, 1500))
+            ]);
+
+            const { data, error } = rpcRes;
+
+            if (error) throw error;
+            if (data) {
+                alert("Success! TV Connected.");
+                input.value = '';
+                fetchMonitors(); // Refresh list
+            } else {
+                alert("Code not found or expired.");
+            }
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            setConnectingTv(false);
+        }
+    };
+
+    const handleDisconnectMonitor = async (monitorId) => {
+        if (!confirm("Disconnect this screen? It will return to pairing mode.")) return;
+        try {
+            const { error } = await supabase.rpc('disconnect_gym_monitor', { p_monitor_id: monitorId });
+            if (error) throw error;
+
+            // Optimistic update
+            setMonitors(prev => prev.filter(m => m.id !== monitorId));
+            alert("Monitor Disconnected.");
+            fetchMonitors(); // Verify with server
+        } catch (err) {
+            alert("Error: " + err.message);
+        }
+    };
 
     const fetchGymDetails = async () => {
         try {
@@ -130,9 +201,11 @@ function GymAdminPage() {
     }, [gym]);
 
     const regenerateKey = async (silent = false) => {
+        console.log("Regenerating Key for Gym:", gymId);
         if (!silent && !confirm("Are you sure? This will disconnect current displays.")) return;
 
         const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
+        console.log("New Key Generated:", newKey);
 
         const { error } = await supabase
             .from('gyms')
@@ -199,19 +272,87 @@ function GymAdminPage() {
                                 <Link
                                     href={`/gym/display?id=${gym.id}`}
                                     target="_blank"
-                                    style={{ background: '#FFC800', color: '#000', padding: '8px 16px', borderRadius: '8px', textDecoration: 'none', fontWeight: 'bold', fontSize: '0.9rem' }}
+                                    style={{ background: '#222', color: '#fff', padding: '8px 16px', borderRadius: '8px', textDecoration: 'none', fontSize: '0.9rem' }}
                                 >
-                                    Open Monitor View ↗
+                                    Open Web Link ↗
                                 </Link>
                             </div>
-                            <p style={{ color: '#888', marginBottom: '16px', fontSize: '0.9rem' }}>
-                                Connect a TV screen to <strong>ironcircle.app/gym/display?id={gym.id}</strong> and enter this key:
-                            </p>
-                            <div style={{ display: 'flex', gap: '12px', background: '#000', padding: '16px', borderRadius: '8px', border: '1px solid #333' }}>
-                                <div style={{ fontFamily: 'monospace', fontSize: '1.8rem', fontWeight: 'bold', letterSpacing: '4px', color: '#FFC800', flex: 1, textAlign: 'center' }}>
-                                    {gym.display_key || '----'}
+
+                            <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
+                                {/* Option A: TV Pairing */}
+                                <div style={{ flex: 1, minWidth: '300px' }}>
+                                    <h4 style={{ color: '#FFC800', marginBottom: '12px' }}>Option A: Smart TV (Recommended)</h4>
+                                    <p style={{ color: '#888', marginBottom: '16px', fontSize: '0.9rem' }}>
+                                        Open <strong>{origin}/tv</strong> on your Gym TV and enter the code shown there:
+                                    </p>
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                        <input
+                                            id="tv-code-input"
+                                            type="text"
+                                            placeholder="Ex: A7X-9P2"
+                                            maxLength={7}
+                                            disabled={connectingTv}
+                                            style={{
+                                                background: connectingTv ? '#222' : '#000',
+                                                border: '1px solid #333', color: connectingTv ? '#666' : '#fff',
+                                                padding: '12px', borderRadius: '8px', flex: 1,
+                                                fontSize: '1.2rem', fontFamily: 'monospace', letterSpacing: '2px', textTransform: 'uppercase'
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleLinkTv();
+                                            }}
+                                        />
+                                        <button
+                                            onClick={handleLinkTv}
+                                            disabled={connectingTv}
+                                            style={{
+                                                background: connectingTv ? '#444' : '#FFC800',
+                                                color: connectingTv ? '#888' : '#000',
+                                                border: 'none', padding: '0 24px', borderRadius: '8px', fontWeight: 'bold', cursor: connectingTv ? 'not-allowed' : 'pointer'
+                                            }}
+                                        >
+                                            {connectingTv ? 'Connecting...' : 'Connect'}
+                                        </button>
+                                    </div>
+
+                                    {/* Connected Monitors List */}
+                                    {monitors.length > 0 && (
+                                        <div style={{ marginTop: '20px', borderTop: '1px solid #333', paddingTop: '16px' }}>
+                                            <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Connected Screens</div>
+                                            {monitors.map(m => (
+                                                <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#222', padding: '12px', borderRadius: '8px', marginBottom: '8px' }}>
+                                                    <div>
+                                                        <div style={{ color: '#fff', fontSize: '1rem', fontWeight: 'bold' }}>TV {m.pairing_code}</div>
+                                                        <div style={{ color: '#888', fontSize: '0.8rem' }}>Active • Connected {new Date(m.updated_at).toLocaleDateString()}</div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleDisconnectMonitor(m.id)}
+                                                        style={{ background: '#330000', color: '#ff4444', border: '1px solid #ff4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '0.8rem' }}
+                                                    >
+                                                        Disconnect
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                                <button onClick={regenerateKey} style={{ background: '#222', border: 'none', color: '#fff', padding: '0 16px', borderRadius: '4px', cursor: 'pointer' }}>Generate New</button>
+
+                                {/* Divider */}
+                                <div style={{ width: '1px', background: '#222' }}></div>
+
+                                {/* Option B: Key */}
+                                <div style={{ flex: 1, minWidth: '300px' }}>
+                                    <h4 style={{ color: '#fff', marginBottom: '12px' }}>Option B: Manual Key</h4>
+                                    <p style={{ color: '#888', marginBottom: '16px', fontSize: '0.9rem' }}>
+                                        Legacy: Connect a TV screen to <strong>{origin}/gym/display?id={gym.id}</strong> and enter this key:
+                                    </p>
+                                    <div style={{ display: 'flex', gap: '12px', background: '#000', padding: '10px', borderRadius: '8px', border: '1px solid #333' }}>
+                                        <div style={{ fontFamily: 'monospace', fontSize: '1.2rem', fontWeight: 'bold', letterSpacing: '2px', color: '#888', flex: 1 }}>
+                                            {gym.display_key || '----'}
+                                        </div>
+                                        <button onClick={regenerateKey} style={{ background: '#222', border: 'none', color: '#fff', padding: '0 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>Regen</button>
+                                    </div>
+                                </div>
                             </div>
                         </section>
 
@@ -223,7 +364,7 @@ function GymAdminPage() {
                                     {/* Simple QR Code to Gym Page */}
                                     {/* In a real app, generate this robustly. Here using an API for immediate result. */}
                                     <img
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://ironcircle.app/community?id=${community?.id}`}
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`${origin}/community?id=${community?.id}`)}`}
                                         alt="Gym QR"
                                         style={{ display: 'block' }}
                                     />

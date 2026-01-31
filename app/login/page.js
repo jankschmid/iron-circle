@@ -42,7 +42,9 @@ export default function LoginPage() {
 
             // Success
             router.refresh()
-            router.push('/')
+            const params = new URLSearchParams(window.location.search);
+            const next = params.get('next');
+            router.push(next ? decodeURIComponent(next) : '/');
 
         } catch (err) {
             // Error handling - ensure loading state is reset immediately

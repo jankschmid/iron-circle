@@ -86,6 +86,10 @@ function ChatListInner() {
         return <div className="p-4 text-center text-red-500" style={{ paddingTop: 'calc(40px + env(safe-area-inset-top))' }}>Error loading chats: {error.message}</div>;
     }
 
+    // Split into active and inactive (left) communities
+    const activeConversations = filteredConversations.filter(c => c.isMember !== false);
+    const inactiveConversations = filteredConversations.filter(c => c.isMember === false);
+
     return (
         <div style={{ maxWidth: '480px', margin: '0 auto', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
 
@@ -117,6 +121,49 @@ function ChatListInner() {
                     ))}
                 </div>
             </header>
+
+            {/* Chat List */}
+            <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                {activeConversations.length === 0 && !loading ? (
+                    <div style={{ textAlign: 'center', color: '#666', marginTop: '40px' }}>
+                        <p>No chats found.</p>
+                        {activeTab === 'communities' && (
+                            <button
+                                onClick={() => setShowCommunitiesModal(true)}
+                                style={{ marginTop: '16px', background: 'var(--primary)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                            >
+                                Find Communities
+                            </button>
+                        )}
+                        {activeTab === 'messages' && (
+                            <p style={{ fontSize: '0.9rem', marginTop: '8px' }}>Start a workout with friends to chat!</p>
+                        )}
+                        {activeTab === 'groups' && (
+                            <Link href="/social/chat/new/group">
+                                <button style={{ marginTop: '16px', background: 'var(--primary)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                    Create Group
+                                </button>
+                            </Link>
+                        )}
+                    </div>
+                ) : (
+                    activeConversations.map(chat => (
+                        <ChatCard key={chat.id} chat={chat} onUpdate={refetch} setConfirmDialog={setConfirmDialog} />
+                    ))
+                )}
+
+                {/* Inactive Communities Toggle */}
+                {inactiveConversations.length > 0 && (
+                    <div style={{ marginTop: '24px' }}>
+                        <button
+                            onClick={() => setShowInactiveCommunities(!showInactiveCommunities)}
+                            style={{ background: 'transparent', border: 'none', color: '#666', width: '100%', textAlign: 'center', cursor: 'pointer', fontSize: '0.9rem' }}
+                        >
+                            {showInactiveCommunities ? 'Hide' : 'Show'} Left Communities ({inactiveConversations.length})
+                        </button>
+                    </div>
+                )}
+            </div>
 
             {showInactiveCommunities && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>

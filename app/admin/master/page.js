@@ -54,7 +54,7 @@ export default function MasterAdminPage() {
             .order('created_at', { ascending: false })
             .limit(50);
 
-        if (error) console.error("Fetch Gyms Error:", error);
+        if (error) console.error("Fetch Gyms Error:", JSON.stringify(error, null, 2), error.message);
         if (data) setGyms(data);
     };
 
