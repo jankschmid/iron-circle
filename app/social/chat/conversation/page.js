@@ -144,17 +144,35 @@ function ChatContent() {
             const from = pageParam * limit;
             const to = from + limit - 1;
 
+            // 1. Fetch messages (raw)
             const { data: msgs, error } = await supabase
                 .from('messages')
-                .select('*, sender:sender_id(name, username, avatar_url)') // Join sender profile
+                .select('*')
                 .eq('conversation_id', conversation.id)
-                .order('created_at', { ascending: false }) // Fetch newest first for pagination
+                .order('created_at', { ascending: false })
                 .range(from, to);
 
             if (error) throw error;
 
-            // Map sender if join failed or was null (handle edge cases)
-            return msgs.reverse(); // We fetch reverse (newest first) but render (oldest first)
+            // 2. Manual Join: Fetch Sender Profiles
+            const senderIds = [...new Set(msgs.map(m => m.sender_id))];
+
+            if (senderIds.length > 0) {
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('id, name, username, avatar_url')
+                    .in('id', senderIds);
+
+                // Map profiles to messages
+                const profileMap = new Map(profiles?.map(p => [p.id, p]));
+
+                return msgs.map(msg => ({
+                    ...msg,
+                    sender: profileMap.get(msg.sender_id) || { name: 'Unknown', avatar_url: null }
+                })).reverse();
+            }
+
+            return msgs.reverse();
         },
         getNextPageParam: (lastPage, allPages) => {
             // If we got less than limit, we are at the end
@@ -328,7 +346,31 @@ function ChatContent() {
     if (!chatId) return <div className="container" style={{ paddingTop: 'calc(40px + env(safe-area-inset-top))', paddingLeft: '20px' }}>Chat ID missing</div>;
 
     if (status === 'pending') {
-        return <div className="container" style={{ paddingTop: 'calc(40px + env(safe-area-inset-top))', textAlign: 'center' }}>Loading Chat...</div>;
+        return (
+            <div style={{
+                padding: 'calc(16px + env(safe-area-inset-top)) 20px',
+                background: 'var(--background)',
+                height: '100vh',
+                maxWidth: '480px',
+                margin: '0 auto',
+                display: 'flex',
+                flexDirection: 'column'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '40px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }} />
+                    <div style={{ width: '120px', height: '24px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1 }}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} style={{
+                            alignSelf: i % 2 === 0 ? 'flex-end' : 'flex-start',
+                            width: '60%', height: '60px',
+                            background: 'rgba(255,255,255,0.05)', borderRadius: '12px'
+                        }} />
+                    ))}
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -365,7 +407,16 @@ function ChatContent() {
                         </div>
                     )}
                 </div>
-                {/* Link Logic... */}
+
+                {/* Info Button */}
+                {conversation && (
+                    <Link href={`/social/chat/conversation/info?id=${conversation.id}`} style={{
+                        width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'rgba(255,255,255,0.1)', borderRadius: '50%', color: 'var(--foreground)', textDecoration: 'none', fontSize: '1.2rem'
+                    }}>
+                        ℹ
+                    </Link>
+                )}
             </header>
 
             {/* Messages Area */}

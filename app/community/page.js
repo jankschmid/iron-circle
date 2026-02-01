@@ -6,10 +6,12 @@ import { useStore } from '@/lib/store';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import GymHub from '@/components/GymHub';
 
 function CommunityContent() {
     const searchParams = useSearchParams();
     const communityId = searchParams.get('id');
+    const gymIdParam = searchParams.get('gymId');
     const { user, joinCommunity, gyms } = useStore();
     const supabase = createClient();
     const router = useRouter();
@@ -21,19 +23,37 @@ function CommunityContent() {
 
     useEffect(() => {
         if (communityId) {
-            fetchCommunity();
+            fetchCommunity(communityId);
+        } else if (gymIdParam) {
+            fetchCommunityByGym(gymIdParam);
+        } else if (user?.gymId) {
+            fetchPrimaryHub(user.gymId);
         } else {
             setLoading(false);
             setError("No Community ID provided.");
         }
-    }, [communityId]);
+    }, [communityId, gymIdParam, user?.gymId]);
 
-    const fetchCommunity = async () => {
+    const fetchPrimaryHub = async (gId) => {
+        fetchCommunityByGym(gId);
+    };
+
+    const fetchCommunityByGym = async (gId) => {
+        const { data, error } = await supabase.from('communities').select('*, gyms(name, address)').eq('gym_id', gId).maybeSingle();
+        if (data) {
+            setCommunity(data);
+        } else {
+            setError("Community not found for this Gym.");
+        }
+        setLoading(false);
+    };
+
+    const fetchCommunity = async (cId) => {
         try {
             const { data, error } = await supabase
                 .from('communities')
                 .select('*, gyms(name, address)')
-                .eq('id', communityId)
+                .eq('id', cId)
                 .single();
 
             if (error) throw error;
@@ -48,7 +68,6 @@ function CommunityContent() {
 
     const handleJoin = async () => {
         if (!user) {
-            // Redirect to login with return URL
             router.push(`/login?returnUrl=/community?id=${communityId}`);
             return;
         }
@@ -64,14 +83,9 @@ function CommunityContent() {
                 consent = true;
             }
 
-            const result = await joinCommunity(community.id, community.gym_id, community.gyms?.name || community.name, consent);
-
-            // Success -> Redirect to Chat
-            if (result?.conversationId) {
-                router.push(`/social/chat/conversation?id=${result.conversationId}&type=community`);
-            } else {
-                router.push('/social/chat');
-            }
+            await joinCommunity(community.id, community.gym_id, community.gyms?.name || community.name, consent);
+            // Refresh to show Hub
+            window.location.reload();
         } catch (err) {
             alert("Failed to join: " + err.message);
         } finally {
@@ -82,8 +96,19 @@ function CommunityContent() {
     if (loading) return <div style={{ height: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>Loading...</div>;
     if (error) return <div style={{ height: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'red' }}>{error}</div>;
 
+    // CHECK MEMBERSHIP & TYPE
+    // 1. Is Member?
     const isMember = user?.gyms?.some(g => g.id === community.gym_id);
 
+    // 2. Is Partner Gym?
+    const isPartner = community.gym_type === 'verified_partner';
+
+    // RENDER HUB IF MEMBER AND PARTNER
+    if (isMember && isPartner) {
+        return <GymHub communityId={community.id} gymId={community.gym_id} />;
+    }
+
+    // DEFAULT LANDING PAGE (Non-Member or Non-Partner)
     return (
         <div style={{ minHeight: '100vh', background: '#000', color: '#fff', fontFamily: 'Inter, sans-serif', padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
 
@@ -104,11 +129,12 @@ function CommunityContent() {
                 </div>
 
                 {isMember ? (
+                    // Member of Standard Community -> Go to standard Chat
                     <Link
-                        href={`/social/chat?tab=communities`} // Or direct deep link
+                        href={`/social/chat?tab=communities`}
                         style={{ display: 'block', width: '100%', padding: '16px', background: '#222', color: '#fff', border: '1px solid #333', borderRadius: '12px', textDecoration: 'none', fontWeight: 'bold', fontSize: '1.1rem' }}
                     >
-                        Already a Member (Open App)
+                        Already a Member (Open Chat)
                     </Link>
                 ) : (
                     <button

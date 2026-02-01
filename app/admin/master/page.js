@@ -164,9 +164,21 @@ export default function MasterAdminPage() {
 
     return (
         <div style={{ minHeight: '100vh', background: '#111', color: '#fff', fontFamily: 'Inter' }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
-                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '900' }}>MASTER <span style={{ color: '#FFC800' }}>ADMIN</span></h1>
+            <style jsx global>{`
+                @media (max-width: 768px) {
+                    .admin-container {
+                        padding: 20px 16px !important;
+                    }
+                    .admin-header {
+                        flex-direction: column;
+                        align-items: flex-start !important;
+                        gap: 16px;
+                    }
+                }
+            `}</style>
+            <div className="admin-container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+                <header className="admin-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '900', margin: 0 }}>MASTER <span style={{ color: '#FFC800' }}>ADMIN</span></h1>
                     <div style={{ color: '#666' }}>Logged as: {user.email || user.name}</div>
                 </header>
 

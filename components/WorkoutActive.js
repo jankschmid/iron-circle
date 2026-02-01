@@ -4,11 +4,26 @@ import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import ExerciseLogger from './ExerciseLogger';
 import BottomNav from './BottomNav';
+import ExercisePicker from './ExercisePicker';
 
 export default function WorkoutActive() {
-    const { activeWorkout, finishWorkout, cancelWorkout, logSet, getExerciseHistory, getExercisePR, exercises, addSetToWorkout, removeSetFromWorkout } = useStore();
+    const {
+        activeWorkout,
+        finishWorkout,
+        cancelWorkout,
+        logSet,
+        getExerciseHistory,
+        getExercisePR,
+        exercises,
+        addSetToWorkout,
+        removeSetFromWorkout,
+        addExerciseToWorkout,
+        removeExerciseFromWorkout
+    } = useStore();
+
     const [showFinishConfirm, setShowFinishConfirm] = useState(false);
     const [isPrivate, setIsPrivate] = useState(false);
+    const [showPicker, setShowPicker] = useState(false);
 
     if (!activeWorkout) return null;
 
@@ -135,16 +150,29 @@ export default function WorkoutActive() {
             <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
                 {activeWorkout.logs.map((log, index) => {
                     const exerciseDef = exercises.find(e => e.id === log.exerciseId);
-                    const lastSets = getExerciseHistory(log.exerciseId); // Now returns array of sets or null
+                    const lastSets = getExerciseHistory(log.exerciseId);
                     const pr = getExercisePR(log.exerciseId);
 
                     return (
                         <div key={log.exerciseId + index}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                <h3 style={{ fontSize: '1.1rem', color: 'var(--primary)' }}>{exerciseDef?.name || 'Unknown'}</h3>
-                                <span style={{ fontSize: '0.8rem', color: 'var(--warning)' }}>
-                                    {pr ? `🏆 PR: ${pr}kg` : 'No PR yet'}
-                                </span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
+                                <h3 style={{ fontSize: '1.1rem', color: 'var(--primary)', margin: 0 }}>{exerciseDef?.name || 'Unknown'}</h3>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--warning)' }}>
+                                        {pr ? `🏆 PR: ${pr}kg` : ''}
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            if (confirm(`Remove ${exerciseDef?.name}?`)) {
+                                                removeExerciseFromWorkout(log.exerciseId);
+                                            }
+                                        }}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}
+                                        title="Remove Exercise"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Table Header */}
@@ -165,7 +193,6 @@ export default function WorkoutActive() {
 
                             {/* Sets */}
                             {log.sets.map((set, setIndex) => {
-                                // Find correct previous set for this index
                                 const prevSet = lastSets && lastSets[setIndex] ? lastSets[setIndex] : null;
                                 const previousData = prevSet ? { lastWeight: prevSet.weight, lastReps: prevSet.reps } : null;
 
@@ -223,6 +250,36 @@ export default function WorkoutActive() {
                     );
                 })}
             </div>
+
+            {/* Add Exercise Button */}
+            <button
+                onClick={() => setShowPicker(true)}
+                style={{
+                    width: '100%',
+                    padding: '16px',
+                    marginTop: '32px',
+                    background: 'transparent',
+                    border: '1px dashed var(--primary)',
+                    color: 'var(--primary)',
+                    borderRadius: 'var(--radius-md)',
+                    fontWeight: '600',
+                    fontSize: '1rem',
+                    cursor: 'pointer'
+                }}
+            >
+                + Add Exercise
+            </button>
+
+            {/* Exercise Picker Modal */}
+            {showPicker && (
+                <ExercisePicker
+                    onSelect={(ex) => {
+                        addExerciseToWorkout(ex.id);
+                        setShowPicker(false);
+                    }}
+                    onCancel={() => setShowPicker(false)}
+                />
+            )}
 
             <BottomNav />
         </div>

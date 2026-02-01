@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -44,10 +44,22 @@ function GymMonitorPage() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [displayKey, setDisplayKey] = useState('');
     const [gymInfo, setGymInfo] = useState(null);
-    const [viewMode, setViewMode] = useState('live'); // 'live' | 'leaderboard'
+    const [viewMode, setViewMode] = useState('loading');
+
+    // Content Data
+    const [tvSettings, setTvSettings] = useState({ enabled_features: ['live'], loop_duration_sec: 20 });
+    const [contentData, setContentData] = useState({ news: [], events: [], challenges: [] });
+
+    // Abort Controller Ref
+    const fetchController = useRef(null);
+
     const [activeUsers, setActiveUsers] = useState([]);
-    const [leaderboard, setLeaderboard] = useState([]);
+    const [leaderboard, setLeaderboard] = useState([]); // TODO: Fetch real leaderboard
     const [isLoading, setIsLoading] = useState(true);
+
+    // Self-Healing & Connection State
+    const [isConnected, setIsConnected] = useState(true);
+    const lastHeartbeat = useRef(Date.now());
 
     // Initial Load
     useEffect(() => {
@@ -65,26 +77,91 @@ function GymMonitorPage() {
         supabase.from('gyms').select('name').eq('id', gymId).single()
             .then(({ data }) => setGymInfo(data));
 
+        // Content Polling (Fetch key settings & content every 30s)
+        const fetchContent = async (signal) => {
+            // 1. Fetch Settings
+            const { data: settings } = await supabase.from('gym_tv_settings').select('*').match({ gym_id: gymId }).single().abortSignal(signal);
+            if (settings) {
+                setTvSettings(prev => settings);
+                // Initialize View Mode if strictly needed
+                if (viewMode === 'loading' && settings.enabled_features.length > 0) {
+                    setViewMode(settings.enabled_features[0]);
+                }
+            } else if (viewMode === 'loading') {
+                setViewMode('live');
+            }
+
+            // 2. Fetch Content
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const { data: news } = await supabase.from('gym_news').select('*').match({ gym_id: gymId, is_active: true }).order('created_at', { ascending: false }).abortSignal(signal);
+            const { data: events } = await supabase.from('gym_events').select('*').eq('gym_id', gymId).gte('event_date', today.toISOString()).order('event_date', { ascending: true }).abortSignal(signal);
+            const { data: challenges } = await supabase.from('gym_challenges').select('*').eq('gym_id', gymId).order('end_date', { ascending: true }).abortSignal(signal);
+
+            setContentData({
+                news: news || [],
+                events: events || [],
+                challenges: challenges || []
+            });
+        };
+
+        const runFetch = async () => {
+            if (fetchController.current) fetchController.current.abort();
+            fetchController.current = new AbortController();
+            try {
+                await fetchContent(fetchController.current.signal);
+            } catch (e) {
+                if (e.name !== 'AbortError') console.error("Poll Error:", e);
+            }
+        };
+
+        runFetch();
+        const interval = setInterval(runFetch, 30000); // 30s Poll
+
+        return () => {
+            clearInterval(interval);
+            if (fetchController.current) fetchController.current.abort();
+        };
+
     }, [gymId]);
 
-    // View Loop (60s Live <-> 20s Leaderboard)
+    // ... (keep Self-Healing useEffect)
+
+    // Dynamic View Loop
     useEffect(() => {
         if (!isAuthenticated) return;
+        const features = tvSettings.enabled_features || ['live'];
+        if (features.length === 0) return;
 
-        const loop = setInterval(() => {
-            setViewMode(prev => prev === 'live' ? 'leaderboard' : 'live');
-        }, viewMode === 'live' ? VIEW_DURATION_LIVE : VIEW_DURATION_LEADERBOARD);
+        // Determine Duration for *Current* View
+        const globalDuration = tvSettings.loop_duration_sec || 20;
+        const specificDuration = tvSettings.feature_durations?.[viewMode];
+        const duration = specificDuration || globalDuration;
 
-        return () => clearInterval(loop);
-    }, [isAuthenticated, viewMode]);
+        const loop = setTimeout(() => {
+            setViewMode(current => {
+                const currentIdx = features.indexOf(current);
+                const nextIdx = (currentIdx + 1) % features.length;
+                return features[nextIdx];
+            });
+        }, duration * 1000);
 
-    // Data Polling (Live Activity)
+        return () => clearTimeout(loop);
+    }, [isAuthenticated, tvSettings, viewMode]);
+
+    // Data Polling (Robust Auto-Retry)
     useEffect(() => {
         if (!isAuthenticated || !gymId) return;
 
+        let timeoutId;
+        let isMounted = true;
+
         const fetchLive = async () => {
+            if (!isMounted) return;
+
             const key = localStorage.getItem(`gym_key_${gymId}`);
-            if (!key) return;
+            if (!key) return; // Should allow auth logic to handle this, but okay for here
 
             try {
                 const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/get_live_gym_activity`, {
@@ -96,23 +173,34 @@ function GymMonitorPage() {
                     },
                     body: JSON.stringify({ p_display_key: key, p_gym_id: gymId })
                 });
+
                 if (res.ok) {
                     const data = await res.json();
                     setActiveUsers(data || []);
+                    setIsConnected(true);
+                    lastHeartbeat.current = Date.now(); // Update Heartbeat on success
+                } else {
+                    console.warn(`Fetch error: ${res.status}`);
                 }
             } catch (e) {
-                if (e.name !== 'AbortError') console.error("Poll Error:", e);
+                if (e.name !== 'AbortError') {
+                    console.error("Poll Error - Retrying in 5s:", e);
+                    // Connection might be flaky
+                }
+            } finally {
+                if (isMounted) {
+                    // Schedule next fetch regardless of success/fail (Auto-Retry)
+                    timeoutId = setTimeout(fetchLive, POLL_INTERVAL);
+                }
             }
         };
 
         fetchLive();
-        const interval = setInterval(fetchLive, POLL_INTERVAL);
 
-        // Also fetch Leaderboard initially
-        // (Mocking leaderboard fetch for now or implement RPC if exists)
-        // setLeaderboard([...mockData]); 
-
-        return () => clearInterval(interval);
+        return () => {
+            isMounted = false;
+            clearTimeout(timeoutId);
+        };
     }, [isAuthenticated, gymId]);
 
 
@@ -191,11 +279,12 @@ function GymMonitorPage() {
                         {gymInfo?.name?.toUpperCase()}
                     </h1>
                     <motion.div
-                        animate={{ opacity: [0.5, 1, 0.5] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        style={{ color: COLOR_ACCENT, fontSize: '1.5vw', fontWeight: 600, marginTop: '1vh' }}
+                        key={viewMode}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }} // Removed pulse for readability on mode switch
+                        style={{ color: COLOR_ACCENT, fontSize: '1.5vw', fontWeight: 600, marginTop: '1vh', textTransform: 'uppercase' }}
                     >
-                        • LIVE FLOOR
+                        • {viewMode === 'live' ? 'LIVE FLOOR' : viewMode}
                     </motion.div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -232,8 +321,58 @@ function GymMonitorPage() {
                             <Leaderboard />
                         </motion.div>
                     )}
+
+                    {viewMode === 'news' && (
+                        <motion.div
+                            key="news"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 1.05 }}
+                            transition={{ duration: 0.5 }}
+                            style={{ height: '100%' }}
+                        >
+                            <NewsWall news={contentData.news} />
+                        </motion.div>
+                    )}
+
+                    {viewMode === 'events' && (
+                        <motion.div
+                            key="events"
+                            initial={{ opacity: 0, x: 50 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -50 }}
+                            transition={{ duration: 0.5 }}
+                            style={{ height: '100%' }}
+                        >
+                            <EventsWall events={contentData.events} />
+                        </motion.div>
+                    )}
+
+                    {viewMode === 'challenges' && (
+                        <motion.div
+                            key="challenges"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 1.1 }}
+                            transition={{ duration: 0.5 }}
+                            style={{ height: '100%' }}
+                        >
+                            <ChallengesWall challenges={contentData.challenges} />
+                        </motion.div>
+                    )}
                 </AnimatePresence>
             </div>
+            {/* Connection Lost Overlay */}
+            {!isConnected && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'rgba(0,0,0,0.8)', zIndex: 9999,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <h2 style={{ color: '#ff0000', fontSize: '3vw', marginBottom: '1vh' }}>CONNECTION LOST</h2>
+                    <p style={{ color: '#fff', fontSize: '1.5vw' }}>Attempting to reconnect...</p>
+                </div>
+            )}
         </div>
     );
 }
@@ -371,6 +510,98 @@ function Leaderboard() {
                         </div>
                         <div style={{ fontSize: '2vw', fontWeight: 900, color: '#fff' }}>
                             {leader.value}
+                        </div>
+                    </motion.div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function NewsWall({ news }) {
+    if (!news || news.length === 0) return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2vw', color: '#666' }}>Checking for updates...</div>;
+
+    const mainItem = news[0];
+    const otherItems = news.slice(1, 4);
+
+    return (
+        <div style={{ height: '100%', padding: '2vw' }}>
+            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>NEWS & ANNOUNCEMENTS</h2>
+
+            <div style={{ display: 'grid', gridTemplateColumns: otherItems.length > 0 ? '2fr 1fr' : '1fr', gap: '4vw', height: '80%' }}>
+                {/* Main Feature */}
+                <div style={{ background: COLOR_SURFACE, padding: '3vw', borderRadius: '2vw', border: '1px solid #333' }}>
+                    <h3 style={{ fontSize: '2.5vw', fontWeight: 800, marginBottom: '2vh', color: '#fff' }}>{mainItem.title}</h3>
+                    <p style={{ fontSize: '1.8vw', lineHeight: 1.5, color: '#ccc', whiteSpace: 'pre-wrap' }}>{mainItem.content}</p>
+                </div>
+
+                {/* Sidebar Items */}
+                {otherItems.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2vh' }}>
+                        {otherItems.map(item => (
+                            <div key={item.id} style={{ background: '#0a0a0a', padding: '2vw', borderRadius: '1.5vw', border: '1px solid #222' }}>
+                                <h4 style={{ fontSize: '1.5vw', fontWeight: 700, marginBottom: '1vh', color: '#fff' }}>{item.title}</h4>
+                                <p style={{ fontSize: '1.2vw', color: '#888', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.content}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function EventsWall({ events }) {
+    if (!events || events.length === 0) return <div />;
+
+    return (
+        <div style={{ height: '100%', padding: '2vw' }}>
+            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>UPCOMING EVENTS</h2>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(25vw, 1fr))', gap: '3vw' }}>
+                {events.map((event, i) => (
+                    <motion.div
+                        key={event.id}
+                        initial={{ opacity: 0, y: 50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        style={{ background: COLOR_SURFACE, padding: '3vw', borderRadius: '2vw', border: '1px solid #333', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}
+                    >
+                        <div style={{ fontSize: '5vw', marginBottom: '2vh' }}>📅</div>
+                        <h3 style={{ fontSize: '2vw', fontWeight: 800, marginBottom: '1vh', color: '#fff' }}>{event.title}</h3>
+                        <div style={{ fontSize: '1.5vw', color: COLOR_ACCENT, fontWeight: 700 }}>
+                            {new Date(event.event_date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                        </div>
+                    </motion.div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function ChallengesWall({ challenges }) {
+    if (!challenges || challenges.length === 0) return <div />;
+
+    return (
+        <div style={{ height: '100%', padding: '2vw' }}>
+            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>ACTIVE CHALLENGES</h2>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3vh', maxWidth: '80vw', margin: '0 auto' }}>
+                {challenges.map((challenge, i) => (
+                    <motion.div
+                        key={challenge.id}
+                        initial={{ opacity: 0, x: -50 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        style={{ background: COLOR_SURFACE, padding: '3vw', borderRadius: '2vw', border: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                        <div style={{ flex: 1 }}>
+                            <h3 style={{ fontSize: '2.5vw', fontWeight: 800, marginBottom: '1vh', color: '#fff' }}>{challenge.title}</h3>
+                            <p style={{ fontSize: '1.8vw', color: '#aaa' }}>{challenge.description}</p>
+                        </div>
+                        <div style={{ background: '#222', padding: '1.5vw 3vw', borderRadius: '1vw', textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.2vw', color: '#666', textTransform: 'uppercase' }}>Goal</div>
+                            <div style={{ fontSize: '2.5vw', fontWeight: 900, color: COLOR_ACCENT }}>FAIL</div>
                         </div>
                     </motion.div>
                 ))}

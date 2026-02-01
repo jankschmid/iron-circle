@@ -79,7 +79,28 @@ function ChatListInner() {
     };
 
     if (loading) {
-        return <div className="p-4 text-center text-gray-500" style={{ paddingTop: 'calc(40px + env(safe-area-inset-top))' }}>Loading chats...</div>;
+        return (
+            <div style={{ maxWidth: '480px', margin: '0 auto', padding: 'calc(16px + env(safe-area-inset-top)) 20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Header Skeleton */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <div style={{ width: '80px', height: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '8px' }} />
+                    <div style={{ width: '32px', height: '32px', background: 'rgba(255,255,255,0.1)', borderRadius: '50%' }} />
+                </div>
+                {/* Tabs Skeleton */}
+                <div style={{ height: '32px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', marginBottom: '20px' }} />
+
+                {/* List Items */}
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }} />
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ width: '40%', height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px' }} />
+                            <div style={{ width: '80%', height: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
     }
 
     if (isError) {
@@ -101,7 +122,25 @@ function ChatListInner() {
                 position: 'sticky', top: 0, zIndex: 10,
                 borderBottom: '1px solid rgba(255,255,255,0.1)'
             }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '16px', color: '#fff' }}>Chat</h1>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#fff', margin: 0 }}>Chat</h1>
+
+                    {/* Add Action Button */}
+                    {activeTab === 'communities' ? (
+                        <button
+                            onClick={() => setShowCommunitiesModal(true)}
+                            style={{ background: 'var(--primary)', color: '#000', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            +
+                        </button>
+                    ) : (
+                        <Link href={activeTab === 'groups' ? '/social/chat/new/group' : '/social/chat/new'} style={{ textDecoration: 'none' }}>
+                            <div style={{ background: 'var(--primary)', color: '#000', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                +
+                            </div>
+                        </Link>
+                    )}
+                </div>
 
                 {/* Tabs */}
                 <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '12px' }}>
@@ -221,7 +260,10 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
 
     return (
         <div style={{ position: 'relative' }}>
-            <Link href={`/social/chat/conversation?id=${chat.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Link href={(chat.type === 'community' || chat.type === 'gym')
+                ? `/community?gymId=${chat.gym_id}`
+                : `/social/chat/conversation?id=${chat.id}`
+            } style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',

@@ -3,21 +3,27 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { useStore } from '@/lib/store';
+
 export default function BottomNav() {
     const pathname = usePathname();
+    const { user } = useStore();
 
     const isActive = (path) => {
         if (path === '/' && pathname === '/') return true;
+        // Handle query params in checking active state? tough.
+        // Just check prefix.
+        if (path.startsWith('/community') && pathname.startsWith('/community')) return true;
         if (path !== '/' && pathname.startsWith(path)) return true;
         return false;
     };
 
     const navItems = [
-        { path: '/', label: 'Hub', icon: '🏠' },
+        { path: '/', label: 'Home', icon: '🏠' },
         { path: '/workout', label: 'Workout', icon: '💪' },
+        ...(user?.gymId ? [{ path: `/community?gymId=${user.gymId}`, label: 'Gym', icon: '🏟️' }] : []),
         { path: '/social', label: 'Circle', icon: '👥' },
         { path: '/chat', label: 'Chat', icon: '💬' },
-        { path: '/progress', label: 'Stats', icon: '📊' },
         { path: '/profile', label: 'Me', icon: '👤' },
     ];
 

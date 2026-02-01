@@ -32,6 +32,10 @@ function GymAdminPage() {
     const [members, setMembers] = useState([]);
     const [memberSearch, setMemberSearch] = useState('');
 
+    // Content Tab State
+    const [tvSettings, setTvSettings] = useState({ enabled_features: ['live', 'leaderboard'], loop_duration_sec: 20 });
+    const [contentData, setContentData] = useState({ news: [], events: [], challenges: [] });
+
     // TV Linking State
     const [connectingTv, setConnectingTv] = useState(false);
     const [monitors, setMonitors] = useState([]); // List of connected TVs
@@ -144,6 +148,7 @@ function GymAdminPage() {
                 // Fetch Members List (Initial)
                 fetchMembers(commData.id);
             }
+            fetchTvContent();
 
         } catch (err) {
             console.error("Gym Admin Error:", err);
@@ -152,27 +157,64 @@ function GymAdminPage() {
         }
     };
 
+    const fetchTvContent = async () => {
+        const { data: settings } = await supabase.from('gym_tv_settings').select('*').eq('gym_id', gymId).single();
+        if (settings) setTvSettings(settings);
+        else {
+            const { data: newSettings } = await supabase.from('gym_tv_settings').insert({ gym_id: gymId }).select().single();
+            if (newSettings) setTvSettings(newSettings);
+        }
+
+        const { data: news } = await supabase.from('gym_news').select('*').eq('gym_id', gymId).order('created_at', { ascending: false });
+        const { data: events } = await supabase.from('gym_events').select('*').eq('gym_id', gymId).order('event_date', { ascending: true });
+        const { data: challenges } = await supabase.from('gym_challenges').select('*').eq('gym_id', gymId).order('end_date', { ascending: true });
+
+        setContentData({
+            news: news || [],
+            events: events || [],
+            challenges: challenges || []
+        });
+    };
+
     const fetchMembers = async (commId, query = '') => {
+        // 1. Fetch Memberships
         let q = supabase
             .from('community_members')
-            .select('user_id, role, member_since, profiles(id, name, username, avatar_url, privacy_settings)')
+            .select('user_id, role, joined_at')
             .eq('community_id', commId)
-            .order('member_since', { ascending: false })
-            .limit(1000); // Increased limit as requested to show "all"
+            .order('joined_at', { ascending: false })
+            .limit(1000);
 
-        const { data } = await q;
-        if (data) {
-            // Map to cleaner objects
-            setMembers(data.map(m => {
-                const isPrivate = !m.profiles || m.profiles?.privacy_settings?.profile_visibility === 'private';
+        const { data: membersData, error } = await q;
+
+        if (error) {
+            console.error("Error fetching members:", JSON.stringify(error, null, 2));
+            return;
+        }
+
+        if (membersData && membersData.length > 0) {
+            // 2. Adjust for manual join
+            const userIds = membersData.map(m => m.user_id);
+            const { data: profiles } = await supabase
+                .from('profiles')
+                .select('id, name, username, avatar_url, privacy_settings')
+                .in('id', userIds);
+
+            const profileMap = new Map(profiles?.map(p => [p.id, p]));
+
+            setMembers(membersData.map(m => {
+                const profile = profileMap.get(m.user_id) || {};
+                const isPrivate = !profile || profile.privacy_settings?.profile_visibility === 'private';
                 return {
                     id: m.user_id,
-                    ...m.profiles,
+                    ...profile,
                     role: m.role,
-                    joined: m.member_since,
+                    joined: m.joined_at,
                     isPrivate
                 };
             }));
+        } else {
+            setMembers([]);
         }
     };
 
@@ -221,6 +263,70 @@ function GymAdminPage() {
         }
     };
 
+    // TV Settings Handlers
+    const toggleTvFeature = async (feature) => {
+        const current = new Set(tvSettings.enabled_features || []);
+        if (current.has(feature)) current.delete(feature);
+        else current.add(feature);
+
+        const newFeatures = Array.from(current);
+        await updateSettings({ enabled_features: newFeatures });
+    };
+
+    const handleDurationChange = async (feature, seconds) => {
+        const oldDurations = tvSettings.feature_durations || {};
+        const newDurations = { ...oldDurations, [feature]: parseInt(seconds) };
+        await updateSettings({ feature_durations: newDurations });
+    };
+
+    const updateSettings = async (updates) => {
+        setTvSettings(prev => ({ ...prev, ...updates }));
+        await supabase.from('gym_tv_settings').update(updates).eq('gym_id', gymId);
+    };
+
+    // Content handlers
+    const handleAddNews = async () => {
+        const title = prompt("News Title:");
+        if (!title) return;
+        const content = prompt("Content / Details:");
+
+        const { error } = await supabase.from('gym_news').insert({ gym_id: gymId, title, content, is_active: true });
+        if (!error) fetchTvContent();
+    };
+
+    const handleEditNews = async (item) => {
+        const title = prompt("Edit Title:", item.title);
+        if (!title) return;
+        const content = prompt("Edit Content:", item.content);
+
+        const { error } = await supabase.from('gym_news').update({ title, content }).eq('id', item.id);
+        if (!error) fetchTvContent();
+    };
+
+    const handleEditEvent = async (item) => {
+        const title = prompt("Edit Title:", item.title);
+        if (!title) return;
+        const dateStr = prompt("Edit Date (YYYY-MM-DD):", new Date(item.event_date).toISOString().split('T')[0]);
+
+        const { error } = await supabase.from('gym_events').update({ title, event_date: new Date(dateStr).toISOString() }).eq('id', item.id);
+        if (!error) fetchTvContent();
+    };
+
+    const handleEditChallenge = async (item) => {
+        const title = prompt("Edit Title:", item.title);
+        if (!title) return;
+        const desc = prompt("Edit Description:", item.description);
+
+        const { error } = await supabase.from('gym_challenges').update({ title, description: desc }).eq('id', item.id);
+        if (!error) fetchTvContent();
+    };
+
+    const handleDeleteContent = async (table, id) => {
+        if (!confirm("Delete this item?")) return;
+        const { error } = await supabase.from(table).delete().eq('id', id);
+        if (!error) fetchTvContent();
+    };
+
     // --- Render Helpers ---
 
     if (!gymId) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Gym ID missing.</div>;
@@ -228,10 +334,37 @@ function GymAdminPage() {
     if (!gym) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Gym not found.</div>;
 
     return (
-        <div style={{ minHeight: '100vh', background: '#000', color: '#fff', fontFamily: 'Inter, sans-serif', display: 'flex' }}>
+        <div className="dashboard-container" style={{ minHeight: '100vh', background: '#000', color: '#fff', fontFamily: 'Inter, sans-serif', display: 'flex' }}>
+            <style jsx global>{`
+                @media (max-width: 768px) {
+                    .dashboard-container {
+                        flex-direction: column;
+                    }
+                    .dashboard-sidebar {
+                        width: 100% !important;
+                        border-right: none !important;
+                        border-bottom: 1px solid #222;
+                        padding: 16px !important;
+                    }
+                    .dashboard-sidebar nav {
+                        flex-direction: row !important;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        margin-bottom: 16px;
+                    }
+                    .dashboard-sidebar nav button {
+                        width: auto !important;
+                        flex: 1;
+                        justify-content: center;
+                    }
+                    .dashboard-content {
+                        padding: 20px 16px !important;
+                    }
+                }
+            `}</style>
 
             {/* Sidebar */}
-            <aside style={{ width: '250px', borderRight: '1px solid #222', padding: '24px', display: 'flex', flexDirection: 'column' }}>
+            <aside className="dashboard-sidebar" style={{ width: '250px', borderRight: '1px solid #222', padding: '24px', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ marginBottom: '40px' }}>
                     <div style={{ fontSize: '0.8rem', color: '#666', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Admin Panel</div>
                     <h1 style={{ fontSize: '1.2rem', fontWeight: '900', margin: 0 }}>{gym.name}</h1>
@@ -240,6 +373,7 @@ function GymAdminPage() {
 
                 <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                     <NavBtn label="Overview" icon="📊" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
+                    <NavBtn label="TV Content" icon="📺" active={activeTab === 'content'} onClick={() => setActiveTab('content')} />
                     <NavBtn label="Members" icon="👥" active={activeTab === 'members'} onClick={() => setActiveTab('members')} />
                     <NavBtn label="Settings" icon="⚙️" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
                 </nav>
@@ -252,7 +386,143 @@ function GymAdminPage() {
             </aside>
 
             {/* Main Content */}
-            <main style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+            <main className="dashboard-content" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+
+                {activeTab === 'content' && (
+                    <div style={{ maxWidth: '900px' }}>
+                        <h2 style={{ fontSize: '2rem', marginBottom: '24px', fontWeight: 'bold' }}>TV Content Management</h2>
+
+                        {/* 1. TV Configuration */}
+                        <section style={{ marginBottom: '40px', background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222' }}>
+                            <h3 style={{ margin: '0 0 16px', color: '#FFC800' }}>Screen Configuration & Timing</h3>
+                            <p style={{ color: '#888', marginBottom: '16px', fontSize: '0.9rem' }}>Select active screens and set duration (seconds) for each.</p>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fil, minmax(200px, 1fr))', gap: '20px' }}>
+                                {['live', 'leaderboard', 'news', 'events', 'challenges'].map(feat => {
+                                    const isEnabled = tvSettings.enabled_features?.includes(feat);
+                                    const duration = tvSettings.feature_durations?.[feat] || 20;
+
+                                    return (
+                                        <div key={feat} style={{
+                                            background: '#222', padding: '12px', borderRadius: '12px',
+                                            border: isEnabled ? '1px solid #FFC800' : '1px solid #333',
+                                            display: 'flex', flexDirection: 'column', gap: '12px'
+                                        }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', textTransform: 'capitalize' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isEnabled}
+                                                    onChange={() => toggleTvFeature(feat)}
+                                                />
+                                                {feat}
+                                            </label>
+
+                                            {isEnabled && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: '#888' }}>
+                                                    <span>Duration:</span>
+                                                    <input
+                                                        type="number"
+                                                        min="5" max="300"
+                                                        value={duration}
+                                                        onChange={(e) => handleDurationChange(feat, e.target.value)}
+                                                        style={{
+                                                            width: '60px', background: '#000', border: '1px solid #444',
+                                                            color: '#fff', padding: '4px', borderRadius: '4px', textAlign: 'center'
+                                                        }}
+                                                    />
+                                                    <span>s</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+
+                        {/* 2. News */}
+                        <section style={{ marginBottom: '40px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ fontSize: '1.5rem', margin: 0 }}>📢 News & Updates</h3>
+                                <button onClick={handleAddNews} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>+ Add News</button>
+                            </div>
+                            <div style={{ display: 'grid', gap: '16px' }}>
+                                {contentData.news.map(item => (
+                                    <div key={item.id} style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222', display: 'flex', justifyContent: 'space-between' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{item.title}</div>
+                                            <div style={{ color: '#888' }}>{item.content}</div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button onClick={() => handleEditNews(item)} style={{ background: '#222', color: '#fff', border: '1px solid #444', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Edit</button>
+                                            <button onClick={() => handleDeleteContent('gym_news', item.id)} style={{ background: '#300', color: '#f88', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Delete</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {contentData.news.length === 0 && <div style={{ color: '#666', fontStyle: 'italic' }}>No news posted.</div>}
+                            </div>
+                        </section>
+
+                        {/* 3. Events */}
+                        <section style={{ marginBottom: '40px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ fontSize: '1.5rem', margin: 0 }}>📅 Upcoming Events</h3>
+                                <button onClick={async () => {
+                                    const title = prompt("Event Title:");
+                                    const date = prompt("Date (YYYY-MM-DD):");
+                                    if (title && date) {
+                                        await supabase.from('gym_events').insert({ gym_id: gymId, title, event_date: new Date(date).toISOString() });
+                                        fetchTvContent();
+                                    }
+                                }} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>+ Add Event</button>
+                            </div>
+                            <div style={{ display: 'grid', gap: '16px' }}>
+                                {contentData.events.map(item => (
+                                    <div key={item.id} style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222', display: 'flex', justifyContent: 'space-between' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{item.title}</div>
+                                            <div style={{ color: '#FFC800' }}>{new Date(item.event_date).toLocaleDateString()}</div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button onClick={() => handleEditEvent(item)} style={{ background: '#222', color: '#fff', border: '1px solid #444', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Edit</button>
+                                            <button onClick={() => handleDeleteContent('gym_events', item.id)} style={{ background: '#300', color: '#f88', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Delete</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {contentData.events.length === 0 && <div style={{ color: '#666', fontStyle: 'italic' }}>No upcoming events.</div>}
+                            </div>
+                        </section>
+
+                        {/* 4. Challenges */}
+                        <section style={{ marginBottom: '40px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ fontSize: '1.5rem', margin: 0 }}>🏆 Active Challenges</h3>
+                                <button onClick={async () => {
+                                    const title = prompt("Challenge Title:");
+                                    const desc = prompt("Description:");
+                                    if (title) {
+                                        await supabase.from('gym_challenges').insert({ gym_id: gymId, title, description: desc });
+                                        fetchTvContent();
+                                    }
+                                }} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>+ Add Challenge</button>
+                            </div>
+                            <div style={{ display: 'grid', gap: '16px' }}>
+                                {contentData.challenges.map(item => (
+                                    <div key={item.id} style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222', display: 'flex', justifyContent: 'space-between' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{item.title}</div>
+                                            <div style={{ color: '#888' }}>{item.description}</div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button onClick={() => handleEditChallenge(item)} style={{ background: '#222', color: '#fff', border: '1px solid #444', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Edit</button>
+                                            <button onClick={() => handleDeleteContent('gym_challenges', item.id)} style={{ background: '#300', color: '#f88', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Delete</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {contentData.challenges.length === 0 && <div style={{ color: '#666', fontStyle: 'italic' }}>No active challenges.</div>}
+                            </div>
+                        </section>
+                    </div>
+                )}
 
                 {activeTab === 'overview' && (
                     <div style={{ maxWidth: '900px' }}>
@@ -394,7 +664,7 @@ function GymAdminPage() {
                             {/* <button style={{ background: '#fff', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold' }}>+ Invite</button> */}
                         </div>
 
-                        <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', overflow: 'hidden' }}>
+                        <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', overflow: 'hidden', overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                 <thead style={{ borderBottom: '1px solid #222', background: '#181818' }}>
                                     <tr>
