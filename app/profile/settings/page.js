@@ -6,17 +6,25 @@ import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
 
+import GoalWizard from '@/components/GoalWizard';
+
 export default function SettingsPage() {
     const { user, updateUserProfile } = useStore();
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
+    const [showGoalWizard, setShowGoalWizard] = useState(false);
     const router = useRouter();
     const supabase = createClient();
 
     // Form States
+    const [name, setName] = useState(user?.user_metadata?.name || user?.name || '');
     const [email, setEmail] = useState(user?.email || '');
     const [newPassword, setNewPassword] = useState('');
+
+    // Preferences
+    const [smartSuggestions, setSmartSuggestions] = useState(user?.user_metadata?.preferences?.smart_suggestions ?? true);
+    const [workoutGoal, setWorkoutGoal] = useState(user?.workout_goal || 150);
 
     // Safety check - MUST be after hooks
     if (!user) return <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>Loading...</div>;
@@ -32,19 +40,53 @@ export default function SettingsPage() {
             const updates = {};
             if (email !== user.email) updates.email = email;
             if (newPassword) updates.password = newPassword;
-            if (name !== user.name) updates.data = { name: name };
 
+            // Handle Metadata Updates (Name & Preferences)
+            const currentMeta = user.user_metadata || {};
+            const newMeta = { ...currentMeta };
+            let metaChanged = false;
+
+            if (name !== (currentMeta.name || user.name)) {
+                newMeta.name = name;
+                metaChanged = true;
+            }
+
+            const currentPrefs = currentMeta.preferences || {};
+            if (smartSuggestions !== (currentPrefs.smart_suggestions ?? true)) {
+                newMeta.preferences = { ...currentPrefs, smart_suggestions: smartSuggestions };
+                metaChanged = true;
+            }
+
+            if (metaChanged) {
+                updates.data = newMeta;
+            }
+
+            // 1. Auth Update
             if (Object.keys(updates).length > 0) {
                 const { error: authError } = await supabase.auth.updateUser(updates);
                 if (authError) throw authError;
             }
 
+            // 2. Profile Column Update (workout_goal)
+            if (workoutGoal !== user.workout_goal) {
+                const { error: profileError } = await supabase.from('profiles').update({ workout_goal: workoutGoal }).eq('id', user.id);
+                if (profileError) throw profileError;
+            }
+
             // Update Local Store & Supabase DB (if using one for profile data, currently mocking in store)
-            updateUserProfile({ name, email });
+            // We pass the updated metadata to the store to reflect changes immediately
+            // Also update the workout_goal in local user object if possible, or just re-fetch
+            updateUserProfile({
+                name,
+                email,
+                workout_goal: workoutGoal,
+                user_metadata: updates.data ? { ...user.user_metadata, ...updates.data } : user.user_metadata
+            });
 
             setMessage('Profile updated successfully!');
             setNewPassword(''); // Clear password field for security
         } catch (e) {
+            console.error(e);
             setError(e.message);
         } finally {
             setIsLoading(false);
@@ -121,6 +163,86 @@ export default function SettingsPage() {
                         />
                     </div>
                 </section>
+
+                <section style={{ marginBottom: '32px' }}>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-muted)' }}>Training Preferences</h3>
+                    <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)'
+                    }}>
+                        <div>
+                            <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Smart Suggestions 🧠</div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                Algorithmic recommendations for weight & reps based on your history.
+                            </div>
+                        </div>
+                        <label className="switch">
+                            <input
+                                type="checkbox"
+                                checked={smartSuggestions}
+                                onChange={(e) => setSmartSuggestions(e.target.checked)}
+                            />
+                            <span className="slider round"></span>
+                        </label>
+                        <style jsx>{`
+                            .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+                            .switch input { opacity: 0; width: 0; height: 0; }
+                            .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--surface-highlight); transition: .4s; border-radius: 34px; }
+                            .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+                            input:checked + .slider { background-color: var(--primary); }
+                            input:checked + .slider:before { transform: translateX(24px); }
+                        `}</style>
+                    </div>
+
+                    <div style={{ marginTop: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>Annual Workout Goal 🎯</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                                type="number"
+                                value={workoutGoal}
+                                onChange={(e) => setWorkoutGoal(parseInt(e.target.value) || 0)}
+                                placeholder="e.g. 150"
+                                style={{
+                                    flex: 1,
+                                    padding: '16px',
+                                    background: 'var(--surface)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 'var(--radius-md)',
+                                    color: 'var(--text-main)'
+                                }}
+                            />
+                            <button
+                                onClick={() => setShowGoalWizard(true)}
+                                style={{
+                                    padding: '0 20px',
+                                    background: 'var(--surface-highlight)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 'var(--radius-md)',
+                                    color: 'var(--primary)',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                🪄 Assist
+                            </button>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            Target number of workouts for the year. Used in your profile graph.
+                        </div>
+                    </div>
+                </section>
+
+                {showGoalWizard && (
+                    <GoalWizard
+                        currentGoal={workoutGoal}
+                        onClose={() => setShowGoalWizard(false)}
+                        onSave={(val) => {
+                            setWorkoutGoal(val);
+                            setShowGoalWizard(false);
+                        }}
+                    />
+                )}
 
                 <section style={{ marginBottom: '32px', borderTop: '1px solid var(--border)', paddingTop: '32px' }}>
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-muted)' }}>Data Synchronization</h3>

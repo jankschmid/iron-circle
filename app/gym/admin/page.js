@@ -5,6 +5,9 @@ import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { useToast } from '@/components/ToastProvider';
+import ConfirmationModal from '@/components/ConfirmationModal';
+import InputModal from '@/components/InputModal';
 
 function GymAdminPage() {
     const searchParams = useSearchParams();
@@ -40,6 +43,12 @@ function GymAdminPage() {
     const [connectingTv, setConnectingTv] = useState(false);
     const [monitors, setMonitors] = useState([]); // List of connected TVs
 
+    const toast = useToast();
+
+    // Modal States
+    const [confirmModal, setConfirmModal] = useState({ isOpen: false });
+    const [inputModal, setInputModal] = useState({ isOpen: false });
+
     useEffect(() => {
         if (!user || !gymId) return;
         fetchGymDetails();
@@ -62,7 +71,7 @@ function GymAdminPage() {
         if (!input) return;
 
         const code = input.value.toUpperCase();
-        if (code.length < 6) return alert("Invalid Code");
+        if (code.length < 6) return toast.error("Invalid Code");
 
         setConnectingTv(true);
         try {
@@ -76,32 +85,42 @@ function GymAdminPage() {
 
             if (error) throw error;
             if (data) {
-                alert("Success! TV Connected.");
+                toast.success("Success! TV Connected.");
                 input.value = '';
                 fetchMonitors(); // Refresh list
             } else {
-                alert("Code not found or expired.");
+                toast.error("Code not found or expired.");
             }
         } catch (err) {
-            alert("Error: " + err.message);
+            toast.error("Error: " + err.message);
         } finally {
             setConnectingTv(false);
         }
     };
 
     const handleDisconnectMonitor = async (monitorId) => {
-        if (!confirm("Disconnect this screen? It will return to pairing mode.")) return;
-        try {
-            const { error } = await supabase.rpc('disconnect_gym_monitor', { p_monitor_id: monitorId });
-            if (error) throw error;
+        setConfirmModal({
+            isOpen: true,
+            title: "Disconnect Screen?",
+            message: "Disconnect this screen? It will return to pairing mode.",
+            confirmText: "Disconnect",
+            isDangerous: true,
+            onConfirm: async () => {
+                setConfirmModal({ isOpen: false });
+                try {
+                    const { error } = await supabase.rpc('disconnect_gym_monitor', { p_monitor_id: monitorId });
+                    if (error) throw error;
 
-            // Optimistic update
-            setMonitors(prev => prev.filter(m => m.id !== monitorId));
-            alert("Monitor Disconnected.");
-            fetchMonitors(); // Verify with server
-        } catch (err) {
-            alert("Error: " + err.message);
-        }
+                    // Optimistic update
+                    setMonitors(prev => prev.filter(m => m.id !== monitorId));
+                    toast.success("Monitor Disconnected.");
+                    fetchMonitors(); // Verify with server
+                } catch (err) {
+                    toast.error("Error: " + err.message);
+                }
+            },
+            onCancel: () => setConfirmModal({ isOpen: false })
+        });
     };
 
     const fetchGymDetails = async () => {
@@ -117,7 +136,7 @@ function GymAdminPage() {
 
             // Security Check
             if (gymData.created_by !== user.id && !user.is_super_admin) {
-                alert("Access Denied: You are not the owner of this gym.");
+                toast.error("Access Denied: You are not the owner of this gym.");
                 router.push('/');
                 return;
             }
@@ -219,20 +238,29 @@ function GymAdminPage() {
     };
 
     const handleCreateCommunity = async () => {
-        if (!confirm("Initialize Community for this gym?")) return;
-        const { error } = await supabase.from('communities').insert({
-            gym_id: gym.id,
-            name: gym.name,
-            description: `Official Community for ${gym.name}`,
-            gym_type: 'verified_partner',
-            privacy: 'public'
+        setConfirmModal({
+            isOpen: true,
+            title: "Initialize Community?",
+            message: "Initialize Community for this gym?",
+            confirmText: "Create Community",
+            onConfirm: async () => {
+                setConfirmModal({ isOpen: false });
+                const { error } = await supabase.from('communities').insert({
+                    gym_id: gym.id,
+                    name: gym.name,
+                    description: `Official Community for ${gym.name}`,
+                    gym_type: 'verified_partner',
+                    privacy: 'public'
+                });
+                if (!error) {
+                    toast.success("Community Created. Refreshing...");
+                    fetchGymDetails();
+                } else {
+                    toast.error("Error: " + error.message);
+                }
+            },
+            onCancel: () => setConfirmModal({ isOpen: false })
         });
-        if (!error) {
-            alert("Community Created. Refreshing...");
-            fetchGymDetails();
-        } else {
-            alert("Error: " + error.message);
-        }
     };
 
     // Auto-generate key if missing
@@ -244,22 +272,40 @@ function GymAdminPage() {
 
     const regenerateKey = async (silent = false) => {
         console.log("Regenerating Key for Gym:", gymId);
-        if (!silent && !confirm("Are you sure? This will disconnect current displays.")) return;
 
-        const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
-        console.log("New Key Generated:", newKey);
+        const performRegen = async () => {
+            const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
+            console.log("New Key Generated:", newKey);
 
-        const { error } = await supabase
-            .from('gyms')
-            .update({ display_key: newKey })
-            .eq('id', gymId);
+            const { error } = await supabase
+                .from('gyms')
+                .update({ display_key: newKey })
+                .eq('id', gymId);
 
-        if (error) {
-            console.error("Key Update Error:", error);
-            if (!silent) alert("Failed to update key: " + error.message);
+            if (error) {
+                console.error("Key Update Error:", error);
+                if (!silent) toast.error("Failed to update key: " + error.message);
+            } else {
+                setGym(prev => ({ ...prev, display_key: newKey }));
+                if (!silent) toast.success("New Key Generated: " + newKey);
+            }
+        };
+
+        if (!silent) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Regenerate Key?",
+                message: "Are you sure? This will disconnect current displays.",
+                confirmText: "Regenerate",
+                isDangerous: true,
+                onConfirm: async () => {
+                    setConfirmModal({ isOpen: false });
+                    await performRegen();
+                },
+                onCancel: () => setConfirmModal({ isOpen: false })
+            });
         } else {
-            setGym(prev => ({ ...prev, display_key: newKey }));
-            if (!silent) alert("New Key Generated: " + newKey);
+            await performRegen();
         }
     };
 
@@ -286,45 +332,131 @@ function GymAdminPage() {
 
     // Content handlers
     const handleAddNews = async () => {
-        const title = prompt("News Title:");
-        if (!title) return;
-        const content = prompt("Content / Details:");
-
-        const { error } = await supabase.from('gym_news').insert({ gym_id: gymId, title, content, is_active: true });
-        if (!error) fetchTvContent();
+        setInputModal({
+            isOpen: true,
+            title: "Add News",
+            fields: [
+                { name: 'title', label: 'Title', type: 'text' },
+                { name: 'content', label: 'Content', type: 'textarea' }
+            ],
+            confirmText: "Post News",
+            onConfirm: async (values) => {
+                setInputModal({ isOpen: false });
+                if (!values.title || !values.content) return toast.error("Title and Content required");
+                const { error } = await supabase.from('gym_news').insert({
+                    gym_id: gymId,
+                    title: values.title,
+                    content: values.content,
+                    is_active: true
+                });
+                if (!error) {
+                    toast.success("News posted");
+                    fetchTvContent();
+                } else {
+                    toast.error("Error posting news");
+                }
+            },
+            onCancel: () => setInputModal({ isOpen: false })
+        });
     };
 
     const handleEditNews = async (item) => {
-        const title = prompt("Edit Title:", item.title);
-        if (!title) return;
-        const content = prompt("Edit Content:", item.content);
-
-        const { error } = await supabase.from('gym_news').update({ title, content }).eq('id', item.id);
-        if (!error) fetchTvContent();
+        setInputModal({
+            isOpen: true,
+            title: "Edit News",
+            fields: [
+                { name: 'title', label: 'Title', type: 'text', defaultValue: item.title },
+                { name: 'content', label: 'Content', type: 'textarea', defaultValue: item.content }
+            ],
+            confirmText: "Update",
+            onConfirm: async (values) => {
+                setInputModal({ isOpen: false });
+                const { error } = await supabase.from('gym_news').update({
+                    title: values.title,
+                    content: values.content
+                }).eq('id', item.id);
+                if (!error) {
+                    toast.success("News updated");
+                    fetchTvContent();
+                } else {
+                    toast.error("Update failed");
+                }
+            },
+            onCancel: () => setInputModal({ isOpen: false })
+        });
     };
 
     const handleEditEvent = async (item) => {
-        const title = prompt("Edit Title:", item.title);
-        if (!title) return;
-        const dateStr = prompt("Edit Date (YYYY-MM-DD):", new Date(item.event_date).toISOString().split('T')[0]);
-
-        const { error } = await supabase.from('gym_events').update({ title, event_date: new Date(dateStr).toISOString() }).eq('id', item.id);
-        if (!error) fetchTvContent();
+        setInputModal({
+            isOpen: true,
+            title: "Edit Event",
+            fields: [
+                { name: 'title', label: 'Title', type: 'text', defaultValue: item.title },
+                { name: 'date', label: 'Date', type: 'date', defaultValue: new Date(item.event_date).toISOString().split('T')[0] }
+            ],
+            confirmText: "Update",
+            onConfirm: async (values) => {
+                setInputModal({ isOpen: false });
+                const { error } = await supabase.from('gym_events').update({
+                    title: values.title,
+                    event_date: new Date(values.date).toISOString()
+                }).eq('id', item.id);
+                if (!error) {
+                    toast.success("Event updated");
+                    fetchTvContent();
+                } else {
+                    toast.error("Update failed");
+                }
+            },
+            onCancel: () => setInputModal({ isOpen: false })
+        });
     };
 
     const handleEditChallenge = async (item) => {
-        const title = prompt("Edit Title:", item.title);
-        if (!title) return;
-        const desc = prompt("Edit Description:", item.description);
-
-        const { error } = await supabase.from('gym_challenges').update({ title, description: desc }).eq('id', item.id);
-        if (!error) fetchTvContent();
+        setInputModal({
+            isOpen: true,
+            title: "Edit Challenge",
+            fields: [
+                { name: 'title', label: 'Title', type: 'text', defaultValue: item.title },
+                { name: 'description', label: 'Description', type: 'textarea', defaultValue: item.description }
+            ],
+            confirmText: "Update",
+            onConfirm: async (values) => {
+                setInputModal({ isOpen: false });
+                const { error } = await supabase.from('gym_challenges').update({
+                    title: values.title,
+                    description: values.description
+                }).eq('id', item.id);
+                if (!error) {
+                    toast.success("Challenge updated");
+                    fetchTvContent();
+                } else {
+                    toast.error("Update failed");
+                }
+            },
+            onCancel: () => setInputModal({ isOpen: false })
+        });
     };
 
     const handleDeleteContent = async (table, id) => {
-        if (!confirm("Delete this item?")) return;
-        const { error } = await supabase.from(table).delete().eq('id', id);
-        if (!error) fetchTvContent();
+        setConfirmModal({
+            isOpen: true,
+            title: "Delete Content?",
+            message: "Are you sure you want to delete this item?",
+            confirmText: "Delete",
+            isDangerous: true,
+            onConfirm: async () => {
+                setConfirmModal({ isOpen: false });
+                const { error } = await supabase.from(table).delete().eq('id', id);
+                if (!error) {
+                    toast.success("Item deleted");
+                    fetchTvContent();
+                } else {
+                    toast.error("Delete failed");
+                }
+            },
+            onCancel: () => setConfirmModal({ isOpen: false })
+        });
     };
 
     // --- Render Helpers ---
@@ -466,13 +598,32 @@ function GymAdminPage() {
                         <section style={{ marginBottom: '40px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h3 style={{ fontSize: '1.5rem', margin: 0 }}>📅 Upcoming Events</h3>
-                                <button onClick={async () => {
-                                    const title = prompt("Event Title:");
-                                    const date = prompt("Date (YYYY-MM-DD):");
-                                    if (title && date) {
-                                        await supabase.from('gym_events').insert({ gym_id: gymId, title, event_date: new Date(date).toISOString() });
-                                        fetchTvContent();
-                                    }
+                                <button onClick={() => {
+                                    setInputModal({
+                                        isOpen: true,
+                                        title: "Add Event",
+                                        fields: [
+                                            { name: 'title', label: 'Title', type: 'text' },
+                                            { name: 'date', label: 'Date', type: 'date' }
+                                        ],
+                                        confirmText: "Add Event",
+                                        onConfirm: async (values) => {
+                                            setInputModal({ isOpen: false });
+                                            if (!values.title || !values.date) return toast.error("Title and Date required");
+                                            const { error } = await supabase.from('gym_events').insert({
+                                                gym_id: gymId,
+                                                title: values.title,
+                                                event_date: new Date(values.date).toISOString()
+                                            });
+                                            if (!error) {
+                                                toast.success("Event added");
+                                                fetchTvContent();
+                                            } else {
+                                                toast.error("Error adding event");
+                                            }
+                                        },
+                                        onCancel: () => setInputModal({ isOpen: false })
+                                    })
                                 }} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>+ Add Event</button>
                             </div>
                             <div style={{ display: 'grid', gap: '16px' }}>
@@ -496,13 +647,28 @@ function GymAdminPage() {
                         <section style={{ marginBottom: '40px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h3 style={{ fontSize: '1.5rem', margin: 0 }}>🏆 Active Challenges</h3>
-                                <button onClick={async () => {
-                                    const title = prompt("Challenge Title:");
-                                    const desc = prompt("Description:");
-                                    if (title) {
-                                        await supabase.from('gym_challenges').insert({ gym_id: gymId, title, description: desc });
-                                        fetchTvContent();
-                                    }
+                                <button onClick={() => {
+                                    setInputModal({
+                                        isOpen: true,
+                                        title: "Add Challenge",
+                                        fields: [
+                                            { name: 'title', label: 'Title', type: 'text' },
+                                            { name: 'description', label: 'Description', type: 'textarea' }
+                                        ],
+                                        confirmText: "Add Challenge",
+                                        onConfirm: async (values) => {
+                                            setInputModal({ isOpen: false });
+                                            if (!values.title) return toast.error("Title required");
+                                            await supabase.from('gym_challenges').insert({
+                                                gym_id: gymId,
+                                                title: values.title,
+                                                description: values.description
+                                            });
+                                            toast.success("Challenge added");
+                                            fetchTvContent();
+                                        },
+                                        onCancel: () => setInputModal({ isOpen: false })
+                                    })
                                 }} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>+ Add Challenge</button>
                             </div>
                             <div style={{ display: 'grid', gap: '16px' }}>

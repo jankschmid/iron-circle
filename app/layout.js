@@ -1,6 +1,7 @@
 import './globals.css'
 import { StoreProvider } from '@/lib/store';
 import Providers from './providers';
+import { ToastProvider } from '@/components/ToastProvider';
 import UpdateChecker from '@/components/UpdateChecker';
 import HardwareBackButton from '@/components/HardwareBackButton';
 
@@ -22,11 +23,13 @@ export default function RootLayout({ children }) {
         <html lang="en">
             <body className="antialiased" suppressHydrationWarning>
                 <Providers>
-                    <StoreProvider>
-                        <UpdateChecker />
-                        <HardwareBackButton />
-                        {children}
-                    </StoreProvider>
+                    <ToastProvider>
+                        <StoreProvider>
+                            <UpdateChecker />
+                            <HardwareBackButton />
+                            {children}
+                        </StoreProvider>
+                    </ToastProvider>
                 </Providers>
             </body>
         </html>

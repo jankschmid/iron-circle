@@ -318,7 +318,7 @@ function GymMonitorPage() {
                             transition={{ duration: 0.5 }}
                             style={{ height: '100%' }}
                         >
-                            <Leaderboard />
+                            <Leaderboard gymId={gymId} />
                         </motion.div>
                     )}
 
@@ -471,23 +471,75 @@ function LiveCard({ user }) {
     );
 }
 
-function Leaderboard() {
-    // Mock Data for now until RPC is ready
-    const leaders = [
-        { id: 1, name: 'Jan S.', value: '42,500 kg', rank: 1 },
-        { id: 2, name: 'Mike T.', value: '38,200 kg', rank: 2 },
-        { id: 3, name: 'Sarah L.', value: '31,000 kg', rank: 3 },
-    ];
+function Leaderboard({ gymId }) {
+    const [leaders, setLeaders] = useState([]);
+    const [metric, setMetric] = useState('volume'); // volume, xp, level
+    const [loading, setLoading] = useState(true);
+    // Cycle metrics each mount or random? Start with Volume, then maybe switch?
+    // Let's cycle: Volume -> XP -> Level
+
+    useEffect(() => {
+        if (!gymId) return;
+
+        // Pick random metric for variety on every show
+        const metrics = ['volume', 'xp', 'level'];
+        const randomMetric = metrics[Math.floor(Math.random() * metrics.length)];
+        setMetric(randomMetric);
+
+        const fetchLeaderboard = async () => {
+            const { data, error } = await monitorSupabase.rpc('get_gym_leaderboard', {
+                p_gym_id: gymId,
+                p_metric: randomMetric,
+                p_days: 30
+            });
+
+            if (data) setLeaders(data);
+            if (error) console.error("Leaderboard Fetch Error:", error);
+            setLoading(false);
+        };
+
+        fetchLeaderboard();
+    }, [gymId]);
+
+    const getTitle = () => {
+        switch (metric) {
+            case 'volume': return 'MONTHLY LEADERS • VOLUME';
+            case 'xp': return 'ALL-TIME LEGENDS • XP';
+            case 'level': return 'HIGHEST LEVEL ATHLETES';
+            case 'workouts': return 'MOST CONSISTENT • WORKOUTS';
+            default: return 'LEADERBOARD';
+        }
+    };
+
+    const formatValue = (val) => {
+        if (metric === 'volume') return `${(val / 1000).toFixed(1)}k kg`;
+        if (metric === 'xp') return `${(val / 1000).toFixed(1)}k XP`;
+        if (metric === 'level') return `Lvl ${val}`;
+        return val;
+    };
+
+    if (loading) return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+    if (leaders.length === 0) return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
+            <h2 style={{ fontSize: '3vw', fontWeight: 900 }}>BE THE FIRST</h2>
+            <p style={{ fontSize: '1.5vw' }}>Log a workout to claim the throne.</p>
+        </div>
+    );
 
     return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>
-                MONTHLY LEADERS • VOLUME
-            </h2>
+            <motion.h2
+                key={metric}
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}
+            >
+                {getTitle()}
+            </motion.h2>
             <div style={{ width: '60vw', display: 'flex', flexDirection: 'column', gap: '2vh' }}>
-                {leaders.map((leader, i) => (
+                {leaders.slice(0, 5).map((leader, i) => (
                     <motion.div
-                        key={leader.id}
+                        key={leader.user_id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.1 }}
@@ -506,10 +558,14 @@ function Leaderboard() {
                             }}>
                                 #{leader.rank}
                             </div>
+                            <img
+                                src={leader.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${leader.user_id}`}
+                                style={{ width: '4vw', height: '4vw', borderRadius: '50%', objectFit: 'cover' }}
+                            />
                             <div style={{ fontSize: '2vw', fontWeight: 700 }}>{leader.name}</div>
                         </div>
                         <div style={{ fontSize: '2vw', fontWeight: 900, color: '#fff' }}>
-                            {leader.value}
+                            {formatValue(leader.value)}
                         </div>
                     </motion.div>
                 ))}

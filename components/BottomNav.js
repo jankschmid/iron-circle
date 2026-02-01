@@ -22,8 +22,7 @@ export default function BottomNav() {
         { path: '/', label: 'Home', icon: '🏠' },
         { path: '/workout', label: 'Workout', icon: '💪' },
         ...(user?.gymId ? [{ path: `/community?gymId=${user.gymId}`, label: 'Gym', icon: '🏟️' }] : []),
-        { path: '/social', label: 'Circle', icon: '👥' },
-        { path: '/chat', label: 'Chat', icon: '💬' },
+        { path: '/connect', label: 'Connect', icon: '🌍' },
         { path: '/profile', label: 'Me', icon: '👤' },
     ];
 

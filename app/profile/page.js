@@ -3,13 +3,15 @@
 import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 import Link from 'next/link';
+import WorkoutHeatmap from '@/components/WorkoutHeatmap';
+import { getLevelProgress } from '@/lib/gamification';
 
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 export default function ProfilePage() {
-    const { user, getWeeklyStats, getPersonalBests, gyms, friends } = useStore();
+    const { user, getWeeklyStats, getPersonalBests, gyms, friends, history } = useStore();
     const router = useRouter();
     // Fix: Create client once to avoid lock contention
     const [supabase] = useState(() => createClient());
@@ -115,6 +117,9 @@ export default function ProfilePage() {
     const { totalWorkouts, totalVolume } = getWeeklyStats();
     const personalBests = getPersonalBests(); // Real data
 
+    // Gamification
+    const { currentLevel, percent, totalNeeded, progress } = getLevelProgress(user.xp || 0);
+
     const handleLogout = async () => {
         await supabase.auth.signOut();
         // Fallback: Force redirect even if listener is slow
@@ -128,7 +133,7 @@ export default function ProfilePage() {
             <header style={{ padding: '24px 0 32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{ position: 'relative', marginBottom: '16px' }}>
                     <img
-                        src={user.avatar}
+                        src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id || 'guest'}`}
                         style={{
                             width: '96px',
                             height: '96px',
@@ -169,6 +174,19 @@ export default function ProfilePage() {
                         📍 {userGym.name}
                     </div>
                 )}
+
+
+                {/* Level Progress */}
+                <div style={{ width: '100%', maxWidth: '240px', margin: '12px 0 8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '4px', color: 'var(--text-dim)', fontWeight: '600' }}>
+                        <span style={{ color: 'var(--primary)' }}>Level {currentLevel}</span>
+                        <span>{Math.floor(progress)} / {totalNeeded} XP</span>
+                    </div>
+                    <div style={{ width: '100%', height: '6px', background: 'var(--surface-highlight)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${percent}%`, height: '100%', background: 'var(--primary)', transition: 'width 0.5s ease' }}></div>
+                    </div>
+                </div>
+
                 {user.bio && <p style={{ marginTop: '8px', fontSize: '0.9rem', maxWidth: '300px', textAlign: 'center' }}>{user.bio}</p>}
 
                 <div style={{ marginTop: '16px', display: 'flex', gap: '24px' }}>
@@ -186,6 +204,10 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </header>
+
+            <section style={{ marginBottom: '32px' }}>
+                <WorkoutHeatmap history={history} />
+            </section>
 
             <section style={{ marginBottom: '32px' }}>
                 <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Personal Bests</h3>

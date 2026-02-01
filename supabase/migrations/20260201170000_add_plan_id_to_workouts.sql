@@ -1,0 +1,1 @@
+ALTER TABLE workouts ADD COLUMN plan_id UUID REFERENCES workout_plans(id) ON DELETE SET NULL;

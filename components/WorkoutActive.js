@@ -5,6 +5,8 @@ import { useStore } from '@/lib/store';
 import ExerciseLogger from './ExerciseLogger';
 import BottomNav from './BottomNav';
 import ExercisePicker from './ExercisePicker';
+import ConfirmationModal from './ConfirmationModal';
+import { getSmartSuggestion } from '@/lib/algorithms';
 
 export default function WorkoutActive() {
     const {
@@ -18,18 +20,51 @@ export default function WorkoutActive() {
         addSetToWorkout,
         removeSetFromWorkout,
         addExerciseToWorkout,
-        removeExerciseFromWorkout
+        removeExerciseFromWorkout,
+        user
     } = useStore();
 
     const [showFinishConfirm, setShowFinishConfirm] = useState(false);
     const [isPrivate, setIsPrivate] = useState(false);
     const [showPicker, setShowPicker] = useState(false);
 
+    // Generic Confirmation State
+    const [confirmAction, setConfirmAction] = useState(null); // { title, message, onConfirm, isDangerous, confirmText }
+
+
+
     if (!activeWorkout) return null;
 
     const handleFinish = () => {
         finishWorkout({ visibility: isPrivate ? 'private' : 'public' });
         setShowFinishConfirm(false);
+    };
+
+    const handleCancel = () => {
+        setConfirmAction({
+            title: "Cancel Workout?",
+            message: "Are you sure you want to cancel? This will discard all progress for this session.",
+            onConfirm: () => {
+                cancelWorkout();
+                setConfirmAction(null);
+            },
+            isDangerous: true,
+            confirmText: "Discard Workout"
+        });
+    };
+
+    const handleRemoveExercise = (log) => {
+        const exerciseDef = exercises.find(e => e.id === log.exerciseId);
+        setConfirmAction({
+            title: `Remove ${exerciseDef?.name || 'Exercise'}?`,
+            message: "This will remove the exercise and all its sets from the current session.",
+            onConfirm: () => {
+                removeExerciseFromWorkout(log.exerciseId);
+                setConfirmAction(null);
+            },
+            isDangerous: true,
+            confirmText: "Remove"
+        });
     };
 
     return (
@@ -52,7 +87,7 @@ export default function WorkoutActive() {
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button
-                        onClick={cancelWorkout}
+                        onClick={handleCancel}
                         style={{
                             background: 'transparent',
                             color: 'var(--error)',
@@ -84,7 +119,7 @@ export default function WorkoutActive() {
                 </div>
             </header>
 
-            {/* Confirmation Modal */}
+            {/* Finish Confirmation Modal (Custom because of Checkbox) */}
             {showFinishConfirm && (
                 <div style={{
                     position: 'fixed',
@@ -162,12 +197,8 @@ export default function WorkoutActive() {
                                         {pr ? `🏆 PR: ${pr}kg` : ''}
                                     </span>
                                     <button
-                                        onClick={() => {
-                                            if (confirm(`Remove ${exerciseDef?.name}?`)) {
-                                                removeExerciseFromWorkout(log.exerciseId);
-                                            }
-                                        }}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}
+                                        onClick={() => handleRemoveExercise(log)}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--text-muted)' }}
                                         title="Remove Exercise"
                                     >
                                         ✕
@@ -187,9 +218,78 @@ export default function WorkoutActive() {
                             }}>
                                 <div>KG</div>
                                 <div>REPS</div>
-                                <div>RIR</div>
+                                <div>RPE</div>
                                 <div></div>
                             </div>
+
+                            {/* Smart Suggestion UI */}
+                            {lastSets && (() => {
+                                // Check preference
+                                const enabled = user?.user_metadata?.preferences?.smart_suggestions ?? true;
+                                if (!enabled) return null;
+
+                                // Calculate suggestion once per exercise render
+                                const suggestion = getSmartSuggestion(lastSets);
+                                if (!suggestion || !suggestion.weight) return null;
+
+                                return (
+                                    <div style={{
+                                        margin: '0 0 12px 0',
+                                        padding: '8px 12px',
+                                        background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent)',
+                                        borderLeft: '3px solid var(--accent)',
+                                        borderRadius: '4px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
+                                        fontSize: '0.85rem'
+                                    }}>
+                                        <div>
+                                            <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>⚡ Smart Goal: </span>
+                                            <span style={{ color: '#fff' }}>{suggestion.weight}kg x {suggestion.reps}</span>
+                                            {suggestion.type === 'deload' && <span style={{ marginLeft: '8px', color: 'var(--success)', fontSize: '0.75rem', border: '1px solid var(--success)', padding: '2px 6px', borderRadius: '100px' }}>DELOAD</span>}
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                // Apply to all empty sets? Or just the next one?
+                                                // Let's apply to the first empty set or the last one if all full
+                                                // Actually, simpler: Apply to the NEWLY added set if it exists, or update the last one.
+                                                // For now, let's just use existing logic to find target set.
+                                                // User asked for "Magic Button" to auto-fill.
+                                                // We can trigger a specific action or just expose this to the user to manually input for now?
+                                                // Better: "Click to Apply" -> fills the *next* incomplete set.
+
+                                                // Find first incomplete set
+                                                const nextSetIndex = log.sets.findIndex(s => !s.completed && (!s.weight || !s.reps));
+                                                if (nextSetIndex !== -1) {
+                                                    logSet(log.exerciseId, nextSetIndex, { weight: suggestion.weight, reps: suggestion.reps });
+                                                } else {
+                                                    // Params are passed to addSetToWorkout? No, addSet adds empty.
+                                                    // We can add a set AND fill its data.
+                                                    addSetToWorkout(log.exerciseId);
+                                                    setTimeout(() => {
+                                                        // We need to wait for state update to know the index, but we know it's length
+                                                        logSet(log.exerciseId, log.sets.length, { weight: suggestion.weight, reps: suggestion.reps });
+                                                    }, 50);
+                                                }
+                                            }}
+                                            style={{
+                                                background: 'var(--accent)',
+                                                color: '#000',
+                                                border: 'none',
+                                                padding: '4px 12px',
+                                                borderRadius: '100px',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                marginLeft: 'auto'
+                                            }}
+                                        >
+                                            APPLY
+                                        </button>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Sets */}
                             {log.sets.map((set, setIndex) => {
@@ -280,6 +380,13 @@ export default function WorkoutActive() {
                     onCancel={() => setShowPicker(false)}
                 />
             )}
+
+            {/* Generic Confirmation Modal (Remove Ex / Cancel Workout) */}
+            <ConfirmationModal
+                isOpen={!!confirmAction}
+                onCancel={() => setConfirmAction(null)}
+                {...confirmAction}
+            />
 
             <BottomNav />
         </div>

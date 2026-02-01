@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 
 export default function ExerciseLogger({ exerciseId, setId, previousData, onLog, initialData }) {
-    // Initialize state from existing data if possible, converting 0 to '' for inputs
-    const [weight, setWeight] = useState((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '');
-    const [reps, setReps] = useState((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '');
+    // Initialize state from existing data if possible, converting 0 to '' ONLY if undefined/null
+    const [weight, setWeight] = useState((initialData?.weight !== undefined && initialData.weight !== null) ? initialData.weight : '');
+    const [reps, setReps] = useState((initialData?.reps !== undefined && initialData.reps !== null) ? initialData.reps : '');
     const [rpe, setRpe] = useState(initialData?.rpe || '');
 
     const [isLogged, setIsLogged] = useState(initialData?.completed || false);
@@ -14,8 +14,8 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
     // Update local state if initialData changes (e.g. from parent re-render)
     useEffect(() => {
         if (initialData) {
-            setWeight((initialData.weight !== undefined && initialData.weight !== 0) ? initialData.weight : '');
-            setReps((initialData.reps !== undefined && initialData.reps !== 0) ? initialData.reps : '');
+            setWeight((initialData.weight !== undefined && initialData.weight !== null) ? initialData.weight : '');
+            setReps((initialData.reps !== undefined && initialData.reps !== null) ? initialData.reps : '');
             if (initialData.rpe !== undefined) setRpe(initialData.rpe);
             setIsLogged(!!initialData.completed);
         }
@@ -31,7 +31,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
         }
 
         if (!weight || !reps) {
-            console.warn("ExerciseLogger: Missing weight or reps", { weight, reps });
+            // console.warn("ExerciseLogger: Missing weight or reps", { weight, reps });
             return;
         }
 
@@ -117,9 +117,16 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
             {/* RPE Input */}
             <input
                 type="number"
-                placeholder="RIR"
+                placeholder="RPE"
+                min="1"
+                max="10"
                 value={rpe}
-                onChange={(e) => setRpe(e.target.value)}
+                onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || (parseFloat(val) >= 1 && parseFloat(val) <= 10)) {
+                        setRpe(val);
+                    }
+                }}
                 onBlur={handleBlur}
                 disabled={isLogged}
                 style={{

@@ -39,7 +39,7 @@ export default function GymMonitor({ gymId, initialKey = null }) {
 
     // Data State
     const [tvSettings, setTvSettings] = useState({ enabled_features: ['live'], loop_duration_sec: 20 });
-    const [contentData, setContentData] = useState({ news: [], events: [], challenges: [] });
+    const [contentData, setContentData] = useState({ news: [], events: [], challenges: [], leaderboard: [] });
     const [activeUsers, setActiveUsers] = useState([]);
 
     // Recovery / Fallback State
@@ -102,10 +102,19 @@ export default function GymMonitor({ gymId, initialKey = null }) {
                 const { data: events } = await supabase.from('gym_events').select('*').eq('gym_id', gymId).gte('event_date', today.toISOString()).order('event_date', { ascending: true }).abortSignal(signal);
                 const { data: challenges } = await supabase.from('gym_challenges').select('*').eq('gym_id', gymId).order('end_date', { ascending: true }).abortSignal(signal);
 
+                // C. Leaderboard
+                const { data: leaderboard } = await supabase.rpc('get_gym_leaderboard', {
+                    p_gym_id: gymId,
+                    p_period: 'month',
+                    p_metric: 'volume',
+                    p_limit: 5
+                }).abortSignal(signal);
+
                 setContentData({
                     news: news || [],
                     events: events || [],
-                    challenges: challenges || []
+                    challenges: challenges || [],
+                    leaderboard: leaderboard || []
                 });
 
                 // If we were offline, we might be back? 
@@ -352,7 +361,7 @@ export default function GymMonitor({ gymId, initialKey = null }) {
                             transition={{ duration: 0.5 }}
                             style={{ height: '100%' }}
                         >
-                            <Leaderboard />
+                            <Leaderboard leaders={contentData.leaderboard} />
                         </motion.div>
                     )}
 
@@ -571,13 +580,15 @@ function ChallengesWall({ challenges }) {
     );
 }
 
-function Leaderboard() {
-    // Semi-Mock Data until we have real stats RPC
-    const leaders = [
-        { id: 1, name: 'Jan S.', value: '42,500 kg', rank: 1 },
-        { id: 2, name: 'Mike T.', value: '38,200 kg', rank: 2 },
-        { id: 3, name: 'Sarah L.', value: '31,000 kg', rank: 3 },
-    ];
+function Leaderboard({ leaders }) {
+    if (!leaders || leaders.length === 0) {
+        return (
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
+                <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '2vh', color: COLOR_ACCENT }}>LEADERBOARD</h2>
+                <div style={{ fontSize: '2vw' }}>Be the first to log a workout this month!</div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -609,7 +620,7 @@ function Leaderboard() {
                             <div style={{ fontSize: '2vw', fontWeight: 700 }}>{leader.name}</div>
                         </div>
                         <div style={{ fontSize: '2vw', fontWeight: 900, color: '#fff' }}>
-                            {leader.value}
+                            {(leader.value / 1000).toFixed(1)}k
                         </div>
                     </motion.div>
                 ))}
