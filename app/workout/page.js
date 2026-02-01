@@ -33,12 +33,15 @@ export default function WorkoutPage() {
             {/* Header Tabs */}
             <div style={{
                 position: 'sticky',
-                position: 'sticky',
                 top: 0,
                 zIndex: 90,
                 background: 'var(--background)',
-                padding: '16px 20px 0',
-                borderBottom: '1px solid var(--border)'
+                paddingTop: 'calc(16px + env(safe-area-inset-top))', // Fix: Safe Area for Status Bar
+                paddingLeft: '20px',
+                paddingRight: '20px',
+                paddingBottom: '0',
+                borderBottom: '1px solid var(--border)',
+                transition: 'padding-top 0.2s'
             }}>
                 <div style={{ display: 'flex', gap: '8px', paddingBottom: '16px' }}>
                     {['Plan', 'Library', 'Stats'].map(tab => (
