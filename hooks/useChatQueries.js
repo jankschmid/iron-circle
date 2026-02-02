@@ -13,7 +13,8 @@ export function useConversations(userId) {
             const { data: myConvos, error: partError } = await supabase
                 .from('conversation_participants')
                 .select('conversation_id, last_read_at')
-                .eq('user_id', userId);
+                .eq('user_id', userId)
+                .is('deleted_at', null);
 
             if (partError) throw partError;
             if (!myConvos || myConvos.length === 0) return [];

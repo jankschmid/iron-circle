@@ -56,7 +56,37 @@ export default function GymChat({ communityId, news }) {
         fetchConvo();
     }, [communityId]);
 
-    // 2. Chat Query (Same as existing Chat, simplified)
+    // 2. Chat Query & Staff Map
+    const [staffMap, setStaffMap] = useState({});
+
+    useEffect(() => {
+        const fetchStaff = async () => {
+            if (!conversation?.gym_id && !communityId) return;
+            // Get Gym ID if likely available or derive it.
+            // If conversation has gym_id, use it.
+            // If not, use community lookup.
+            let gId = conversation?.gym_id;
+            if (!gId && communityId) {
+                const { data } = await supabase.from('communities').select('gym_id').eq('id', communityId).single();
+                gId = data?.gym_id;
+            }
+
+            if (gId) {
+                const { data: staff } = await supabase.from('user_gyms')
+                    .select('user_id, role')
+                    .eq('gym_id', gId)
+                    .in('role', ['owner', 'admin', 'trainer']);
+
+                if (staff) {
+                    const map = {};
+                    staff.forEach(s => map[s.user_id] = s.role);
+                    setStaffMap(map);
+                }
+            }
+        };
+        fetchStaff();
+    }, [conversation?.gym_id, communityId]);
+
     const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
         queryKey: ['messages', conversation?.id],
         queryFn: async ({ pageParam = 0 }) => {
@@ -66,7 +96,7 @@ export default function GymChat({ communityId, news }) {
 
             const { data: msgs } = await supabase
                 .from('messages')
-                .select('*, sender:sender_id(id, username, avatar_url)')
+                .select('*, sender:sender_id(id, username, avatar_url, is_super_admin)')
                 .eq('conversation_id', conversation.id)
                 .order('created_at', { ascending: false })
                 .range(from, to);
@@ -77,7 +107,14 @@ export default function GymChat({ communityId, news }) {
         getNextPageParam: (lastPage, all) => lastPage.length === 50 ? all.length : undefined
     });
 
-    const messages = data?.pages ? data.pages.flat() : [];
+    const rawMessages = data?.pages ? data.pages.flat() : [];
+    const messages = rawMessages.map(m => ({
+        ...m,
+        sender: {
+            ...m.sender,
+            role: staffMap[m.sender_id]
+        }
+    }));
 
     // 3. Realtime
     useEffect(() => {

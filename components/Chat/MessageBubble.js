@@ -10,8 +10,17 @@ const MessageBubble = memo(({ msg, isMe, isSequence, onSaveTemplate, onJoinSessi
             animation: 'fadeIn 0.3s ease-out'
         }}>
             {!isMe && !isSequence && (
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', marginLeft: '12px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', marginLeft: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     {msg.sender?.name}
+                    {msg.sender?.is_super_admin ? (
+                        <span style={{ fontSize: '0.65rem', background: '#FFD700', color: '#000', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>Owner</span>
+                    ) : (
+                        <>
+                            {msg.sender?.role === 'owner' && <span style={{ fontSize: '0.65rem', background: 'var(--error)', color: '#fff', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>Gym Admin</span>}
+                            {msg.sender?.role === 'admin' && <span style={{ fontSize: '0.65rem', background: 'var(--brand-purple)', color: '#fff', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>Staff</span>}
+                            {msg.sender?.role === 'trainer' && <span style={{ fontSize: '0.65rem', background: 'var(--brand-yellow)', color: '#000', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>Trainer</span>}
+                        </>
+                    )}
                 </div>
             )}
             <div style={{

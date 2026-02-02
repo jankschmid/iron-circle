@@ -9,23 +9,28 @@ export default function PlanBuilder({ existingPlan, onClose }) {
     const [name, setName] = useState(existingPlan?.name || '');
     const [description, setDescription] = useState(existingPlan?.description || '');
     const [days, setDays] = useState(existingPlan?.days || [{ id: 'temp-1', day_order: 1, template_id: null, label: 'Day 1' }]);
+    const [isFlex, setIsFlex] = useState(existingPlan?.type === 'flex');
     const [loading, setLoading] = useState(false);
     const [creatingTemplateForIndex, setCreatingTemplateForIndex] = useState(null);
 
     useEffect(() => {
         fetchTemplates();
-    }, []);
+        if (existingPlan?.type === 'flex') {
+            setIsFlex(true);
+        }
+    }, []); // Check existing plan type on mount
 
     const addDay = () => {
         const nextOrder = days.length + 1;
-        // Default new day to Rest Day label
-        setDays([...days, { id: `temp-${Date.now()}`, day_order: nextOrder, template_id: null, label: 'Rest Day' }]);
+        const defaultLabel = isFlex ? `Routine ${nextOrder}` : `Day ${nextOrder}`;
+        setDays([...days, { id: `temp-${Date.now()}`, day_order: nextOrder, template_id: null, label: isFlex ? 'Select Routine' : 'Rest Day' }]);
     };
 
     const removeDay = (index) => {
         const newDays = days.filter((_, i) => i !== index).map((d, i) => ({
             ...d,
             day_order: i + 1,
+            label: isFlex && !d.template_id ? `Routine ${i + 1}` : d.label // simplified relabel logic
         }));
         setDays(newDays);
     };
@@ -34,7 +39,7 @@ export default function PlanBuilder({ existingPlan, onClose }) {
         const newDays = [...days];
         newDays[index] = { ...newDays[index], [field]: value };
 
-        // If updating template_id, automatically update the label to match the template name
+        // If updating template_id, update label
         if (field === 'template_id') {
             if (value) {
                 const template = templates.find(t => t.id === value);
@@ -42,7 +47,7 @@ export default function PlanBuilder({ existingPlan, onClose }) {
                     newDays[index].label = template.name;
                 }
             } else {
-                newDays[index].label = 'Rest Day';
+                newDays[index].label = isFlex ? 'Select Routine' : 'Rest Day';
             }
         }
 
@@ -50,7 +55,7 @@ export default function PlanBuilder({ existingPlan, onClose }) {
     };
 
     const quickCreateTemplate = async (index) => {
-        const defaultName = `Day ${days[index].day_order} Workout`;
+        const defaultName = isFlex ? `Routine ${days[index].day_order}` : `Day ${days[index].day_order} Workout`;
         if (!confirm(`Create a new empty template named "${defaultName}"?`)) return;
 
         try {
@@ -61,11 +66,7 @@ export default function PlanBuilder({ existingPlan, onClose }) {
             });
 
             if (newId) {
-                await fetchTemplates(); // Refresh list
-
-                // We need to fetch specific template to get name, or just use defaultName
-                // updateDay handles label update if we pass ID, but we need template in store first.
-                // Simpler: manually update both
+                await fetchTemplates();
                 const newDays = [...days];
                 newDays[index] = {
                     ...newDays[index],
@@ -83,7 +84,12 @@ export default function PlanBuilder({ existingPlan, onClose }) {
         if (!name.trim()) return alert("Please name your plan.");
         setLoading(true);
         try {
-            await savePlan({ id: existingPlan?.id, name, description }, days);
+            await savePlan({
+                id: existingPlan?.id,
+                name,
+                description,
+                type: isFlex ? 'flex' : 'scheduled' // Send type
+            }, days);
             onClose();
         } catch (e) {
             alert("Failed to save plan: " + e.message);
@@ -99,9 +105,9 @@ export default function PlanBuilder({ existingPlan, onClose }) {
             left: 0,
             right: 0,
             bottom: 0,
-            height: '100dvh', // Dynamic viewport height for mobile
+            height: '100dvh',
             background: 'var(--surface)',
-            zIndex: 200, // Higher than everything
+            zIndex: 200,
             display: 'flex',
             flexDirection: 'column'
         }}>
@@ -122,10 +128,45 @@ export default function PlanBuilder({ existingPlan, onClose }) {
                         <input
                             value={name}
                             onChange={e => setName(e.target.value)}
-                            placeholder="e.g. Push Pull Legs"
+                            placeholder={isFlex ? "e.g. My Workout Collection" : "e.g. Push Pull Legs"}
                             style={{ width: '100%', padding: '16px', background: 'var(--surface-highlight)', border: 'none', borderRadius: '8px', color: 'white', fontSize: '1.1rem', fontWeight: 'bold' }}
                         />
                     </div>
+
+                    {/* Plan Type Toggle */}
+                    <div style={{ marginBottom: '24px', background: 'var(--surface-highlight)', padding: '4px', borderRadius: '8px', display: 'flex' }}>
+                        <button
+                            onClick={() => setIsFlex(false)}
+                            style={{
+                                flex: 1,
+                                padding: '8px',
+                                border: 'none',
+                                borderRadius: '6px',
+                                background: !isFlex ? 'var(--primary)' : 'transparent',
+                                color: !isFlex ? 'black' : 'var(--text-muted)',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            📅 Scheduled
+                        </button>
+                        <button
+                            onClick={() => setIsFlex(true)}
+                            style={{
+                                flex: 1,
+                                padding: '8px',
+                                border: 'none',
+                                borderRadius: '6px',
+                                background: isFlex ? 'var(--primary)' : 'transparent',
+                                color: isFlex ? 'black' : 'var(--text-muted)',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            🧘 Flex Plan
+                        </button>
+                    </div>
+
                     <div style={{ marginBottom: '32px' }}>
                         <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Description (Optional)</label>
                         <textarea
@@ -137,22 +178,16 @@ export default function PlanBuilder({ existingPlan, onClose }) {
                     </div>
 
                     {/* Days Builder */}
-                    <h3 style={{ marginBottom: '16px', fontSize: '1.1rem' }}>Schedule</h3>
+                    <h3 style={{ marginBottom: '16px', fontSize: '1.1rem' }}>{isFlex ? 'Workouts' : 'Schedule'}</h3>
 
-                    {days.length === 0 && (
-                        <div style={{
-                            padding: '24px',
-                            background: 'var(--surface-highlight)',
-                            borderRadius: '16px',
-                            border: '2px dashed var(--border)',
-                            marginBottom: '24px',
-                            textAlign: 'center'
-                        }}>
-                            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>♾️</div>
-                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '4px' }}>Flex Plan</div>
-                            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                                No fixed schedule. Workouts are added dynamically.
-                            </div>
+                    {/* Info Box */}
+                    {isFlex ? (
+                        <div style={{ marginBottom: '16px', fontSize: '0.9rem', color: 'var(--text-muted)', background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px' }}>
+                            Flex Plans have no fixed weekly schedule. Add routines here, and you can pick any of them to start on any day.
+                        </div>
+                    ) : (
+                        <div style={{ marginBottom: '16px', fontSize: '0.9rem', color: 'var(--text-muted)', background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px' }}>
+                            Scheduled Plans assign specific workouts to specific days (Day 1, Day 2...).
                         </div>
                     )}
 
@@ -176,12 +211,12 @@ export default function PlanBuilder({ existingPlan, onClose }) {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 6px', borderRadius: '4px' }}>
-                                                Day {day.day_order}
+                                                {isFlex ? `Option ${index + 1}` : `Day ${day.day_order}`}
                                             </span>
                                             <div style={{ fontWeight: 'bold', fontSize: '1rem', color: day.template_id ? 'white' : 'var(--text-muted)' }}>
                                                 {day.template_id ?
                                                     (templates.find(t => t.id === day.template_id)?.name || 'Loading...')
-                                                    : 'Rest Day 💤'}
+                                                    : (isFlex ? 'Use specific routine' : 'Rest Day 💤')}
                                             </div>
                                         </div>
                                         <button
@@ -207,7 +242,7 @@ export default function PlanBuilder({ existingPlan, onClose }) {
                                                 fontSize: '0.95rem'
                                             }}
                                         >
-                                            <option value="">Rest Day 💤</option>
+                                            <option value="">{isFlex ? 'Select Routine...' : 'Rest Day 💤'}</option>
                                             {templates.map(t => (
                                                 <option key={t.id} value={t.id}>{t.name}</option>
                                             ))}
@@ -254,7 +289,7 @@ export default function PlanBuilder({ existingPlan, onClose }) {
                             cursor: 'pointer'
                         }}
                     >
-                        + Add Day
+                        {isFlex ? '+ Add Option' : '+ Add Day'}
                     </button>
                 </div>
             </div>

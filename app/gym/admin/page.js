@@ -134,9 +134,29 @@ function GymAdminPage() {
 
             if (error) throw error;
 
+            if (error) throw error;
+
             // Security Check
-            if (gymData.created_by !== user.id && !user.is_super_admin) {
-                toast.error("Access Denied: You are not the owner of this gym.");
+            // Allow: Super Admin, Creator, OR Gym Admin/Owner role
+            let hasAccess = false;
+            if (user.is_super_admin) hasAccess = true;
+            if (gymData.created_by === user.id) hasAccess = true;
+
+            if (!hasAccess) {
+                const { data: roleData } = await supabase
+                    .from('user_gyms')
+                    .select('role')
+                    .eq('user_id', user.id)
+                    .eq('gym_id', gymId)
+                    .single();
+
+                if (roleData && (roleData.role === 'admin' || roleData.role === 'owner')) {
+                    hasAccess = true;
+                }
+            }
+
+            if (!hasAccess) {
+                toast.error("Access Denied: You are not an admin of this gym.");
                 router.push('/');
                 return;
             }
@@ -459,7 +479,63 @@ function GymAdminPage() {
         });
     };
 
-    // --- Render Helpers ---
+    // --- Invites Logic ---
+    const [invites, setInvites] = useState([]);
+
+    const fetchInvites = async () => {
+        const { data, error } = await supabase
+            .from('gym_invites')
+            .select('*')
+            .eq('gym_id', gymId)
+            .order('created_at', { ascending: false });
+
+        if (data) setInvites(data);
+    };
+
+    // Load invites when tab is active
+    useEffect(() => {
+        if (activeTab === 'invites' && gymId) {
+            fetchInvites();
+        }
+    }, [activeTab, gymId]);
+
+    const handleCreateInvite = async (role, type) => {
+        // type: 'one_time', '24h', 'unlimited'
+        let max_uses = type === 'one_time' ? 1 : null;
+        let expires_at = null;
+        if (type === '24h') {
+            const d = new Date();
+            d.setHours(d.getHours() + 24);
+            expires_at = d.toISOString();
+        }
+
+        const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+
+        const { error } = await supabase.from('gym_invites').insert({
+            gym_id: gymId,
+            role,
+            code,
+            max_uses,
+            expires_at,
+            created_by: user.id
+        });
+
+        if (error) {
+            toast.error("Failed to create invite: " + error.message);
+        } else {
+            toast.success("Invite Created!");
+            fetchInvites();
+        }
+    };
+
+    const handleDeleteInvite = async (id) => {
+        const { error } = await supabase.from('gym_invites').delete().eq('id', id);
+        if (!error) {
+            toast.success("Invite Revoked");
+            fetchInvites();
+        }
+    };
+
 
     if (!gymId) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Gym ID missing.</div>;
     if (loading) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Dashboard...</div>;
@@ -480,13 +556,28 @@ function GymAdminPage() {
                     }
                     .dashboard-sidebar nav {
                         flex-direction: row !important;
-                        flex-wrap: wrap;
-                        gap: 8px;
+                        overflow-x: auto;
+                        white-space: nowrap;
+                        gap: 12px;
                         margin-bottom: 16px;
+                        padding-bottom: 8px;
+                        -webkit-overflow-scrolling: touch;
                     }
+                    /* Remove scrollbar visual if desired, but keeping it is safer for discovery */
+                    .dashboard-sidebar nav::-webkit-scrollbar {
+                        height: 4px;
+                    }
+                    .dashboard-sidebar nav::-webkit-scrollbar-thumb {
+                        background: #333;
+                        border-radius: 4px;
+                    }
+
                     .dashboard-sidebar nav button {
                         width: auto !important;
-                        flex: 1;
+                        flex: 0 0 auto !important;
+                        padding: 8px 16px !important;
+                        border-radius: 100px !important;
+                        border: 1px solid #333 !important;
                         justify-content: center;
                     }
                     .dashboard-content {
@@ -507,6 +598,7 @@ function GymAdminPage() {
                     <NavBtn label="Overview" icon="📊" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
                     <NavBtn label="TV Content" icon="📺" active={activeTab === 'content'} onClick={() => setActiveTab('content')} />
                     <NavBtn label="Members" icon="👥" active={activeTab === 'members'} onClick={() => setActiveTab('members')} />
+                    <NavBtn label="Invitations" icon="📩" active={activeTab === 'invites'} onClick={() => setActiveTab('invites')} />
                     <NavBtn label="Settings" icon="⚙️" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
                 </nav>
 
@@ -885,6 +977,112 @@ function GymAdminPage() {
                                             </td>
                                         </tr>
                                     ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'invites' && (
+                    <div style={{ maxWidth: '900px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                            <div>
+                                <h2 style={{ fontSize: '2rem', marginBottom: '8px', fontWeight: 'bold' }}>Team Invitations</h2>
+                                <div style={{ color: '#888' }}>
+                                    Generate secure codes to invite Trainers and Admins to your team.
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '40px' }}>
+                            {/* Trainer Invite Card */}
+                            <div style={{ background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222' }}>
+                                <h3 style={{ color: '#FFC800', margin: '0 0 16px 0' }}>Invite Trainer</h3>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                    <button
+                                        onClick={() => handleCreateInvite('trainer', 'one_time')}
+                                        style={{ background: '#222', border: '1px solid #333', color: '#fff', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}
+                                    >
+                                        Only Once
+                                    </button>
+                                    <button
+                                        onClick={() => handleCreateInvite('trainer', '24h')}
+                                        style={{ background: '#222', border: '1px solid #333', color: '#fff', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}
+                                    >
+                                        Valid 24h
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Admin Invite Card */}
+                            <div style={{ background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222' }}>
+                                <h3 style={{ color: '#ff4444', margin: '0 0 16px 0' }}>Invite Admin</h3>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                    <button
+                                        onClick={() => handleCreateInvite('admin', 'one_time')}
+                                        style={{ background: '#222', border: '1px solid #333', color: '#fff', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}
+                                    >
+                                        Only Once
+                                    </button>
+                                    <button
+                                        onClick={() => handleCreateInvite('admin', '24h')}
+                                        style={{ background: '#222', border: '1px solid #333', color: '#fff', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}
+                                    >
+                                        Valid 24h
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* List */}
+                        <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Active Invites</h3>
+                        <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                <thead style={{ background: '#181818', borderBottom: '1px solid #222' }}>
+                                    <tr>
+                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>CODE</th>
+                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>ROLE</th>
+                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>TYPE</th>
+                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>STATUS</th>
+                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {invites.length === 0 ? (
+                                        <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#444' }}>No active invites.</td></tr>
+                                    ) : invites.map(invite => {
+                                        const isExpired = invite.expires_at && new Date(invite.expires_at) < new Date();
+                                        const isUsed = invite.max_uses && invite.used_count >= invite.max_uses;
+                                        const status = isExpired ? 'Expired' : isUsed ? 'Used' : 'Active';
+
+                                        return (
+                                            <tr key={invite.id} style={{ borderBottom: '1px solid #222' }}>
+                                                <td style={{ padding: '16px' }}>
+                                                    <div style={{ fontFamily: 'monospace', fontSize: '1.2rem', fontWeight: 'bold', letterSpacing: '1px', color: status === 'Active' ? '#fff' : '#666' }}>
+                                                        {invite.code}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '16px' }}>
+                                                    <span style={{
+                                                        color: invite.role === 'admin' ? '#000' : '#fff',
+                                                        background: invite.role === 'admin' ? '#ff4444' : '#0066ff',
+                                                        padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold'
+                                                    }}>{invite.role.toUpperCase()}</span>
+                                                </td>
+                                                <td style={{ padding: '16px', fontSize: '0.9rem', color: '#888' }}>
+                                                    {invite.max_uses === 1 ? 'One-Time' : invite.expires_at ? '24 Hours' : 'Unlimited'}
+                                                </td>
+                                                <td style={{ padding: '16px' }}>
+                                                    <span style={{ color: status === 'Active' ? '#0f0' : '#666' }}>{status}</span>
+                                                    {invite.expires_at && <div style={{ fontSize: '0.7rem', color: '#444' }}>Expires: {new Date(invite.expires_at).toLocaleTimeString()}</div>}
+                                                </td>
+                                                <td style={{ padding: '16px' }}>
+                                                    <button onClick={() => handleDeleteInvite(invite.id)} style={{ color: '#ff4444', background: 'none', border: 'none', cursor: 'pointer' }}>Revoke</button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

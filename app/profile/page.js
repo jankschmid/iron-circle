@@ -162,16 +162,37 @@ export default function ProfilePage() {
                 <h1 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{user.name}</h1>
                 <p style={{ color: 'var(--text-muted)' }}>{user.handle || '@athlete'}</p>
                 {userGym && (
-                    <div style={{
-                        marginTop: '8px',
-                        fontSize: '0.8rem',
-                        color: 'var(--primary)',
-                        background: 'var(--primary-dim)',
-                        padding: '4px 12px',
-                        borderRadius: '100px',
-                        display: 'inline-block'
-                    }}>
-                        📍 {userGym.name}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '8px' }}>
+                        <div style={{
+                            fontSize: '0.8rem',
+                            color: 'var(--primary)',
+                            background: 'var(--primary-dim)',
+                            padding: '4px 12px',
+                            borderRadius: '100px',
+                            display: 'inline-block'
+                        }}>
+                            📍 {userGym.name}
+                        </div>
+                        {userGym.role === 'owner' && (
+                            <div style={{ background: '#FFD700', color: '#000', padding: '4px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                👑 Owner
+                            </div>
+                        )}
+                        {userGym.role === 'admin' && (
+                            <div style={{ background: 'var(--error)', color: '#fff', padding: '4px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                🛡️ Admin
+                            </div>
+                        )}
+                        {userGym.role === 'trainer' && (
+                            <div style={{ background: 'var(--brand-yellow)', color: '#000', padding: '4px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                💪 Trainer
+                            </div>
+                        )}
+                        {(userGym.role === 'member' || !userGym.role) && (
+                            <div style={{ background: 'var(--surface-highlight)', color: 'var(--text-muted)', padding: '4px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid var(--border)' }}>
+                                👤 Member
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -228,115 +249,115 @@ export default function ProfilePage() {
             </section>
 
             <section>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Settings</h3>
-                <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                    {/* Navigation Buttons */}
-                    <Link href="/profile/edit" style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '16px',
-                        background: 'transparent',
-                        borderBottom: '1px solid var(--border)',
-                        color: 'inherit',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        Edit Profile
-                        <span style={{ color: 'var(--text-dim)' }}>›</span>
-                    </Link>
-
-                    <Link href="/profile/settings" style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '16px',
-                        background: 'transparent',
-                        borderBottom: '1px solid var(--border)',
-                        color: 'inherit',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        Account Settings
-                        <span style={{ color: 'var(--text-dim)' }}>›</span>
-                    </Link>
-                    <Link href="/profile/notifications" style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '16px',
-                        background: 'transparent',
-                        borderBottom: '1px solid var(--border)',
-                        color: 'inherit',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        Notifications
-                        <span style={{ color: 'var(--text-dim)' }}>›</span>
-                    </Link>
-
-                    <Link href="/settings/privacy" style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '16px',
-                        background: 'transparent',
-                        borderBottom: '1px solid var(--border)',
-                        color: 'inherit',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}>
-                        Privacy & Ghost Mode 👻
-                        <span style={{ color: 'var(--text-dim)' }}>›</span>
-                    </Link>
-
-                    {/* Conditional Coach Panel */}
-                    {(user.is_super_admin) && (
-                        <Link href="/admin/master" style={{
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '16px',
-                            background: 'rgba(255, 0, 0, 0.1)', // Red tint for Master Admin
-                            borderBottom: '1px solid var(--border)',
-                            color: '#ff4444',
+                {/* Settings & Notifications Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+                    <Link href="/profile/settings" style={{ textDecoration: 'none' }}>
+                        <div style={{
+                            background: 'var(--surface)',
+                            padding: '24px',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid var(--border)',
                             display: 'flex',
-                            justifyContent: 'space-between',
+                            flexDirection: 'column',
                             alignItems: 'center',
-                            fontWeight: 'bold'
+                            justifyContent: 'center',
+                            gap: '12px',
+                            height: '100%'
                         }}>
-                            Master Admin Panel
-                            <span style={{ color: '#ff4444' }}>›</span>
+                            <div style={{ fontSize: '1.8rem' }}>⚙️</div>
+                            <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>Settings</div>
+                        </div>
+                    </Link>
+
+                    <Link href="/profile/notifications" style={{ textDecoration: 'none' }}>
+                        <div style={{
+                            background: 'var(--surface)',
+                            padding: '24px',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid var(--border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '12px',
+                            height: '100%'
+                        }}>
+                            <div style={{ fontSize: '1.8rem' }}>🔔</div>
+                            <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>Notifications</div>
+                        </div>
+                    </Link>
+                </div>
+
+                {/* Role Based Access */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {(user.is_super_admin) && (
+                        <Link href="/admin/master" style={{ textDecoration: 'none' }}>
+                            <div style={{
+                                padding: '16px',
+                                background: 'rgba(255, 0, 0, 0.1)',
+                                border: '1px solid #ff4444',
+                                borderRadius: 'var(--radius-md)',
+                                color: '#ff4444',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                fontWeight: 'bold'
+                            }}>
+                                <span>⚡</span> Master Admin Panel
+                            </div>
                         </Link>
                     )}
 
-                    {(userGym?.role === 'trainer' || userGym?.role === 'admin') && (
-                        <Link href={`/trainer/dashboard?gymId=${userGym.id}`} style={{
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '16px',
-                            background: 'rgba(255, 200, 0, 0.1)', // Gold tint
-                            borderBottom: '1px solid var(--border)',
-                            color: '#FFC800',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            fontWeight: 'bold'
-                        }}>
-                            Coach Panel
-                            <span style={{ color: '#FFC800' }}>›</span>
+                    {(userGym?.role === 'trainer' || userGym?.role === 'admin' || userGym?.role === 'owner') && (
+                        <Link href={`/trainer/dashboard?gymId=${userGym.id}`} style={{ textDecoration: 'none' }}>
+                            <div style={{
+                                padding: '16px',
+                                background: 'rgba(255, 200, 0, 0.1)',
+                                border: '1px solid #FFC800',
+                                borderRadius: 'var(--radius-md)',
+                                color: '#FFC800',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                fontWeight: 'bold'
+                            }}>
+                                <span>📋</span> Coach Panel
+                            </div>
+                        </Link>
+                    )}
+
+                    {(userGym?.role === 'admin' || userGym?.role === 'owner') && (
+                        <Link href={`/gym/admin?id=${userGym.id}`} style={{ textDecoration: 'none' }}>
+                            <div style={{
+                                padding: '16px',
+                                background: 'rgba(50, 50, 200, 0.15)',
+                                border: '1px solid #4488ff',
+                                borderRadius: 'var(--radius-md)',
+                                color: '#4488ff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                fontWeight: 'bold'
+                            }}>
+                                <span>🏢</span> Gym Admin Dashboard
+                            </div>
                         </Link>
                     )}
 
                     <button onClick={handleLogout} style={{
                         width: '100%',
-                        textAlign: 'left',
                         padding: '16px',
                         background: 'transparent',
-                        color: 'var(--warning)',
+                        color: 'var(--error)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        marginTop: '12px',
                         display: 'flex',
-                        justifyContent: 'space-between',
                         alignItems: 'center',
-                        fontWeight: '600'
+                        justifyContent: 'center',
+                        gap: '8px'
                     }}>
                         Sign Out
                     </button>

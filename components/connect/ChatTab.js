@@ -261,9 +261,27 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
     };
 
     const handleDelete = async () => {
-        // Implement delete logic if needed
-        console.log("Delete chat", chat.id);
-    }
+        setConfirmDialog({
+            message: "Delete this conversation? It will be hidden from your list.",
+            type: 'confirm',
+            onConfirm: async () => {
+                try {
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
+                    if (!authUser) return;
+
+                    await supabase
+                        .from('conversation_participants')
+                        .update({ deleted_at: new Date().toISOString() })
+                        .eq('conversation_id', chat.id)
+                        .eq('user_id', authUser.id);
+
+                    if (onUpdate) onUpdate();
+                } catch (e) {
+                    console.error("Delete error:", e);
+                }
+            }
+        });
+    };
 
     return (
         <div style={{ position: 'relative' }}>

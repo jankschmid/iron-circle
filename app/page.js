@@ -27,6 +27,20 @@ export default function Home() {
         return () => clearTimeout(timer);
     }, [user]);
 
+    // 3. Onboarding Redirect Check
+    useEffect(() => {
+        if (user && (!user.gymId || !user.height)) {
+            router.push('/profile/setup');
+        }
+    }, [user, router]);
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        localStorage.clear();
+        sessionStorage.clear();
+        router.push('/login');
+    };
+
     // Safety check - if no user, rendering will be handled by redirect in store, 
     // but we return empty here to prevent crash
     if (!user) {
@@ -124,12 +138,7 @@ export default function Home() {
     // Only get stats if user exists
     const { volumeByDay } = getWeeklyStats();
 
-    const handleLogout = async () => {
-        await supabase.auth.signOut();
-        localStorage.clear();
-        sessionStorage.clear();
-        router.push('/login');
-    };
+
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
@@ -143,10 +152,10 @@ export default function Home() {
             </header>
 
             {/* 3. Onboarding vs Dashboard */}
-            {!user.gymId ? (
-                <section style={{ marginTop: '32px' }}>
-                    <GymFinder />
-                </section>
+            {(!user.gymId || !user.height) ? (
+                <div style={{ padding: '40px', textAlign: 'center' }}>
+                    <p>Redirecting to setup...</p>
+                </div>
             ) : (
                 <>
                     <LiveStatus />

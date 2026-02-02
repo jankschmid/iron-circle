@@ -4,181 +4,250 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 
-import { Suspense } from 'react';
-
-const TrainerDashboardContent = TrainerDashboard;
-
-export default function TrainerDashboardWrapper() {
-    return (
-        <Suspense fallback={<div className="container" style={{ padding: '40px', textAlign: 'center' }}>Loading Coach Panel...</div>}>
-            <TrainerDashboardContent />
-        </Suspense>
-    );
-}
-
-function TrainerDashboard() {
+export default function TrainerDashboard() {
     const { user } = useStore();
+    const [clients, setClients] = useState([]);
+    const [activeTab, setActiveTab] = useState('clients'); // clients, invites
+    const [inviteLink, setInviteLink] = useState(null);
+    const [trainerCode, setTrainerCode] = useState(null);
+
+    // Search State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+
     const supabase = createClient();
-    const searchParams = useSearchParams();
-    const gymIdParam = searchParams.get('gymId');
-
-    // If no gymId in URL, fallback to user's current gym or first gym they are trainer in
-    // Real-world: Should probably let them select gym if they are trainer in multiple.
-
-    const [members, setMembers] = useState([]);
-
-    const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all'); // 'all', 'inactive', 'new'
 
     useEffect(() => {
         if (!user) return;
-        fetchMembers();
-    }, [user, gymIdParam, filter]);
+        fetchClients();
+        fetchTrainerCode();
+    }, [user]);
 
-    const fetchMembers = async () => {
-        setLoading(true);
-        // We need to fetch community members for this gym
-        // 1. Get Community ID for this gym
-        const targetGymId = gymIdParam || user.gymId;
-        if (!targetGymId) {
-            setLoading(false);
-            return;
-        }
+    const fetchClients = async () => {
+        const { data, error } = await supabase
+            .from('trainer_relationships')
+            .select(`
+                *,
+                client:profiles!client_id (*)
+            `)
+            .eq('trainer_id', user.id)
+            .eq('status', 'active');
 
+        if (data) setClients(data);
+    };
+
+    const fetchTrainerCode = async () => {
+        const { data, error } = await supabase.rpc('get_my_trainer_code');
+        if (data) setTrainerCode(data);
+    };
+
+    const handleGenerateInvite = () => {
+        // Simple invite: ?trainer_ref=USER_ID
+        const link = `${window.location.origin}/connect?trainer=${user.id}`;
+        setInviteLink(link);
+    };
+
+    const handleSearch = async () => {
+        if (!searchQuery || searchQuery.length < 3) return;
+        setIsSearching(true);
         try {
-            // Get Community ID
-            const { data: comm } = await supabase
-                .from('communities')
-                .select('id')
-                .eq('gym_id', targetGymId)
-                .single();
-
-            if (!comm) throw new Error("No community found for this gym");
-
-            // Get Members
-            // Join profiles to get names
-            let query = supabase
-                .from('community_members')
-                .select('joined_at, role, monitor_consent_at, profiles(id, name, avatar_url, last_start_workout)')
-                .eq('community_id', comm.id);
-
-            const { data, error } = await query;
-            if (error) throw error;
-
-            let processed = data.map(m => ({
-                id: m.profiles.id,
-                name: m.profiles.name,
-                avatar: m.profiles.avatar_url,
-                joinedAt: new Date(m.joined_at),
-                lastWorkout: m.profiles.last_start_workout ? new Date(m.profiles.last_start_workout) : null,
-                role: m.role,
-                monitorConsent: !!m.monitor_consent_at
-            }));
-
-            // Client-side filtering for simplicity (since "Inactive > 7 days" is easier in JS)
-            const now = new Date();
-            const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-
-            if (filter === 'inactive') {
-                processed = processed.filter(m => !m.lastWorkout || m.lastWorkout < sevenDaysAgo);
-            } else if (filter === 'new') {
-                processed = processed.filter(m => m.joinedAt > sevenDaysAgo);
-            }
-
-            setMembers(processed);
-        } catch (err) {
-            console.error("Trainer Fetch Error:", err);
+            const { data, error } = await supabase.rpc('search_profiles_secure', { p_query: searchQuery });
+            if (data) setSearchResults(data);
         } finally {
-            setLoading(false);
+            setIsSearching(false);
         }
     };
 
-    const handlePushWorkout = (memberId) => {
-        // Placeholder for "Assign Plan" functionality
-        // In a real app, this would open a modal to select a template.
-        alert(`Open Template Selector for member ${memberId.substr(0, 5)}...`);
+    const handleAddClient = async (clientId) => {
+        const { data, error } = await supabase.rpc('invite_client_by_id', { client_id: clientId });
+        if (data?.success) {
+            alert("Invite sent!"); // Ideally replace with Toast
+            // Remove from list or mark as invited?
+            setSearchResults(prev => prev.map(p => p.id === clientId ? { ...p, is_client: true } : p));
+        } else {
+            alert("Error: " + (data?.message || error?.message));
+        }
     };
 
     return (
-        <div className="container" style={{ paddingBottom: '100px', background: '#f5f5f7', minHeight: '100vh' }}>
-            {/* Header */}
-            <div style={{ background: '#fff', padding: '20px 20px 10px', position: 'sticky', top: 0, zIndex: 10, borderBottom: '1px solid #eee' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-                    <Link href="/profile" style={{ fontSize: '1.5rem', textDecoration: 'none', color: '#000', marginRight: '16px' }}>←</Link>
-                    <div>
-                        <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: '800' }}>Coach Panel</h1>
-                        <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>{members.length} Athletes Managed</p>
-                    </div>
-                </div>
-
-                {/* Filters */}
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
-                    {['all', 'inactive', 'new'].map(f => (
-                        <button
-                            key={f}
-                            onClick={() => setFilter(f)}
-                            style={{
-                                padding: '8px 16px',
-                                borderRadius: '100px',
-                                border: 'none',
-                                background: filter === f ? '#000' : '#eee',
-                                color: filter === f ? '#fff' : '#666',
-                                fontWeight: '600',
-                                textTransform: 'capitalize',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {f} {f === 'inactive' && '⚠️'} {f === 'new' && '✨'}
-                        </button>
-                    ))}
-                </div>
+        <div className="container" style={{ padding: '20px' }}>
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', borderBottom: '1px solid var(--border)' }}>
+                <button
+                    onClick={() => setActiveTab('clients')}
+                    style={{
+                        padding: '12px 0',
+                        color: activeTab === 'clients' ? 'var(--primary)' : 'var(--text-muted)',
+                        borderBottom: activeTab === 'clients' ? '2px solid var(--primary)' : '2px solid transparent',
+                        borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+                        background: 'none', cursor: 'pointer', fontWeight: 'bold'
+                    }}
+                >
+                    My Athletes ({clients.length})
+                </button>
+                <button
+                    onClick={() => setActiveTab('invites')}
+                    style={{
+                        padding: '12px 0',
+                        color: activeTab === 'invites' ? 'var(--primary)' : 'var(--text-muted)',
+                        borderBottom: activeTab === 'invites' ? '2px solid var(--primary)' : '2px solid transparent',
+                        borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+                        background: 'none', cursor: 'pointer', fontWeight: 'bold'
+                    }}
+                >
+                    Invite
+                </button>
             </div>
 
-            {/* List */}
-            <div style={{ padding: '20px' }}>
-                {loading ? <div style={{ textAlign: 'center', padding: '40px' }}>Loading Team...</div> : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {members.map(member => (
-                            <div key={member.id} style={{
-                                background: '#fff', padding: '16px', borderRadius: '16px',
-                                display: 'flex', alignItems: 'center', gap: '16px',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                            }}>
-                                <img src={member.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.id}`}
-                                    style={{ width: '50px', height: '50px', borderRadius: '50%', background: '#eee' }} />
+            {/* Content */}
+            {activeTab === 'invites' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontWeight: 'bold', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        {member.name}
-                                        {member.role === 'trainer' && <span style={{ fontSize: '0.7rem', background: '#FFC800', padding: '2px 6px', borderRadius: '4px' }}>COACH</span>}
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                                        Last: {member.lastWorkout ? new Date(member.lastWorkout).toLocaleDateString() : 'Never'}
-                                    </div>
-                                    {filter === 'inactive' && (
-                                        <div style={{ fontSize: '0.75rem', color: '#ff3b30', fontWeight: 'bold' }}>
-                                            ⚠️ Slackin' for {Math.floor((new Date() - member.lastWorkout) / (1000 * 60 * 60 * 24))} days
+                    {/* Method 1: Trainer Code */}
+                    <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', textAlign: 'center', border: '1px solid var(--primary-dim)' }}>
+                        <h2 style={{ fontSize: '1rem', marginBottom: '8px', color: 'var(--text-muted)' }}>YOUR TRAINER CODE</h2>
+                        <div style={{
+                            fontSize: '2.5rem', fontWeight: '900', letterSpacing: '2px',
+                            color: 'var(--primary)', marginBottom: '8px', fontFamily: 'monospace'
+                        }}>
+                            {trainerCode || '...'}
+                        </div>
+                        <p style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>
+                            Tell your clients to enter this code in their settings.
+                        </p>
+                    </div>
+
+                    {/* Method 2: Direct Search */}
+                    <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px' }}>
+                        <h2 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Direct Invite</h2>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                            <input
+                                placeholder="Search by name or handle..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                style={{
+                                    flex: 1, padding: '12px', borderRadius: '8px',
+                                    background: 'var(--background)', border: '1px solid var(--border)',
+                                    color: 'var(--text-main)'
+                                }}
+                            />
+                            <button
+                                onClick={handleSearch}
+                                disabled={isSearching}
+                                style={{
+                                    padding: '0 24px', borderRadius: '8px',
+                                    background: 'var(--surface-highlight)', border: 'none',
+                                    color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer'
+                                }}
+                            >
+                                {isSearching ? '...' : 'Search'}
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'grid', gap: '8px' }}>
+                            {searchResults.map(profile => (
+                                <div key={profile.id} style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '12px', background: 'var(--background)', borderRadius: '8px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <img src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`}
+                                            style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                                        <div>
+                                            <div style={{ fontWeight: 'bold' }}>{profile.name}</div>
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{profile.username}</div>
                                         </div>
+                                    </div>
+                                    {profile.is_client ? (
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '8px' }}>Added</span>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleAddClient(profile.id)}
+                                            style={{
+                                                padding: '8px 16px', borderRadius: '100px',
+                                                background: 'var(--primary)', color: 'black', border: 'none',
+                                                fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer'
+                                            }}
+                                        >
+                                            Add +
+                                        </button>
                                     )}
                                 </div>
+                            ))}
+                        </div>
+                    </div>
 
-                                <button
-                                    onClick={() => handlePushWorkout(member.id)}
+                    {/* Method 3: Link */}
+                    <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', textAlign: 'center' }}>
+                        <h2 style={{ fontSize: '1rem', marginBottom: '12px', color: 'var(--text-muted)' }}>INVITE LINK</h2>
+                        {!inviteLink ? (
+                            <button
+                                onClick={handleGenerateInvite}
+                                style={{
+                                    padding: '12px 24px',
+                                    background: 'var(--surface-highlight)', color: 'var(--primary)',
+                                    borderRadius: '100px', border: '1px solid var(--primary)', fontWeight: 'bold', cursor: 'pointer'
+                                }}
+                            >
+                                Generate Link
+                            </button>
+                        ) : (
+                            <input
+                                readOnly
+                                value={inviteLink}
+                                style={{
+                                    width: '100%', padding: '12px',
+                                    background: 'var(--background)', border: '1px solid var(--border)',
+                                    borderRadius: '8px', color: 'var(--text-main)', textAlign: 'center'
+                                }}
+                            />
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'clients' && (
+                <div style={{ display: 'grid', gap: '12px' }}>
+                    {clients.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                            No active clients yet.<br />Go to Invite tab to start.
+                        </div>
+                    ) : (
+                        clients.map(rel => {
+                            const client = rel.client;
+                            return (
+                                <Link
+                                    key={rel.id}
+                                    href={`/trainer/dashboard/client?id=${client.id}`}
                                     style={{
-                                        background: '#007AFF', color: '#fff', border: 'none',
-                                        width: '40px', height: '40px', borderRadius: '50%',
-                                        fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        display: 'flex', alignItems: 'center', gap: '16px',
+                                        padding: '16px',
+                                        background: 'var(--surface)',
+                                        borderRadius: '16px',
+                                        textDecoration: 'none',
+                                        color: 'inherit'
                                     }}
                                 >
-                                    +
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+                                    <img
+                                        src={client.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${client.id}`}
+                                        alt={client.name}
+                                        style={{ width: '48px', height: '48px', borderRadius: '50%' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{client.name || 'Unknown'}</div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            Last Active: {new Date().toLocaleDateString()} {/* Mock for now */}
+                                        </div>
+                                    </div>
+                                    <div style={{ color: 'var(--text-muted)' }}>➜</div>
+                                </Link>
+                            );
+                        })
+                    )}
+                </div>
+            )}
         </div>
     );
 }

@@ -29,11 +29,9 @@ export default function AddFriendPage() {
             const cleanQuery = searchQuery.trim();
             if (cleanQuery.length < 3) throw new Error("Search too short");
 
+            // Use RPC to bypass RLS and search securely
             const { data, error } = await supabase
-                .from('profiles')
-                .select('id, name, username, avatar_url, bio')
-                .or(`username.ilike.%${cleanQuery}%,name.ilike.%${cleanQuery}%`)
-                .limit(5);
+                .rpc('search_profiles_secure', { p_query: cleanQuery });
 
             if (error) throw error;
 

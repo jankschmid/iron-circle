@@ -517,7 +517,32 @@ export default function CreateRoutinePage() {
                                         </button>
                                     </div>
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                        Default: 3 Sets (Adjustable during workout)
+                                        Default: 3 Sets
+                                    </div>
+                                    <div style={{ marginTop: '8px' }}>
+                                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Training Goal:</label>
+                                        <select
+                                            value={ex.target_rep_range || 'auto'}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setSelectedExercises(prev => prev.map(p => p.id === ex.id ? { ...p, target_rep_range: val } : p));
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '8px',
+                                                borderRadius: '8px',
+                                                background: 'var(--background)',
+                                                border: '1px solid var(--border)',
+                                                color: 'var(--text-main)',
+                                                fontSize: '0.9rem'
+                                            }}
+                                        >
+                                            <option value="auto">Auto-Detect (Smart)</option>
+                                            <option value="1-5">Strength (1-5 reps)</option>
+                                            <option value="6-12">Hypertrophy (6-12 reps)</option>
+                                            <option value="12-20">Endurance (12-20 reps)</option>
+                                            <option value="custom">Custom Range</option>
+                                        </select>
                                     </div>
                                 </div>
                             ))}

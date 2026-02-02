@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store';
 
 export default function BottomNav() {
     const pathname = usePathname();
-    const { user } = useStore();
+    const { user, unreadCount } = useStore();
 
     const isActive = (path) => {
         if (path === '/' && pathname === '/') return true;
@@ -48,9 +48,32 @@ export default function BottomNav() {
                     textDecoration: 'none',
                     color: isActive(item.path) ? 'var(--primary)' : 'var(--text-muted)',
                     fontSize: '0.75rem',
-                    gap: '4px'
+                    gap: '4px',
+                    position: 'relative' // Position relative for badge
                 }}>
-                    <span style={{ fontSize: '1.2rem' }}>{item.icon}</span>
+                    <span style={{ fontSize: '1.2rem', position: 'relative' }}>
+                        {item.icon}
+                        {item.path === '/connect' && unreadCount > 0 && (
+                            <span style={{
+                                position: 'absolute',
+                                top: '-4px',
+                                right: '-8px',
+                                background: 'var(--error)',
+                                color: 'white',
+                                fontSize: '0.6rem',
+                                fontWeight: 'bold',
+                                minWidth: '16px',
+                                height: '16px',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '2px solid var(--surface)'
+                            }}>
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
+                    </span>
                     <span>{item.label}</span>
                 </Link>
             ))}

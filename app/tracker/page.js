@@ -17,6 +17,7 @@ function TrackerContent() {
     const { status, currentLocation, distanceToGym, isAtGym, workoutSession, startTracking, stopTracking, warning } = useGeoTracker();
 
     const searchParams = useSearchParams();
+    const router = useRouter();
     const [elapsed, setElapsed] = useState(0);
     const supabase = createClient();
     const [history, setHistory] = useState([]);
@@ -26,7 +27,7 @@ function TrackerContent() {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [manualLocation, setManualLocation] = useState(null);
-    const [newGymLabel, setNewGymLabel] = useState('My Gym');
+    const [newGymLabel, setNewGymLabel] = useState('');
     const [newGymName, setNewGymName] = useState(''); // For name-first flow
     const [addressSearchQuery, setAddressSearchQuery] = useState(''); // Separate address search
     const [successMessage, setSuccessMessage] = useState(''); // Success notification
@@ -90,13 +91,16 @@ function TrackerContent() {
         }
     }, [successMessage]);
 
-    // Auto-open Communities modal if coming from Find Communities button
+    // Auto-open Communities/Manage modal
     useEffect(() => {
         if (searchParams.get('openCommunities') === 'true') {
             setShowManage(true);
             setTimeout(() => {
                 setShowCommunities(true);
             }, 100);
+        }
+        if (searchParams.get('manage') === 'true') {
+            setShowManage(true);
         }
     }, [searchParams]);
 
@@ -368,7 +372,7 @@ function TrackerContent() {
         try {
             // Check if user already has this gym
             if (user.gyms?.some(g => g.id === gymId)) {
-                setWarning('You already have this gym in your list!');
+                setWarningMsg('You already have this gym in your list!');
                 return;
             }
 
@@ -414,7 +418,7 @@ function TrackerContent() {
             setSuccessMessage(`Successfully joined ${gymName}!`);
         } catch (err) {
             console.error("Join gym error:", err); // Keep internal log
-            setWarning(`Failed to join gym: ${err.message || 'Unknown error'}`);
+            setWarningMsg(`Failed to join gym: ${err.message || 'Unknown error'}`);
         }
     };
 
@@ -465,12 +469,10 @@ function TrackerContent() {
             setNewGymName('');
             setAddressSearchQuery('');
 
-            // Show success message
             setSuccessMessage(`Successfully added ${name}!`);
         } catch (err) {
-            console.error("Failed to save gym:", err); // Keep internal log for debugging if needed, or remove as requested. User said remove console.
-            // Actually user said avoid console when creating.
-            setWarning(`Failed to save gym: ${err.message}`);
+            console.error("Failed to save gym:", JSON.stringify(err, null, 2));
+            setWarningMsg(`Failed to save gym: ${err.message || 'Unknown error'}`);
         }
     };
 
@@ -683,7 +685,16 @@ function TrackerContent() {
                 )}
 
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
-                    <button onClick={() => setShowManage(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', marginRight: '16px', cursor: 'pointer', color: 'var(--text-main)' }}>←</button>
+                    <button onClick={() => {
+                        const returnTo = searchParams.get('returnTo');
+                        if (returnTo) {
+                            router.push(returnTo);
+                        } else {
+                            setShowManage(false);
+                            // Remove manage param from URL
+                            router.replace('/tracker', { scroll: false });
+                        }
+                    }} style={{ background: 'none', border: 'none', fontSize: '1.5rem', marginRight: '16px', cursor: 'pointer', color: 'var(--text-main)' }}>←</button>
                     <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Manage Gyms</h1>
                 </div>
 
@@ -735,7 +746,7 @@ function TrackerContent() {
                             }}>
                                 <div>
                                     <div style={{ fontWeight: 'bold', color: gym.isDefault ? 'var(--brand-yellow)' : 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        {gym.label || gym.name}
+                                        {gym.name || gym.label}
                                         <span title={gym.source === 'gps' ? 'Auto-Detected via GPS' : 'Manually Added'} style={{ fontSize: '0.8rem', opacity: 0.7 }}>
                                             {gym.source === 'gps' ? '📍' : '🗺️'}
                                         </span>
@@ -875,7 +886,7 @@ function TrackerContent() {
                             }}>
                                 <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Gym Settings</h2>
                                 <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                                    Settings for <strong>{editingSettingsGym.label}</strong>
+                                    Settings for <strong>{editingSettingsGym.name || editingSettingsGym.label}</strong>
                                 </p>
 
                                 <div>
@@ -998,7 +1009,14 @@ function TrackerContent() {
                                     <button
                                         onClick={async () => {
                                             // 1. Update Personal Radius
-                                            const radiusResult = await updateUserGym(editingSettingsGym.id, { radius: editingSettingsGym.radius });
+                                            // Prioritize keeping label synced with name if name exists, otherwise use existing label
+                                            // Actually, per user request, we mostly ignore label now for display, but let's keep it clean in DB.
+                                            const updates = {
+                                                radius: editingSettingsGym.radius
+                                            };
+                                            // If creator renames global gym, we might want to update label too, but display logic now prefers name anyway.
+
+                                            const radiusResult = await updateUserGym(editingSettingsGym.id, updates);
 
                                             // 2. Update Global Details (if creator)
                                             let globalResult = { success: true };
@@ -1499,7 +1517,10 @@ function TrackerContent() {
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '2px' }}>Session Duration</p>
                             <div style={{ marginTop: '16px', padding: '8px 16px', background: 'rgba(255,255,255,0.05)', borderRadius: '100px', display: 'inline-block' }}>
                                 <span style={{ color: 'var(--brand-yellow)', fontWeight: 'bold' }}>
-                                    {user.gyms?.find(g => g.id === workoutSession.gym_id)?.label || workoutSession.gyms?.name || 'Gym Session'}
+                                    {(() => {
+                                        const g = user.gyms?.find(gym => gym.id === workoutSession.gym_id);
+                                        return g?.name || g?.label || workoutSession.gyms?.name || 'Gym Session';
+                                    })()}
                                 </span>
                             </div>
                         </>
@@ -1509,7 +1530,12 @@ function TrackerContent() {
                                 {isAtGym ? "You're at the Gym!" : "Not at Gym"}
                             </h2>
                             <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                                Active Gym: <span style={{ color: 'var(--brand-yellow)', fontWeight: 'bold' }}>{user.gyms?.length > 0 ? (user.gyms?.find(g => g.id === user.gymId)?.label || user.gyms[0]?.label || 'None') : 'None'}</span>
+                                Active Gym: <span style={{ color: 'var(--brand-yellow)', fontWeight: 'bold' }}>
+                                    {user.gyms?.length > 0 ? (() => {
+                                        const active = user.gyms?.find(g => g.id === user.gymId) || user.gyms[0];
+                                        return active.name || active.label || 'None';
+                                    })() : 'None'}
+                                </span>
                             </div>
                             {user.auto_tracking_enabled && (
                                 <div style={{ fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>

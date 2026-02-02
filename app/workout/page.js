@@ -8,12 +8,15 @@ import WorkoutSummary from '@/components/WorkoutSummary';
 import BottomNav from '@/components/BottomNav';
 import StatsView from '@/components/StatsView';
 import PlanManager from '@/components/PlanManager';
+import TemplateSelector from '@/components/TemplateSelector';
+import QuickLogModal from '@/components/QuickLogModal';
 import { AnimatePresence } from 'framer-motion';
 
 export default function WorkoutPage() {
     const { activeWorkout, workoutPlans, fetchPlans, startWorkout, workoutSummary, clearWorkoutSummary, user, history } = useStore();
     const [view, setView] = useState('plan'); // 'plan' | 'library' | 'stats'
     const [showPlans, setShowPlans] = useState(false);
+    const [activeRestDay, setActiveRestDay] = useState(null);
 
     // Fetch active plans on mount and when user loads
     useEffect(() => {
@@ -36,7 +39,7 @@ export default function WorkoutPage() {
                 top: 0,
                 zIndex: 90,
                 background: 'var(--background)',
-                paddingTop: 'calc(16px + env(safe-area-inset-top))', // Fix: Safe Area for Status Bar
+                paddingTop: 'calc(40px + env(safe-area-inset-top))', // Increased base padding significantly
                 paddingLeft: '20px',
                 paddingRight: '20px',
                 paddingBottom: '0',
@@ -87,142 +90,217 @@ export default function WorkoutPage() {
                                 </div>
 
                                 {/* Plan Content */}
-                                {(activePlan.days && activePlan.days.length > 0) ? (
+                                {(activePlan.type === 'flex') ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
-                                        {activePlan.days.map(day => {
-                                            // Check if completed this week
-                                            const isCompleted = history?.some(w => {
-                                                if (!w.endTime) return false;
-                                                const wDate = new Date(w.endTime);
-                                                const now = new Date();
+                                        {activePlan.days.map((day, index) => (
+                                            <div key={day.id || index} style={{
+                                                background: 'var(--surface)',
+                                                padding: '16px',
+                                                borderRadius: '16px',
+                                                border: '1px solid var(--border)',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                justifyContent: 'space-between',
+                                                position: 'relative'
+                                            }}>
+                                                <div style={{ marginBottom: '12px' }}>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                                        Routine {index + 1}
+                                                    </div>
+                                                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--foreground)' }}>
+                                                        {day.template ? day.template.name : (day.label || 'Unnamed Routine')}
+                                                    </div>
+                                                </div>
 
-                                                // Check if same ISO week
-                                                const getWeek = d => {
-                                                    const date = new Date(d.getTime());
-                                                    date.setHours(0, 0, 0, 0);
-                                                    date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-                                                    const week1 = new Date(date.getFullYear(), 0, 4);
-                                                    return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-                                                };
+                                                {day.template_id ? (
+                                                    <button
+                                                        onClick={() => startWorkout(day.template_id, activePlan.id, day.id)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '10px 0',
+                                                            background: 'var(--primary)',
+                                                            color: 'black',
+                                                            border: 'none',
+                                                            borderRadius: '8px',
+                                                            fontWeight: 'bold',
+                                                            cursor: 'pointer',
+                                                            marginTop: 'auto'
+                                                        }}
+                                                    >
+                                                        Start Workout
+                                                    </button>
+                                                ) : (
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                                                        No template linked
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (activePlan.days && activePlan.days.length > 0) ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
+                                        {(() => {
+                                            // 1. Determine completion variables first
+                                            const daysWithStatus = activePlan.days.map((day, index) => {
+                                                const isCompleted = history?.some(w => {
+                                                    if (!w.endTime) return false;
+                                                    const wDate = new Date(w.endTime);
+                                                    const now = new Date();
 
-                                                const isSameWeek = getWeek(wDate) === getWeek(now) && wDate.getFullYear() === now.getFullYear();
+                                                    const getWeek = d => {
+                                                        const date = new Date(d.getTime());
+                                                        date.setHours(0, 0, 0, 0);
+                                                        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+                                                        const week1 = new Date(date.getFullYear(), 0, 4);
+                                                        return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+                                                    };
 
-                                                // Match by Template ID (Strict) or Name Check
-                                                // Fixed: Removed length check to avoid false positives
-                                                return isSameWeek && (
-                                                    (w.templateId && w.templateId === day.template?.id) ||
-                                                    (w.name === day.template?.name)
-                                                );
+                                                    const isSameWeek = getWeek(wDate) === getWeek(now) && wDate.getFullYear() === now.getFullYear();
+
+                                                    // STRICT CHECK: Plan Day ID or Template ID
+                                                    if (day.id && w.plan_day_id) {
+                                                        return isSameWeek && w.plan_day_id === day.id;
+                                                    }
+
+                                                    // Fallback (only if no plan_day_id in history record, legacy support)
+                                                    return isSameWeek && (
+                                                        (w.templateId && w.templateId === day.template?.id)
+                                                    );
+                                                });
+                                                return { ...day, isCompleted, index };
                                             });
 
-                                            return (
-                                                <div key={day.id} style={{
-                                                    background: 'var(--surface)',
-                                                    padding: '16px',
-                                                    borderRadius: '16px',
-                                                    border: isCompleted ? '1px solid var(--success)' : '1px solid var(--border)',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    justifyContent: 'space-between',
-                                                    position: 'relative',
-                                                    overflow: 'hidden'
-                                                }}>
-                                                    {isCompleted && (
-                                                        <div style={{
-                                                            position: 'absolute',
-                                                            top: 0, right: 0,
-                                                            background: 'var(--success)',
-                                                            color: '#000',
-                                                            fontSize: '0.7rem',
-                                                            padding: '2px 8px',
-                                                            fontWeight: 'bold',
-                                                            borderRadius: '0 0 0 8px'
-                                                        }}>
-                                                            DONE
-                                                        </div>
-                                                    )}
+                                            // 2. Find last completed day index to determine "Missed" days
+                                            const lastCompletedIndex = daysWithStatus.reduce((max, day) => {
+                                                return day.isCompleted ? Math.max(max, day.index) : max;
+                                            }, -1);
 
-                                                    <div style={{ marginBottom: '12px' }}>
-                                                        <div style={{ fontSize: '0.75rem', color: isCompleted ? 'var(--text-muted)' : 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                                            Day {day.day_order}
-                                                        </div>
-                                                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: isCompleted ? 'var(--text-muted)' : 'var(--foreground)' }}>
-                                                            {day.template ? day.template.name : (day.label === 'Rest Day' ? 'Rest Day 💤' : day.label)}
-                                                        </div>
-                                                    </div>
+                                            return daysWithStatus.map(day => {
+                                                const isMissed = !day.isCompleted && day.index < lastCompletedIndex;
 
-                                                    {day.template_id ? (
-                                                        isCompleted ? (
-                                                            <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                                                                <button disabled style={{
-                                                                    flex: 1,
-                                                                    padding: '10px',
-                                                                    background: 'transparent',
-                                                                    border: '1px solid var(--success)',
-                                                                    color: 'var(--success)',
-                                                                    borderRadius: '8px',
-                                                                    fontWeight: '600',
-                                                                    opacity: 0.8,
-                                                                    cursor: 'default'
-                                                                }}>
-                                                                    ✓ Done
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => startWorkout(day.template_id, activePlan.id)}
-                                                                    title="Do again"
-                                                                    style={{
+                                                return (
+                                                    <div key={day.id} style={{
+                                                        background: 'var(--surface)',
+                                                        padding: '16px',
+                                                        borderRadius: '16px',
+                                                        border: day.isCompleted ? '1px solid var(--success)' : (isMissed ? '1px solid var(--error)' : '1px solid var(--border)'),
+                                                        opacity: isMissed ? 0.7 : 1, // Dim missed workouts
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        justifyContent: 'space-between',
+                                                        position: 'relative',
+                                                        overflow: 'hidden'
+                                                    }}>
+                                                        {day.isCompleted && (
+                                                            <div style={{
+                                                                position: 'absolute',
+                                                                top: 0, right: 0,
+                                                                background: 'var(--success)',
+                                                                color: '#000',
+                                                                fontSize: '0.7rem',
+                                                                padding: '2px 8px',
+                                                                fontWeight: 'bold',
+                                                                borderRadius: '0 0 0 8px'
+                                                            }}>
+                                                                DONE
+                                                            </div>
+                                                        )}
+                                                        {isMissed && (
+                                                            <div style={{
+                                                                position: 'absolute',
+                                                                top: 0, right: 0,
+                                                                background: 'var(--error)',
+                                                                color: '#FFF',
+                                                                fontSize: '0.7rem',
+                                                                padding: '2px 8px',
+                                                                fontWeight: 'bold',
+                                                                borderRadius: '0 0 0 8px'
+                                                            }}>
+                                                                MISSED
+                                                            </div>
+                                                        )}
+
+                                                        <div style={{ marginBottom: '12px' }}>
+                                                            <div style={{ fontSize: '0.75rem', color: day.isCompleted ? 'var(--text-muted)' : 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                                                Day {day.day_order}
+                                                            </div>
+                                                            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: day.isCompleted ? 'var(--text-muted)' : 'var(--foreground)' }}>
+                                                                {day.template ? day.template.name : (day.label === 'Rest Day' ? 'Rest Day 💤' : day.label)}
+                                                            </div>
+                                                        </div>
+
+                                                        {day.template_id ? (
+                                                            day.isCompleted ? (
+                                                                <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+                                                                    <button disabled style={{
+                                                                        flex: 1,
                                                                         padding: '10px',
-                                                                        background: 'var(--surface-highlight)',
+                                                                        background: 'transparent',
+                                                                        border: '1px solid var(--success)',
+                                                                        color: 'var(--success)',
+                                                                        borderRadius: '8px',
+                                                                        fontWeight: '600',
+                                                                        opacity: 0.8,
+                                                                        cursor: 'default'
+                                                                    }}>
+                                                                        ✓ Done
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => startWorkout(day.template_id, activePlan.id, day.id)}
+                                                                        title="Do again"
+                                                                        style={{
+                                                                            padding: '10px',
+                                                                            background: 'var(--surface-highlight)',
+                                                                            border: 'none',
+                                                                            borderRadius: '8px',
+                                                                            color: 'var(--text-muted)',
+                                                                            cursor: 'pointer'
+                                                                        }}>
+                                                                        ↻
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => startWorkout(day.template_id, activePlan.id, day.id)}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        padding: '10px 0',
+                                                                        background: 'var(--primary)',
+                                                                        color: 'black',
                                                                         border: 'none',
                                                                         borderRadius: '8px',
-                                                                        color: 'var(--text-muted)',
-                                                                        cursor: 'pointer'
-                                                                    }}>
-                                                                    ↻
+                                                                        fontWeight: 'bold',
+                                                                        cursor: 'pointer',
+                                                                        marginTop: 'auto'
+                                                                    }}
+                                                                >
+                                                                    Start Workout
                                                                 </button>
-                                                            </div>
+                                                            )
                                                         ) : (
                                                             <button
-                                                                onClick={() => startWorkout(day.template_id, activePlan.id)}
+                                                                onClick={() => {
+                                                                    setActiveRestDay(day);
+                                                                }}
                                                                 style={{
+                                                                    marginTop: 'auto',
                                                                     width: '100%',
-                                                                    padding: '10px 0',
-                                                                    background: 'var(--primary)',
-                                                                    color: 'black',
-                                                                    border: 'none',
+                                                                    padding: '8px',
+                                                                    background: 'var(--surface-highlight)',
+                                                                    border: '1px dashed var(--border)',
                                                                     borderRadius: '8px',
-                                                                    fontWeight: 'bold',
-                                                                    cursor: 'pointer',
-                                                                    marginTop: 'auto'
+                                                                    color: 'var(--text-muted)',
+                                                                    fontSize: '0.8rem',
+                                                                    cursor: 'pointer'
                                                                 }}
                                                             >
-                                                                Start Workout
+                                                                Log Activity 🧘
                                                             </button>
-                                                        )
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => {
-                                                                alert("Coming soon: Log Cardio/Stretch!");
-                                                                // TODO: Implement Quick Log Modal
-                                                            }}
-                                                            style={{
-                                                                marginTop: 'auto',
-                                                                width: '100%',
-                                                                padding: '8px',
-                                                                background: 'var(--surface-highlight)',
-                                                                border: '1px dashed var(--border)',
-                                                                borderRadius: '8px',
-                                                                color: 'var(--text-muted)',
-                                                                fontSize: '0.8rem',
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            Log Activity 🧘
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )
-                                        })}
+                                                        )}
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
                                     </div>
                                 ) : (
                                     /* Flex Plan View */
@@ -289,6 +367,13 @@ export default function WorkoutPage() {
             </div>
 
             {showPlans && <PlanManager onClose={() => setShowPlans(false)} />}
+            {activeRestDay && (
+                <QuickLogModal
+                    onClose={() => setActiveRestDay(null)}
+                    activePlanId={activePlan.id}
+                    dayId={activeRestDay.id}
+                />
+            )}
             <BottomNav />
         </div>
     );

@@ -43,7 +43,7 @@ function ProfileContent() {
                     console.log("Profile: User not in friends, fetching from DB...");
                     const { data, error } = await supabase
                         .from('profiles')
-                        .select('id, name, username, avatar_url, bio')
+                        .select('id, name, username, avatar_url, bio, is_super_admin') // Added is_super_admin
                         .eq('id', friendId)
                         .single();
 
@@ -55,9 +55,29 @@ function ProfileContent() {
                             name: data.name,
                             handle: '@' + data.username,
                             avatar: data.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
-                            bio: data.bio
+                            bio: data.bio,
+                            is_super_admin: data.is_super_admin // Store it
                         };
                     }
+                } else {
+                    // Try to fetch is_super_admin if we rely on friend store which might not have it
+                    const { data: saData } = await supabase.from('profiles').select('is_super_admin').eq('id', friendId).single();
+                    if (saData) friendData.is_super_admin = saData.is_super_admin;
+                }
+
+                // FETCH ROLE (Primary Gym)
+                const { data: roleData } = await supabase
+                    .from('user_gyms')
+                    .select('role')
+                    .eq('user_id', friendId)
+                    .eq('is_default', true)
+                    .maybeSingle();
+
+                if (roleData) {
+                    friendData.role = roleData.role;
+                } else {
+                    // Fallback: try any gym role if no default? Or just 'member'
+                    friendData.role = 'member';
                 }
 
                 setProfile(friendData);
@@ -177,7 +197,37 @@ function ProfileContent() {
                         marginBottom: '16px'
                     }}
                 />
-                <h1 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{profile.name}</h1>
+                <h1 style={{ fontSize: '1.5rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {profile.name}
+                    {profile.is_super_admin ? (
+                        <div style={{ background: '#FFD700', color: '#000', padding: '2px 8px', borderRadius: '100px', fontSize: '0.65rem', fontWeight: 'bold' }}>
+                            👑 Owner
+                        </div>
+                    ) : (
+                        <>
+                            {profile.role === 'owner' && (
+                                <div style={{ background: 'var(--error)', color: '#fff', padding: '2px 8px', borderRadius: '100px', fontSize: '0.65rem', fontWeight: 'bold' }}>
+                                    🛡️ Gym Admin
+                                </div>
+                            )}
+                            {profile.role === 'admin' && (
+                                <div style={{ background: 'var(--brand-purple)', color: '#fff', padding: '2px 8px', borderRadius: '100px', fontSize: '0.65rem', fontWeight: 'bold' }}>
+                                    🛡️ Staff
+                                </div>
+                            )}
+                            {profile.role === 'trainer' && (
+                                <div style={{ background: 'var(--brand-yellow)', color: '#000', padding: '2px 8px', borderRadius: '100px', fontSize: '0.65rem', fontWeight: 'bold' }}>
+                                    💪 Trainer
+                                </div>
+                            )}
+                            {(profile.role === 'member' || !profile.role) && (
+                                <div style={{ background: 'var(--surface-highlight)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '100px', fontSize: '0.65rem', fontWeight: 'bold', border: '1px solid var(--border)' }}>
+                                    👤 Member
+                                </div>
+                            )}
+                        </>
+                    )}
+                </h1>
                 <p style={{ color: 'var(--text-muted)' }}>{profile.handle}</p>
 
                 <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>

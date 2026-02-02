@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function TemplateSelector() {
     const { workoutTemplates, startWorkout, friends, shareTemplate } = useStore();
     const [showShareModal, setShowShareModal] = useState(false);
     const [templateToShare, setTemplateToShare] = useState(null);
+    const router = useRouter();
 
     return (
         <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>
@@ -24,7 +26,7 @@ export default function TemplateSelector() {
                         overflow: 'hidden'
                     }}>
                         <button
-                            onClick={() => startWorkout(template.id)}
+                            onClick={() => router.push(`/workout/edit?id=${template.id}`)}
                             style={{
                                 flex: 1,
                                 padding: '24px',
@@ -34,6 +36,7 @@ export default function TemplateSelector() {
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
+                                cursor: 'pointer'
                             }}
                         >
                             <div>
@@ -42,13 +45,35 @@ export default function TemplateSelector() {
                                     {template.exercises.length} Exercises
                                 </p>
                             </div>
-                            <span style={{ fontSize: '1.5rem', color: 'var(--primary)' }}>→</span>
+                            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Tap to Edit ✏️</span>
                         </button>
                         <div style={{
                             display: 'flex',
                             flexDirection: 'column',
                             borderLeft: '1px solid var(--border)'
                         }}>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    startWorkout(template.id);
+                                }}
+                                style={{
+                                    flex: 1,
+                                    padding: '0 16px',
+                                    background: 'var(--primary)',
+                                    color: '#000',
+                                    border: 'none',
+                                    borderBottom: '1px solid rgba(0,0,0,0.1)',
+                                    fontSize: '1.5rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                title="Start Workout"
+                            >
+                                ▶
+                            </button>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -60,7 +85,6 @@ export default function TemplateSelector() {
                                     padding: '0 16px',
                                     background: 'var(--surface-highlight)',
                                     border: 'none',
-                                    borderBottom: '1px solid var(--border)',
                                     color: 'var(--primary)',
                                     fontSize: '1.2rem',
                                     cursor: 'pointer'
@@ -68,22 +92,6 @@ export default function TemplateSelector() {
                             >
                                 📤
                             </button>
-                            <Link
-                                href={`/workout/edit?id=${template.id}`}
-                                style={{
-                                    flex: 1,
-                                    padding: '0 16px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    background: 'var(--surface-highlight)',
-                                    color: 'var(--foreground)',
-                                    fontSize: '1.2rem',
-                                    textDecoration: 'none'
-                                }}
-                            >
-                                ⚙️
-                            </Link>
                         </div>
                     </div>
                 ))}

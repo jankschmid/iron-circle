@@ -36,7 +36,8 @@ export default function GymHub({ communityId, gymId, initialView = 'lobby' }) {
 
                 // 2. Live Users (Direct Query with fallback)
                 let activeUsers = [];
-                const { data: active } = await supabase.rpc('get_live_gym_activity', {
+                // Use V2 RPC to avoid schema cache issues and ambiguity
+                const { data: active } = await supabase.rpc('get_live_gym_activity_v2', {
                     p_gym_id: gymId
                 }).catch(() => ({ data: null }));
 
@@ -74,9 +75,8 @@ export default function GymHub({ communityId, gymId, initialView = 'lobby' }) {
                 // 5. Leaderboard (Real)
                 const { data: lbData } = await supabase.rpc('get_gym_leaderboard', {
                     p_gym_id: gymId,
-                    p_period: 'month',
                     p_metric: 'volume',
-                    p_limit: 10
+                    p_days: 30
                 });
                 setLeaderboard(lbData || []);
 
@@ -149,11 +149,23 @@ export default function GymHub({ communityId, gymId, initialView = 'lobby' }) {
                     {liveUsers.map(u => (
                         <div key={u.user_id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '64px' }}>
                             <div style={{
-                                width: '60px', height: '60px', borderRadius: '50%', border: '2px solid var(--primary)', padding: '2px',
+                                width: '60px', height: '60px', borderRadius: '50%',
+                                border: u.role === 'owner' ? '3px solid #FFD700' : (u.role === 'admin' ? '3px solid var(--error)' : (u.role === 'trainer' ? '3px solid var(--brand-yellow)' : '2px solid var(--primary)')),
+                                padding: '2px',
                                 position: 'relative'
                             }}>
                                 <img src={u.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${u.username}`}
                                     style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', background: 'var(--surface)' }} />
+                                <div style={{
+                                    position: 'absolute', bottom: -5, right: -5,
+                                    background: u.role === 'owner' ? '#FFD700' : (u.role === 'admin' ? 'var(--error)' : (u.role === 'trainer' ? 'var(--brand-yellow)' : 'var(--surface-highlight)')),
+                                    color: u.role === 'member' || !u.role ? 'var(--text-muted)' : '#000',
+                                    borderRadius: '50%', width: '20px', height: '20px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold',
+                                    border: u.role === 'member' || !u.role ? '1px solid var(--border)' : 'none'
+                                }}>
+                                    {u.is_super_admin ? '👑' : (u.role === 'owner' ? '🛡️' : (u.role === 'trainer' ? '💪' : '👤'))}
+                                </div>
                             </div>
                             <span style={{ fontSize: '0.75rem', marginTop: '6px', maxWidth: '64px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
                                 {u.username}
@@ -281,7 +293,14 @@ function GymLeaderboard({ leaders }) {
                             <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: 'var(--surface-highlight)' }}>
                                 {l.avatar_url ? <img src={l.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
                             </div>
-                            <span style={{ fontWeight: 600 }}>{l.username}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{ fontWeight: 600 }}>{l.name || l.username || 'Athlete'}</span>
+                                    {l.role === 'owner' && <span title="Owner">👑</span>}
+                                    {l.role === 'admin' && <span title="Admin">🛡️</span>}
+                                    {l.role === 'trainer' && <span title="Trainer">💪</span>}
+                                </div>
+                            </div>
                         </div>
                         <span style={{ fontWeight: 800, color: 'var(--text-muted)' }}>
                             {(l.value / 1000).toFixed(1)}k

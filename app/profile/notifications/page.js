@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function NotificationsPage() {
-    const { user } = useStore();
+    const { user, fetchFriends } = useStore();
     const supabase = createClient();
     const router = useRouter();
 
@@ -103,7 +103,8 @@ export default function NotificationsPage() {
 
                 if (!error) {
                     setRequests(prev => prev.filter(r => r.id !== request.id));
-                    router.refresh();
+                    fetchFriends(); // Refresh Circle immediately
+                    router.refresh(); // Optional, but keeps server components fresh
                 }
             } else if (action === 'decline') {
                 const { error } = await supabase

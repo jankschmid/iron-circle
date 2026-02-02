@@ -148,9 +148,17 @@ function EditRoutineContent() {
         }));
     };
 
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterMuscle, setFilterMuscle] = useState('All');
 
-    if (isLoading) return <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>Loading...</div>;
+    // ... (inside isSelecting view)
+
+    // Filtered Exercises
+    const filteredExercises = exercises.filter(ex => {
+        const matchesSearch = ex.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesMuscle = filterMuscle === 'All' || ex.muscle === filterMuscle;
+        return matchesSearch && matchesMuscle;
+    });
 
     if (isSelecting) {
         return (
@@ -159,6 +167,39 @@ function EditRoutineContent() {
                     <button onClick={() => setIsSelecting(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: 'var(--text-muted)' }}>←</button>
                     <h1 style={{ fontSize: '1.5rem' }}>Select Exercises</h1>
                 </header>
+
+                {/* Search & Filter */}
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                    <input
+                        type="text"
+                        placeholder="Search..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{
+                            flex: 1,
+                            padding: '12px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border)',
+                            background: 'var(--surface)',
+                            color: 'var(--foreground)'
+                        }}
+                    />
+                    <select
+                        value={filterMuscle}
+                        onChange={(e) => setFilterMuscle(e.target.value)}
+                        style={{
+                            padding: '12px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border)',
+                            background: 'var(--surface)',
+                            color: 'var(--text-main)'
+                        }}
+                    >
+                        <option value="All">All Muscles</option>
+                        {MUSCLES.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                </div>
+
                 <div style={{ display: 'grid', gap: '12px', paddingBottom: '100px' }}>
                     {/* Reuse Custom Exercise Input */}
                     <div style={{
@@ -216,7 +257,7 @@ function EditRoutineContent() {
                         </div>
                     </div>
 
-                    {exercises.map(ex => {
+                    {filteredExercises.map(ex => {
                         const isSelected = selectedExercises.find(e => e.id === ex.id);
                         return (
                             <button

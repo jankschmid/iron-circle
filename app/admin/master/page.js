@@ -15,7 +15,13 @@ export default function MasterAdminPage() {
     const [stats, setStats] = useState(null);
     const [gyms, setGyms] = useState([]);
     const [users, setUsers] = useState([]);
+
+    // Pagination State
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [currentPage, setCurrentPage] = useState(0);
+    const [totalCount, setTotalCount] = useState(0);
+    const pageSize = 12;
 
     // Modal State
     const [showModal, setShowModal] = useState(false);
@@ -33,8 +39,22 @@ export default function MasterAdminPage() {
     useEffect(() => {
         if (!user) return;
         fetchStats();
-        fetchGyms();
     }, [user]);
+
+    // Search Debounce
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            setCurrentPage(0); // Reset page on new search
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    // Fetch Gyms when Page or Search changes
+    useEffect(() => {
+        if (!user) return;
+        fetchGyms();
+    }, [user, currentPage, debouncedSearch]);
 
     const fetchStats = async () => {
         // Fallback stats if RPC fails
@@ -48,14 +68,21 @@ export default function MasterAdminPage() {
     };
 
     const fetchGyms = async () => {
-        const { data, error } = await supabase
-            .from('gyms')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(50);
+        try {
+            const { data, error } = await supabase.rpc('get_admin_gyms_paginated', {
+                p_page_size: pageSize,
+                p_page: currentPage,
+                p_search: debouncedSearch
+            });
 
-        if (error) console.error("Fetch Gyms Error:", JSON.stringify(error, null, 2), error.message);
-        if (data) setGyms(data);
+            if (error) throw error;
+            if (data) {
+                setGyms(data.data);
+                setTotalCount(data.total);
+            }
+        } catch (err) {
+            console.error("Fetch Gyms Error:", err.message);
+        }
     };
 
     const handleSearchUsers = async (e) => {
@@ -90,6 +117,21 @@ export default function MasterAdminPage() {
         } else {
             setGyms(prev => prev.filter(g => g.id !== gymId));
             alert("Gym Deleted.");
+        }
+    };
+
+    const handleHandover = async (gymId) => {
+        if (!confirm("Generate Emergency Handover Code? This is only allowed because no admins exist.")) return;
+
+        const { data, error } = await supabase.rpc('request_gym_handover', { p_gym_id: gymId });
+
+        if (error) {
+            alert("Error: " + error.message);
+        } else if (data.success) {
+            prompt("HANDOVER CODE GENERATED\n\nShare this code with the new Admin. It expires in 24h.\n\nCode:", data.code);
+            fetchGyms(); // Refresh to see admin count update? No, count won't update until they join.
+        } else {
+            alert("Failed: " + data.message);
         }
     };
 
@@ -153,9 +195,14 @@ export default function MasterAdminPage() {
 
                 if (commError) console.error("Community Create Failed:", commError);
 
+                // 3. Generate Initial Handover Code
+                const { data: handoverData } = await supabase.rpc('request_gym_handover', { p_gym_id: data.id });
+                const codeMsg = handoverData?.success ? "\n\n🔑 HANDOVER CODE: " + handoverData.code : "\n(Could not generate handover code)";
+
                 setGyms(prev => [data, ...prev]);
                 setShowModal(false);
-                alert(`Gym Created!\nDisplay Key: ${data.display_key}\nCommunity Auto-created.`);
+
+                alert(`Gym Created Successfully!${codeMsg}\n\nShare this code with the Gym Manager immediately. You will not see it again.`);
             }
         }
     };
@@ -173,6 +220,52 @@ export default function MasterAdminPage() {
                         flex-direction: column;
                         align-items: flex-start !important;
                         gap: 16px;
+                    }
+                    
+                    /* Responsive Table -> Cards */
+                    .admin-table, .admin-table tbody, .admin-table tr, .admin-table td {
+                        display: block;
+                        width: 100%;
+                    }
+                    .admin-table {
+                        min-width: 0 !important; /* Override inline style */
+                    }
+                    .admin-table thead {
+                        display: none;
+                    }
+                    .admin-table tr {
+                        margin-bottom: 16px;
+                        border: 1px solid #333;
+                        border-radius: 12px;
+                        background: #222;
+                        overflow: hidden;
+                    }
+                    .admin-table td {
+                        padding: 12px 16px !important;
+                        text-align: right;
+                        border-bottom: 1px solid #333;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        font-size: 0.9rem;
+                    }
+                    .admin-table td:last-child {
+                        border-bottom: none;
+                        justify-content: flex-end;
+                        padding-top: 16px !important;
+                    }
+                    
+                    /* Mobile Labels */
+                    .admin-table td::before {
+                        content: attr(data-label);
+                        font-weight: bold;
+                        color: #888;
+                        text-transform: uppercase;
+                        font-size: 0.7rem;
+                        margin-right: 12px;
+                    }
+                    .admin-table td:last-child::before {
+                        display: none;
                     }
                 }
             `}</style>
@@ -197,8 +290,18 @@ export default function MasterAdminPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '40px' }}>
                     {/* Gym Management */}
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Partner Gyms</h2>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0 }}>Partner Gyms</h2>
+                                <input
+                                    placeholder="Search Gyms..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    style={{
+                                        padding: '8px 12px', borderRadius: '8px', border: '1px solid #333', background: '#000', color: '#fff', width: '250px'
+                                    }}
+                                />
+                            </div>
                             <button
                                 onClick={openCreateModal}
                                 style={{ background: '#FFC800', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
@@ -208,12 +311,12 @@ export default function MasterAdminPage() {
                         </div>
 
                         <div style={{ background: '#222', borderRadius: '16px', overflow: 'hidden', overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+                            <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
                                 <thead>
                                     <tr style={{ background: '#333', textAlign: 'left' }}>
                                         <th style={{ padding: '16px' }}>Name</th>
                                         <th style={{ padding: '16px' }}>Location</th>
-                                        <th style={{ padding: '16px' }}>Key</th>
+                                        <th style={{ padding: '16px' }}>Admins</th>
                                         <th style={{ padding: '16px' }}>Status</th>
                                         <th style={{ padding: '16px' }}>Action</th>
                                     </tr>
@@ -221,10 +324,16 @@ export default function MasterAdminPage() {
                                 <tbody>
                                     {gyms.map(gym => (
                                         <tr key={gym.id} style={{ borderBottom: '1px solid #333' }}>
-                                            <td style={{ padding: '16px', fontWeight: 'bold' }}>{gym.name}</td>
-                                            <td style={{ padding: '16px', color: '#888' }}>{gym.address}</td>
-                                            <td style={{ padding: '16px', fontFamily: 'monospace' }}>{gym.display_key || '-'}</td>
-                                            <td style={{ padding: '16px' }}>
+                                            <td data-label="Name" style={{ padding: '16px', fontWeight: 'bold' }}>{gym.name}</td>
+                                            <td data-label="Location" style={{ padding: '16px', color: '#888' }}>{gym.address}</td>
+                                            <td data-label="Admins" style={{ padding: '16px' }}>
+                                                {gym.admin_count > 0 ? (
+                                                    <span style={{ color: '#0f0', fontWeight: 'bold' }}>Active ({gym.admin_count})</span>
+                                                ) : (
+                                                    <span style={{ color: '#f00', fontWeight: 'bold' }}>No Admin</span>
+                                                )}
+                                            </td>
+                                            <td data-label="Status" style={{ padding: '16px' }}>
                                                 {gym.is_verified ? (
                                                     <span style={{ color: '#000', background: '#FFC800', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>VERIFIED</span>
                                                 ) : (
@@ -232,32 +341,22 @@ export default function MasterAdminPage() {
                                                 )}
                                             </td>
                                             <td style={{ padding: '16px', display: 'flex', gap: '8px' }}>
-                                                <a
-                                                    href={`/gym/admin?id=${gym.id}`}
-                                                    target="_blank"
-                                                    style={{ background: '#333', color: '#fff', padding: '6px 12px', borderRadius: '6px', textDecoration: 'none', fontSize: '0.8rem', border: '1px solid #555' }}
-                                                >
-                                                    Dashboard
-                                                </a>
+                                                {gym.admin_count === 0 ? (
+                                                    <button
+                                                        onClick={() => handleHandover(gym.id)}
+                                                        style={{ background: '#004400', color: '#0f0', border: '1px solid #0f0', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}
+                                                    >
+                                                        📲 Initialize Admin
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ color: '#444', padding: '6px', fontSize: '0.8rem', fontStyle: 'italic' }}>Managed</span>
+                                                )}
+
                                                 <button
                                                     onClick={() => openEditModal(gym)}
                                                     style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}
                                                 >
                                                     ✏️
-                                                </button>
-                                                <button
-                                                    onClick={() => toggleVerification(gym.id, gym.is_verified)}
-                                                    style={{
-                                                        background: 'transparent',
-                                                        border: '1px solid #555',
-                                                        color: gym.is_verified ? '#aaa' : '#fff',
-                                                        padding: '6px 12px',
-                                                        borderRadius: '6px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '0.8rem'
-                                                    }}
-                                                >
-                                                    {gym.is_verified ? 'Unverify' : 'Verify'}
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteGym(gym.id)}
@@ -270,6 +369,35 @@ export default function MasterAdminPage() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Pagination Controls */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '0 8px', flexWrap: 'wrap', gap: '16px' }}>
+                            <div style={{ color: '#888', fontSize: '0.9rem' }}>
+                                Showing {currentPage * pageSize + 1}-{Math.min((currentPage + 1) * pageSize, totalCount)} of {totalCount}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    disabled={currentPage === 0}
+                                    onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                                    style={{
+                                        padding: '8px 16px', background: currentPage === 0 ? '#222' : '#333',
+                                        color: currentPage === 0 ? '#555' : '#fff', border: 'none', borderRadius: '8px', cursor: currentPage === 0 ? 'default' : 'pointer'
+                                    }}
+                                >
+                                    Previous
+                                </button>
+                                <button
+                                    disabled={((currentPage + 1) * pageSize) >= totalCount}
+                                    onClick={() => setCurrentPage(prev => prev + 1)}
+                                    style={{
+                                        padding: '8px 16px', background: ((currentPage + 1) * pageSize) >= totalCount ? '#222' : '#333',
+                                        color: ((currentPage + 1) * pageSize) >= totalCount ? '#555' : '#fff', border: 'none', borderRadius: '8px', cursor: ((currentPage + 1) * pageSize) >= totalCount ? 'default' : 'pointer'
+                                    }}
+                                >
+                                    Next
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
