@@ -24,6 +24,7 @@ function EditRoutineContent() {
     const [visibility, setVisibility] = useState('private');
     const [selectedExercises, setSelectedExercises] = useState([]);
     const [isSelecting, setIsSelecting] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     // Custom Exercise State
     const [customExerciseName, setCustomExerciseName] = useState('');

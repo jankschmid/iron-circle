@@ -196,20 +196,29 @@ export default function ChatTab() {
                         <p style={{ color: 'var(--text-main)', marginBottom: '24px', textAlign: 'center' }}>
                             {confirmDialog.message}
                         </p>
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                            <button
-                                onClick={() => setConfirmDialog(null)}
-                                style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
-                            >
-                                Cancel
-                            </button>
+                        {confirmDialog.type === 'alert' ? (
                             <button
                                 onClick={handleConfirm}
-                                style={{ flex: 1, padding: '12px', background: 'var(--error)', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                                style={{ width: '100%', padding: '12px', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
                             >
-                                Confirm
+                                OK
                             </button>
-                        </div>
+                        ) : (
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    onClick={() => setConfirmDialog(null)}
+                                    style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirm}
+                                    style={{ flex: 1, padding: '12px', background: 'var(--error)', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                                >
+                                    Confirm
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -269,15 +278,31 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
                     const { data: { user: authUser } } = await supabase.auth.getUser();
                     if (!authUser) return;
 
-                    await supabase
+                    const { error } = await supabase
                         .from('conversation_participants')
                         .update({ deleted_at: new Date().toISOString() })
                         .eq('conversation_id', chat.id)
                         .eq('user_id', authUser.id);
 
-                    if (onUpdate) onUpdate();
+                    if (error) {
+                        console.error("Delete error:", error);
+                        setConfirmDialog({
+                            message: "Failed to delete chat: " + error.message,
+                            type: 'alert',
+                            onConfirm: () => setConfirmDialog(null)
+                        });
+                        return;
+                    }
+
+                    // Force refetch after successful deletion
+                    if (onUpdate) await onUpdate();
                 } catch (e) {
                     console.error("Delete error:", e);
+                    setConfirmDialog({
+                        message: "Failed to delete chat: " + e.message,
+                        type: 'alert',
+                        onConfirm: () => setConfirmDialog(null)
+                    });
                 }
             }
         });
