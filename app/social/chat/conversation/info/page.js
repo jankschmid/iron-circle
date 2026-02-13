@@ -7,12 +7,15 @@ import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/lib/supabase';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
+import { useQueryClient } from '@tanstack/react-query'; // Add import
+
 function ChatInfoContent() {
-    const { user, friends, addMemberToGroup, renameGroup, leaveGroup, saveUserGym } = useStore();
+    const { user, friends, addMemberToGroup, renameGroup, leaveGroup, saveUserGym, leaveCommunity } = useStore();
     const router = useRouter();
     const searchParams = useSearchParams();
     const supabase = createClient();
     const chatId = searchParams.get('id');
+    const queryClient = useQueryClient(); // Init client
 
     const [chat, setChat] = useState(null);
     const [participants, setParticipants] = useState([]);
@@ -79,6 +82,9 @@ function ChatInfoContent() {
                 if (communityData) {
                     setCommunity(communityData);
                     setGym(communityData.gyms);
+                    if (communityData.gyms) {
+                        setChat(prev => ({ ...prev, name: communityData.gyms.name }));
+                    }
 
                     const { data: allMembers } = await supabase
                         .from('community_members')
@@ -130,7 +136,18 @@ function ChatInfoContent() {
                         .eq('id', convo.gym_id)
                         .maybeSingle();
 
-                    if (gymData) setGym(gymData);
+                    if (gymData) {
+                        setGym(gymData);
+                        // Sync name for display
+                        setChat(prev => ({ ...prev, name: gymData.name }));
+                    }
+                }
+
+                // If we found the gym via communityData earlier, also sync name
+                if (convo.type === 'community' && community) {
+                    // Wait, communityData was fetched above.
+                    // The block above `if (communityData)` sets `setGym(communityData.gyms)`.
+                    // We should verify we set the chat name there too.
                 }
 
                 if (convo.type === 'community' || convo.type === 'gym') {
@@ -192,6 +209,7 @@ function ChatInfoContent() {
                 try {
                     await leaveGroup(chatId);
                     setConfirmDialog(null);
+                    await queryClient.invalidateQueries({ queryKey: ['conversations'] }); // Invalidate!
                     router.push('/chat');
                 } catch (err) {
                     setConfirmDialog({
@@ -216,15 +234,21 @@ function ChatInfoContent() {
             onConfirm: async () => {
                 try {
                     const { data: { user: authUser } } = await supabase.auth.getUser();
-                    await supabase
+
+                    const { error } = await supabase
                         .from('conversation_participants')
-                        .delete()
+                        .update({ deleted_at: new Date().toISOString() }) // Soft delete
                         .eq('conversation_id', chatId)
                         .eq('user_id', authUser.id);
 
+                    if (error) throw error;
+
                     setConfirmDialog(null);
-                    router.push('/chat');
+                    await queryClient.invalidateQueries({ queryKey: ['conversations'] }); // Invalidate!
+                    router.refresh();
+                    router.push('/connect?tab=chat');
                 } catch (err) {
+                    console.error("Delete error:", err);
                     setConfirmDialog({
                         message: "Failed to delete: " + err.message,
                         type: 'alert',
@@ -235,18 +259,27 @@ function ChatInfoContent() {
             onConfirmAndLeave: async () => {
                 try {
                     const { data: { user: authUser } } = await supabase.auth.getUser();
+
+                    // 1. Leave Community
                     if (community) {
-                        await useStore.getState().leaveCommunity(community.id);
+                        await leaveCommunity(community.id);
                     }
-                    await supabase
+
+                    // 2. Soft Delete Chat
+                    const { error } = await supabase
                         .from('conversation_participants')
-                        .delete()
+                        .update({ deleted_at: new Date().toISOString() })
                         .eq('conversation_id', chatId)
                         .eq('user_id', authUser.id);
 
+                    if (error) throw error;
+
                     setConfirmDialog(null);
-                    router.push('/chat');
+                    await queryClient.invalidateQueries({ queryKey: ['conversations'] }); // Invalidate!
+                    router.refresh();
+                    router.push('/connect?tab=chat');
                 } catch (err) {
+                    console.error("Delete & Leave error:", err);
                     setConfirmDialog({
                         message: "Failed: " + err.message,
                         type: 'alert',
@@ -306,8 +339,20 @@ function ChatInfoContent() {
                             <button onClick={handleRename} style={{ background: 'var(--primary)', border: 'none', borderRadius: '8px', padding: '0 12px', cursor: 'pointer' }}>✓</button>
                         </div>
                     ) : (
-                        <h2 onClick={() => setIsEditingName(true)} style={{ fontSize: '1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                            {chat.name} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>✎</span>
+                        <h2
+                            onClick={() => {
+                                if (chat.type !== 'community' && chat.type !== 'gym') {
+                                    setIsEditingName(true);
+                                }
+                            }}
+                            style={{
+                                fontSize: '1.5rem',
+                                cursor: (chat.type === 'community' || chat.type === 'gym') ? 'default' : 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                            }}
+                        >
+                            {chat.name}
+                            {(chat.type !== 'community' && chat.type !== 'gym') && <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>✎</span>}
                         </h2>
                     )}
                     <p style={{ color: 'var(--text-muted)' }}>{participants.length} members</p>

@@ -11,7 +11,7 @@ const MessageBubble = memo(({ msg, isMe, isSequence, onSaveTemplate, onJoinSessi
         }}>
             {!isMe && !isSequence && (
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', marginLeft: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {msg.sender?.name}
+                    {msg.sender?.name || msg.sender?.username || 'User'}
                     {msg.sender?.is_super_admin ? (
                         <span style={{ fontSize: '0.65rem', background: '#FFD700', color: '#000', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>Owner</span>
                     ) : (
@@ -142,7 +142,9 @@ const MessageBubble = memo(({ msg, isMe, isSequence, onSaveTemplate, onJoinSessi
         prev.msg.content === next.msg.content &&
         prev.isMe === next.isMe &&
         prev.isSequence === next.isSequence &&
-        prev.savedTemplates === next.savedTemplates
+        prev.savedTemplates === next.savedTemplates &&
+        prev.msg.sender?.role === next.msg.sender?.role &&
+        prev.msg.sender?.is_super_admin === next.msg.sender?.is_super_admin
     );
 });
 

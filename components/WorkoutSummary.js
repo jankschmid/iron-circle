@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Confetti from 'react-confetti';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function WorkoutSummary({ data, onContinue }) {
+    const { t } = useTranslation();
     const [showConfetti, setShowConfetti] = useState(false);
     const [progress, setProgress] = useState(0);
 
@@ -80,7 +82,7 @@ export default function WorkoutSummary({ data, onContinue }) {
                         color: didLevelUp ? 'var(--primary)' : '#fff',
                         textShadow: didLevelUp ? '0 0 20px var(--primary)' : 'none'
                     }}>
-                        {didLevelUp ? "LEVEL UP!" : "WORKOUT COMPLETE!"}
+                        {didLevelUp ? t("LEVEL UP!") : t("WORKOUT COMPLETE!")}
                     </h2>
 
                     <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>
@@ -121,7 +123,7 @@ export default function WorkoutSummary({ data, onContinue }) {
                             flexDirection: 'column',
                             alignItems: 'center'
                         }}>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>LEVEL</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{t('LEVEL')}</div>
                             <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#fff' }}>{newLevel}</div>
                         </div>
                     </div>
@@ -131,7 +133,7 @@ export default function WorkoutSummary({ data, onContinue }) {
                             +{earnedXP} XP
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                            Total XP: {newTotalXP}
+                            {t('Total XP')}: {newTotalXP}
                         </div>
                     </div>
 
@@ -146,11 +148,11 @@ export default function WorkoutSummary({ data, onContinue }) {
                         borderRadius: '16px'
                     }}>
                         <div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Duration</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Duration')}</div>
                             <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{Math.floor(duration / 60)}m</div>
                         </div>
                         <div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Volume</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Volume')}</div>
                             <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{(volume / 1000).toFixed(1)}k kg</div>
                         </div>
                     </div>
@@ -172,7 +174,7 @@ export default function WorkoutSummary({ data, onContinue }) {
                             transition: 'transform 0.2s'
                         }}
                     >
-                        CONTINUE
+                        {t('CONTINUE')}
                     </button>
                 </div>
             </motion.div>

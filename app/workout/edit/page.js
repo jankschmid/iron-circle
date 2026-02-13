@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { useTranslation } from '@/context/TranslationContext';
 
 function EditRoutineContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const id = searchParams.get('id');
+    const { t } = useTranslation();
 
     const {
         workoutTemplates,
@@ -97,7 +99,7 @@ function EditRoutineContent() {
     };
 
     const handleDelete = () => {
-        if (confirm('Are you sure you want to delete this routine?')) {
+        if (confirm(t('Are you sure you want to delete this routine?'))) {
             deleteWorkoutTemplate(id);
             router.push('/workout');
         }
@@ -166,14 +168,14 @@ function EditRoutineContent() {
             <div className="container" style={{ paddingBottom: '100px' }}>
                 <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button onClick={() => setIsSelecting(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: 'var(--text-muted)' }}>←</button>
-                    <h1 style={{ fontSize: '1.5rem' }}>Select Exercises</h1>
+                    <h1 style={{ fontSize: '1.5rem' }}>{t('Select Exercises')}</h1>
                 </header>
 
                 {/* Search & Filter */}
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
                     <input
                         type="text"
-                        placeholder="Search..."
+                        placeholder={t('Search...')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         style={{
@@ -196,8 +198,8 @@ function EditRoutineContent() {
                             color: 'var(--text-main)'
                         }}
                     >
-                        <option value="All">All Muscles</option>
-                        {MUSCLES.map(m => <option key={m} value={m}>{m}</option>)}
+                        <option value="All">{t('All Muscles')}</option>
+                        {MUSCLES.map(m => <option key={m} value={m}>{t(m)}</option>)}
                     </select>
                 </div>
 
@@ -215,7 +217,7 @@ function EditRoutineContent() {
                                 <input
                                     value={customExerciseName}
                                     onChange={(e) => setCustomExerciseName(e.target.value)}
-                                    placeholder="Add custom exercise..."
+                                    placeholder={t('Add custom exercise...')}
                                     style={{
                                         flex: 1,
                                         background: 'transparent',
@@ -236,7 +238,7 @@ function EditRoutineContent() {
                                         borderRadius: '4px'
                                     }}
                                 >
-                                    {MUSCLES.map(m => <option key={m} value={m}>{m}</option>)}
+                                    {MUSCLES.map(m => <option key={m} value={m}>{t(m)}</option>)}
                                 </select>
                             </div>
                             <button
@@ -253,7 +255,7 @@ function EditRoutineContent() {
                                     fontSize: '0.9rem'
                                 }}
                             >
-                                + Add & Select
+                                + {t('Add & Select')}
                             </button>
                         </div>
                     </div>
@@ -300,7 +302,7 @@ function EditRoutineContent() {
                         fontSize: '1.1rem'
                     }}
                 >
-                    Done ({selectedExercises.length})
+                    {t('Done')} ({selectedExercises.length})
                 </button>
             </div>
         );
@@ -315,20 +317,20 @@ function EditRoutineContent() {
                     onClick={() => setShowDeleteConfirm(true)}
                     style={{ color: 'var(--warning)', background: 'none', border: 'none' }}
                 >
-                    Delete
+                    {t('Delete')}
                 </button>
             </header>
 
-            <h1 style={{ fontSize: '1.5rem', marginBottom: '24px' }}>Edit Routine</h1>
+            <h1 style={{ fontSize: '1.5rem', marginBottom: '24px' }}>{t('Edit Routine')}</h1>
 
             <section>
                 <div style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Routine Name</label>
+                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>{t('Routine Name')}</label>
                     <input
                         type="text"
                         value={routineName}
                         onChange={(e) => setRoutineName(e.target.value)}
-                        placeholder="e.g. Chest & Triceps"
+                        placeholder={t('e.g. Chest & Triceps')}
                         style={{
                             width: '100%',
                             padding: '16px',
@@ -342,7 +344,7 @@ function EditRoutineContent() {
                     />
 
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <label style={{ color: 'var(--text-muted)' }}>Visibility:</label>
+                        <label style={{ color: 'var(--text-muted)' }}>{t('Visibility')}:</label>
                         <select
                             value={visibility}
                             onChange={(e) => setVisibility(e.target.value)}
@@ -355,14 +357,14 @@ function EditRoutineContent() {
                                 cursor: 'pointer'
                             }}
                         >
-                            <option value="public">Public (Friends can copy)</option>
-                            <option value="private">Private (Only me)</option>
+                            <option value="public">{t('Public (Friends can copy)')}</option>
+                            <option value="private">{t('Private (Only me)')}</option>
                         </select>
                     </div>
                 </div>
 
                 <div style={{ marginBottom: '32px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Exercises</label>
+                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>{t('Exercises')}</label>
 
                     {selectedExercises.length > 0 && (
                         <div style={{ display: 'grid', gap: '16px', marginBottom: '16px' }}>
@@ -379,7 +381,7 @@ function EditRoutineContent() {
                                             onClick={() => toggleExercise(ex)}
                                             style={{ color: 'var(--warning)', background: 'none', border: 'none', fontSize: '0.9rem' }}
                                         >
-                                            Remove Exercise
+                                            {t('Remove Exercise')}
                                         </button>
                                     </div>
 
@@ -393,7 +395,7 @@ function EditRoutineContent() {
                                                 padding: '8px 0',
                                                 borderBottom: setIdx < ex.sets.length - 1 ? '1px solid var(--border)' : 'none'
                                             }}>
-                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Set {setIdx + 1}</span>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t('Set')} {setIdx + 1}</span>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <input
                                                         type="number"
@@ -409,7 +411,7 @@ function EditRoutineContent() {
                                                             textAlign: 'center'
                                                         }}
                                                     />
-                                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Reps</span>
+                                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Reps')}</span>
                                                 </div>
                                             </div>
                                         ))}
@@ -429,7 +431,7 @@ function EditRoutineContent() {
                                                 fontWeight: '600'
                                             }}
                                         >
-                                            + Add Set
+                                            + {t('Add Set')}
                                         </button>
                                         <button
                                             onClick={() => removeLastSet(ex.id)}
@@ -445,7 +447,7 @@ function EditRoutineContent() {
                                                 opacity: ex.sets.length <= 1 ? 0.5 : 1
                                             }}
                                         >
-                                            - Remove Set
+                                            - {t('Remove Set')}
                                         </button>
                                     </div>
                                 </div>
@@ -468,7 +470,7 @@ function EditRoutineContent() {
                                 transition: 'all 0.2s'
                             }}
                         >
-                            Save Changes
+                            {t('Save Changes')}
                         </button>
                     </div>
                 </div>
@@ -485,7 +487,7 @@ function EditRoutineContent() {
                         marginBottom: '16px'
                     }}
                 >
-                    {selectedExercises.length > 0 ? '+ Add More Exercises' : '+ Add Exercises'}
+                    {selectedExercises.length > 0 ? `+ ${t('Add More Exercises')}` : `+ ${t('Add Exercises')}`}
                 </button>
             </section>
 
@@ -510,16 +512,16 @@ function EditRoutineContent() {
                         textAlign: 'center',
                         border: '1px solid var(--border)'
                     }}>
-                        <h3 style={{ marginBottom: '16px' }}>Delete Routine?</h3>
+                        <h3 style={{ marginBottom: '16px' }}>{t('Delete Routine?')}</h3>
                         <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-                            Are you sure you want to delete this routine permanently?
+                            {t('Are you sure you want to delete this routine permanently?')}
                         </p>
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <button
                                 onClick={() => setShowDeleteConfirm(false)}
                                 style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
                             >
-                                Cancel
+                                {t('Cancel')}
                             </button>
                             <button
                                 onClick={() => {
@@ -528,7 +530,7 @@ function EditRoutineContent() {
                                 }}
                                 style={{ flex: 1, padding: '12px', background: 'var(--error)', border: 'none', color: '#FFF', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}
                             >
-                                Delete
+                                {t('Delete')}
                             </button>
                         </div>
                     </div>

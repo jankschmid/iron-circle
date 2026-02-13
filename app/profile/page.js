@@ -5,12 +5,14 @@ import BottomNav from '@/components/BottomNav';
 import Link from 'next/link';
 import WorkoutHeatmap from '@/components/WorkoutHeatmap';
 import { getLevelProgress } from '@/lib/gamification';
+import { useTranslation } from '@/context/TranslationContext'; // Import Hook
 
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 export default function ProfilePage() {
+    const { t } = useTranslation(); // Use Hook
     const { user, getWeeklyStats, getPersonalBests, gyms, friends, history } = useStore();
     const router = useRouter();
     // Fix: Create client once to avoid lock contention
@@ -42,8 +44,8 @@ export default function ProfilePage() {
                     padding: '20px'
                 }}>
                     <div>
-                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--foreground)' }}>Connection Issue</h2>
-                        <p>We're having trouble loading your data.</p>
+                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--foreground)' }}>{t('Connection Issue')}</h2>
+                        <p>{t("We're having trouble loading your data.")}</p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
@@ -59,7 +61,7 @@ export default function ProfilePage() {
                                 fontWeight: 'bold'
                             }}
                         >
-                            Retry Connection
+                            {t('Retry Connection')}
                         </button>
                         <button
                             onClick={async () => {
@@ -77,7 +79,7 @@ export default function ProfilePage() {
                                 cursor: 'pointer'
                             }}
                         >
-                            Log Out & Reset
+                            {t('Log Out & Reset')}
                         </button>
                     </div>
                 </div>
@@ -94,7 +96,7 @@ export default function ProfilePage() {
             }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
                     <div className="spinner"></div>
-                    <p>Syncing...</p>
+                    <p>{t('Syncing...')}</p>
                 </div>
                 <style jsx>{`
                     .spinner {
@@ -175,22 +177,22 @@ export default function ProfilePage() {
                         </div>
                         {userGym.role === 'owner' && (
                             <div style={{ background: '#FFD700', color: '#000', padding: '4px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                👑 Owner
+                                👑 {t('Owner')}
                             </div>
                         )}
                         {userGym.role === 'admin' && (
                             <div style={{ background: 'var(--error)', color: '#fff', padding: '4px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                🛡️ Admin
+                                🛡️ {t('Admin')}
                             </div>
                         )}
                         {userGym.role === 'trainer' && (
                             <div style={{ background: 'var(--brand-yellow)', color: '#000', padding: '4px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                                💪 Trainer
+                                💪 {t('Trainer')}
                             </div>
                         )}
                         {(userGym.role === 'member' || !userGym.role) && (
                             <div style={{ background: 'var(--surface-highlight)', color: 'var(--text-muted)', padding: '4px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid var(--border)' }}>
-                                👤 Member
+                                👤 {t('Member')}
                             </div>
                         )}
                     </div>
@@ -200,7 +202,7 @@ export default function ProfilePage() {
                 {/* Level Progress */}
                 <div style={{ width: '100%', maxWidth: '240px', margin: '12px 0 8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '4px', color: 'var(--text-dim)', fontWeight: '600' }}>
-                        <span style={{ color: 'var(--primary)' }}>Level {currentLevel}</span>
+                        <span style={{ color: 'var(--primary)' }}>{t('Level')} {currentLevel}</span>
                         <span>{Math.floor(progress)} / {totalNeeded} XP</span>
                     </div>
                     <div style={{ width: '100%', height: '6px', background: 'var(--surface-highlight)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -213,15 +215,15 @@ export default function ProfilePage() {
                 <div style={{ marginTop: '16px', display: 'flex', gap: '24px' }}>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontWeight: '700', fontSize: '1.2rem' }}>{totalWorkouts}</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Workouts</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Workouts')}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontWeight: '700', fontSize: '1.2rem' }}>{(totalVolume / 1000).toFixed(1)}k</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Volume</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Volume')}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontWeight: '700', fontSize: '1.2rem' }}>{friends?.length || 0}</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Friends</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Friends')}</div>
                     </div>
                 </div>
             </header>
@@ -231,7 +233,7 @@ export default function ProfilePage() {
             </section>
 
             <section style={{ marginBottom: '32px' }}>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Personal Bests</h3>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{t('Personal Bests')}</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     {personalBests.map((pb) => (
                         <div key={pb.name} style={{
@@ -265,7 +267,7 @@ export default function ProfilePage() {
                             height: '100%'
                         }}>
                             <div style={{ fontSize: '1.8rem' }}>⚙️</div>
-                            <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>Settings</div>
+                            <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{t('Settings')}</div>
                         </div>
                     </Link>
 
@@ -283,7 +285,7 @@ export default function ProfilePage() {
                             height: '100%'
                         }}>
                             <div style={{ fontSize: '1.8rem' }}>🔔</div>
-                            <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>Notifications</div>
+                            <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{t('Notifications')}</div>
                         </div>
                     </Link>
                 </div>
@@ -303,7 +305,7 @@ export default function ProfilePage() {
                                 gap: '12px',
                                 fontWeight: 'bold'
                             }}>
-                                <span>⚡</span> Master Admin Panel
+                                <span>⚡</span> {t('Master Admin Panel')}
                             </div>
                         </Link>
                     )}
@@ -321,7 +323,7 @@ export default function ProfilePage() {
                                 gap: '12px',
                                 fontWeight: 'bold'
                             }}>
-                                <span>📋</span> Coach Panel
+                                <span>📋</span> {t('Coach Panel')}
                             </div>
                         </Link>
                     )}
@@ -339,7 +341,7 @@ export default function ProfilePage() {
                                 gap: '12px',
                                 fontWeight: 'bold'
                             }}>
-                                <span>🏢</span> Gym Admin Dashboard
+                                <span>🏢</span> {t('Gym Admin Dashboard')}
                             </div>
                         </Link>
                     )}
@@ -359,7 +361,7 @@ export default function ProfilePage() {
                         justifyContent: 'center',
                         gap: '8px'
                     }}>
-                        Sign Out
+                        {t('Sign Out')}
                     </button>
                 </div>
             </section>

@@ -83,7 +83,7 @@ export default function NewChatPage() {
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
             <header style={{ padding: '24px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <Link href="/chat" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
+                <Link href="/connect?tab=chat" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
                     ←
                 </Link>
                 <h1 style={{ fontSize: '1.5rem' }}>New Message</h1>
@@ -141,7 +141,7 @@ export default function NewChatPage() {
                             if (conversationId) {
                                 router.push(`/social/chat/conversation?id=${conversationId}`);
                             } else {
-                                router.push('/chat');
+                                router.push('/connect?tab=chat');
                             }
                         }}
                     />

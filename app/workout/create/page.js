@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function CreateRoutinePage() {
     const router = useRouter();
+    const { t } = useTranslation();
     const { exercises, addWorkoutTemplate, addCustomExercise, deleteCustomExercise, updateCustomExercise } = useStore();
     const [routineName, setRoutineName] = useState('');
     const [visibility, setVisibility] = useState('public');
@@ -123,7 +125,7 @@ export default function CreateRoutinePage() {
             <div className="container" style={{ paddingBottom: '100px' }}>
                 <header style={{ padding: '24px 0 16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button onClick={() => setIsSelecting(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: 'var(--text-muted)' }}>←</button>
-                    <h1 style={{ fontSize: '1.5rem' }}>Select Exercises</h1>
+                    <h1 style={{ fontSize: '1.5rem' }}>{t('Select Exercises')}</h1>
                 </header>
 
                 {/* Search & Add Custom */}
@@ -132,7 +134,7 @@ export default function CreateRoutinePage() {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search exercises..."
+                        placeholder={t('Search exercises...')}
                         style={{
                             flex: 1,
                             padding: '12px',
@@ -155,7 +157,7 @@ export default function CreateRoutinePage() {
                             whiteSpace: 'nowrap'
                         }}
                     >
-                        + Custom
+                        + {t('Custom')}
                     </button>
                 </div>
 
@@ -185,7 +187,7 @@ export default function CreateRoutinePage() {
                                 flexShrink: 0 // Prevent shrinking
                             }}
                         >
-                            {muscle}
+                            {t(muscle)}
                         </button>
                     ))}
                 </div>
@@ -286,7 +288,7 @@ export default function CreateRoutinePage() {
                         fontSize: '1.1rem'
                     }}
                 >
-                    Done ({selectedExercises.length})
+                    {t('Done')} ({selectedExercises.length})
                 </button>
 
                 {/* Custom Exercise Modal */}
@@ -306,15 +308,15 @@ export default function CreateRoutinePage() {
                             border: '1px solid var(--border)'
                         }} onClick={e => e.stopPropagation()}>
                             <h3 style={{ marginBottom: '16px', fontSize: '1.2rem' }}>
-                                {editingExercise ? 'Edit Exercise' : 'New Custom Exercise'}
+                                {editingExercise ? t('Edit Exercise') : t('New Custom Exercise')}
                             </h3>
 
                             <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Name</label>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>{t('Name')}</label>
                                 <input
                                     value={customFormName}
                                     onChange={(e) => setCustomFormName(e.target.value)}
-                                    placeholder="e.g. Weighted Dips"
+                                    placeholder={t('e.g. Weighted Dips')}
                                     autoFocus
                                     style={{
                                         width: '100%',
@@ -329,7 +331,7 @@ export default function CreateRoutinePage() {
                             </div>
 
                             <div style={{ marginBottom: '24px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Muscle Group</label>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>{t('Muscle Group')}</label>
                                 <select
                                     value={customFormMuscle}
                                     onChange={(e) => setCustomFormMuscle(e.target.value)}
@@ -344,7 +346,7 @@ export default function CreateRoutinePage() {
                                     }}
                                 >
                                     {MUSCLES.filter(m => m !== 'All').map(m => (
-                                        <option key={m} value={m}>{m}</option>
+                                        <option key={m} value={m}>{t(m)}</option>
                                     ))}
                                 </select>
                             </div>
@@ -362,7 +364,7 @@ export default function CreateRoutinePage() {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    Cancel
+                                    {t('Cancel')}
                                 </button>
                                 <button
                                     onClick={handleSaveCustom}
@@ -379,7 +381,7 @@ export default function CreateRoutinePage() {
                                         opacity: customFormName.trim() ? 1 : 0.5
                                     }}
                                 >
-                                    Save
+                                    {t('Save')}
                                 </button>
                             </div>
                         </div>
@@ -403,10 +405,8 @@ export default function CreateRoutinePage() {
                             border: '1px solid var(--border)',
                             textAlign: 'center'
                         }} onClick={e => e.stopPropagation()}>
-                            <h3 style={{ marginBottom: '12px', fontSize: '1.2rem' }}>Delete Exercise?</h3>
-                            <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-                                Are you sure you want to permanently delete <strong>{exerciseToDelete?.name}</strong>? This cannot be undone.
-                            </p>
+                            <h3 style={{ marginBottom: '12px', fontSize: '1.2rem' }}>{t('Delete Exercise?')}</h3>
+                            {t('Are you sure you want to permanently delete')} <strong>{exerciseToDelete?.name}</strong>? {t('This cannot be undone.')}
 
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 <button
@@ -421,7 +421,7 @@ export default function CreateRoutinePage() {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    Cancel
+                                    {t('Cancel')}
                                 </button>
                                 <button
                                     onClick={handleDelete}
@@ -436,7 +436,7 @@ export default function CreateRoutinePage() {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    Delete
+                                    {t('Delete')}
                                 </button>
                             </div>
                         </div>
@@ -452,17 +452,17 @@ export default function CreateRoutinePage() {
         <div className="container" style={{ paddingBottom: '100px' }}>
             <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <Link href="/workout" style={{ fontSize: '1.5rem', color: 'var(--text-muted)' }}>←</Link>
-                <h1 style={{ fontSize: '1.5rem' }}>New Routine</h1>
+                <h1 style={{ fontSize: '1.5rem' }}>{t('New Routine')}</h1>
             </header>
 
             <section>
                 <div style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Routine Name</label>
+                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>{t('Routine Name')}</label>
                     <input
                         type="text"
                         value={routineName}
                         onChange={(e) => setRoutineName(e.target.value)}
-                        placeholder="e.g. Chest & Triceps"
+                        placeholder={t('e.g. Chest & Triceps')}
                         style={{
                             width: '100%',
                             padding: '16px',
@@ -476,7 +476,7 @@ export default function CreateRoutinePage() {
                     />
 
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <label style={{ color: 'var(--text-muted)' }}>Visibility:</label>
+                        <label style={{ color: 'var(--text-muted)' }}>{t('Visibility')}:</label>
                         <select
                             value={visibility}
                             onChange={(e) => setVisibility(e.target.value)}
@@ -489,14 +489,14 @@ export default function CreateRoutinePage() {
                                 cursor: 'pointer'
                             }}
                         >
-                            <option value="public">Public (Friends can copy)</option>
-                            <option value="private">Private (Only me)</option>
+                            <option value="public">{t('Public (Friends can copy)')}</option>
+                            <option value="private">{t('Private (Only me)')}</option>
                         </select>
                     </div>
                 </div>
 
                 <div style={{ marginBottom: '32px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Exercises</label>
+                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>{t('Exercises')}</label>
 
                     {selectedExercises.length > 0 && (
                         <div style={{ display: 'grid', gap: '16px', marginBottom: '16px' }}>
@@ -513,14 +513,14 @@ export default function CreateRoutinePage() {
                                             onClick={() => toggleExercise(ex)}
                                             style={{ color: 'var(--warning)', background: 'none', border: 'none', fontSize: '0.9rem' }}
                                         >
-                                            Remove
+                                            {t('Remove')}
                                         </button>
                                     </div>
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                        Default: 3 Sets
+                                        {t('Default')}: 3 {t('Sets')}
                                     </div>
                                     <div style={{ marginTop: '8px' }}>
-                                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Training Goal:</label>
+                                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>{t('Training Goal')}:</label>
                                         <select
                                             value={ex.target_rep_range || 'auto'}
                                             onChange={(e) => {
@@ -537,11 +537,11 @@ export default function CreateRoutinePage() {
                                                 fontSize: '0.9rem'
                                             }}
                                         >
-                                            <option value="auto">Auto-Detect (Smart)</option>
-                                            <option value="1-5">Strength (1-5 reps)</option>
-                                            <option value="6-12">Hypertrophy (6-12 reps)</option>
-                                            <option value="12-20">Endurance (12-20 reps)</option>
-                                            <option value="custom">Custom Range</option>
+                                            <option value="auto">{t('Auto-Detect (Smart)')}</option>
+                                            <option value="1-5">{t('Strength (1-5 reps)')}</option>
+                                            <option value="6-12">{t('Hypertrophy (6-12 reps)')}</option>
+                                            <option value="12-20">{t('Endurance (12-20 reps)')}</option>
+                                            <option value="custom">{t('Custom Range')}</option>
                                         </select>
                                     </div>
                                 </div>
@@ -561,7 +561,7 @@ export default function CreateRoutinePage() {
                             marginBottom: '16px'
                         }}
                     >
-                        {selectedExercises.length > 0 ? '+ Add More Exercises' : '+ Add Exercises'}
+                        {selectedExercises.length > 0 ? `+ ${t('Add More Exercises')}` : `+ ${t('Add Exercises')}`}
                     </button>
                 </div>
 
@@ -579,7 +579,7 @@ export default function CreateRoutinePage() {
                         transition: 'all 0.2s'
                     }}
                 >
-                    Create Routine
+                    {t('Create Routine')}
                 </button>
             </section>
         </div>

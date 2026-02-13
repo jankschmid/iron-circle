@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function TemplateSelector() {
+    const { t } = useTranslation();
     const { workoutTemplates, startWorkout, friends, shareTemplate } = useStore();
     const [showShareModal, setShowShareModal] = useState(false);
     const [templateToShare, setTemplateToShare] = useState(null);
@@ -13,7 +15,7 @@ export default function TemplateSelector() {
 
     return (
         <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>
-            <h1 style={{ marginBottom: '24px' }}>Start Workout</h1>
+            <h1 style={{ marginBottom: '24px' }}>{t('Start Workout')}</h1>
 
             <div style={{ display: 'grid', gap: '16px' }}>
                 {workoutTemplates.map(template => (
@@ -42,10 +44,10 @@ export default function TemplateSelector() {
                             <div>
                                 <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>{template.name}</h3>
                                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                    {template.exercises.length} Exercises
+                                    {template.exercises.length} {t('Exercises')}
                                 </p>
                             </div>
-                            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Tap to Edit ✏️</span>
+                            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{t('Tap to Edit')} ✏️</span>
                         </button>
                         <div style={{
                             display: 'flex',
@@ -98,7 +100,7 @@ export default function TemplateSelector() {
             </div>
 
             <div style={{ marginTop: '40px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
-                <h3 style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Quick Actions</h3>
+                <h3 style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>{t('Quick Actions')}</h3>
                 <Link href="/workout/create" style={{
                     display: 'block',
                     width: '100%',
@@ -110,7 +112,7 @@ export default function TemplateSelector() {
                     textAlign: 'center',
                     marginBottom: '16px'
                 }}>
-                    + Create Custom Routine
+                    + {t('Create Custom Routine')}
                 </Link>
 
                 <Link href="/workout/history" style={{
@@ -123,7 +125,7 @@ export default function TemplateSelector() {
                     background: 'var(--surface)',
                     textAlign: 'center'
                 }}>
-                    📜 View Workout History
+                    📜 {t('View Workout History')}
                 </Link>
             </div>
             {/* Share Modal */}
@@ -145,12 +147,12 @@ export default function TemplateSelector() {
                         display: 'flex',
                         flexDirection: 'column'
                     }} onClick={e => e.stopPropagation()}>
-                        <h3 style={{ marginBottom: '16px', fontSize: '1.2rem' }}>Share "{templateToShare?.name}"</h3>
+                        <h3 style={{ marginBottom: '16px', fontSize: '1.2rem' }}>{t('Share')} "{templateToShare?.name}"</h3>
 
                         <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {friends.length === 0 ? (
                                 <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>
-                                    No friends found to share with.
+                                    {t('No friends found to share with.')}
                                 </p>
                             ) : (
                                 friends.map(friend => (
@@ -199,7 +201,7 @@ export default function TemplateSelector() {
                                 width: '100%'
                             }}
                         >
-                            Cancel
+                            {t('Cancel')}
                         </button>
                     </div>
                 </div>

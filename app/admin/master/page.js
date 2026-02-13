@@ -77,8 +77,8 @@ export default function MasterAdminPage() {
 
             if (error) throw error;
             if (data) {
-                setGyms(data.data);
-                setTotalCount(data.total);
+                setGyms(data.data || []);
+                setTotalCount(data.total || 0);
             }
         } catch (err) {
             console.error("Fetch Gyms Error:", err.message);
@@ -272,7 +272,23 @@ export default function MasterAdminPage() {
             <div className="admin-container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
                 <header className="admin-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
                     <h1 style={{ fontSize: '2rem', fontWeight: '900', margin: 0 }}>MASTER <span style={{ color: '#FFC800' }}>ADMIN</span></h1>
-                    <div style={{ color: '#666' }}>Logged as: {user.email || user.name}</div>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                        <button
+                            onClick={() => router.push('/admin/translations')}
+                            style={{
+                                background: '#222',
+                                border: '1px solid #444',
+                                color: '#fff',
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            🌍 Languages & Translations
+                        </button>
+                        <div style={{ color: '#666' }}>Logged as: {user.email || user.name}</div>
+                    </div>
                 </header>
 
                 {/* KPI Cards */}

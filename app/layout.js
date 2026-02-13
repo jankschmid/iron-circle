@@ -1,9 +1,10 @@
-import './globals.css'
+import './globals.css';
 import { StoreProvider } from '@/lib/store';
 import Providers from './providers';
 import { ToastProvider } from '@/components/ToastProvider';
 import UpdateChecker from '@/components/UpdateChecker';
 import HardwareBackButton from '@/components/HardwareBackButton';
+import { TranslationProvider } from '@/context/TranslationContext';
 
 export const metadata = {
     title: 'IronCircle',
@@ -25,9 +26,11 @@ export default function RootLayout({ children }) {
                 <Providers>
                     <ToastProvider>
                         <StoreProvider>
-                            <UpdateChecker />
-                            <HardwareBackButton />
-                            {children}
+                            <TranslationProvider>
+                                <UpdateChecker />
+                                <HardwareBackButton />
+                                {children}
+                            </TranslationProvider>
                         </StoreProvider>
                     </ToastProvider>
                 </Providers>

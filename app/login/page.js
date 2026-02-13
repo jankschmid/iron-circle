@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { useTranslation } from '@/context/TranslationContext'
+import LanguageSelector from '@/components/ui/LanguageSelector'
 
 export default function LoginPage() {
+    const { t } = useTranslation()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState(null)
@@ -54,13 +57,19 @@ export default function LoginPage() {
     }
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
+        <div style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '16px', position: 'relative' }}>
+
+            {/* Language Selector (Top Right) */}
+            <div style={{ position: 'absolute', top: '16px', right: '16px' }}>
+                <LanguageSelector position="bottom-right" />
+            </div>
+
             <div style={{ width: '100%', maxWidth: '400px', background: 'var(--surface)', padding: '32px', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)' }}>
                 <div style={{ textAlign: 'center', marginBottom: '16px' }}>
                     <div style={{ width: '64px', height: '64px', background: '#2a2a2a', borderRadius: '50%', margin: '0 auto', lineHeight: '64px', fontSize: '28px' }}>💪</div>
                 </div>
-                <h1 className="text-gradient" style={{ fontSize: '2rem', marginBottom: '8px', textAlign: 'center' }}>Welcome Back</h1>
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '32px' }}>Enter the Iron Circle.</p>
+                <h1 className="text-gradient" style={{ fontSize: '2rem', marginBottom: '8px', textAlign: 'center' }}>{t('Welcome Back')}</h1>
+                <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '32px' }}>{t('Enter the Iron Circle.')}</p>
 
                 {error && (
                     <div style={{ background: 'rgba(255, 23, 68, 0.1)', border: '1px solid var(--error)', color: 'var(--error)', padding: '16px', borderRadius: 'var(--radius-sm)', marginBottom: '24px', fontSize: '0.9rem' }}>
@@ -70,7 +79,7 @@ export default function LoginPage() {
 
                 <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     <div>
-                        <label htmlFor="email" style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Email</label>
+                        <label htmlFor="email" style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>{t('Email')}</label>
                         <input
                             id="email"
                             type="email"
@@ -85,7 +94,7 @@ export default function LoginPage() {
                     </div>
 
                     <div>
-                        <label htmlFor="password" style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Password</label>
+                        <label htmlFor="password" style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>{t('Password')}</label>
                         <input
                             id="password"
                             type="password"
@@ -115,14 +124,14 @@ export default function LoginPage() {
                             cursor: loading ? 'wait' : 'pointer'
                         }}
                     >
-                        {loading ? 'Signing In...' : 'Sign In'}
+                        {loading ? t('Signing In...') : t('Sign In')}
                     </button>
                 </form>
 
                 <p style={{ marginTop: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    Don't have an account?{' '}
+                    {t("Don't have an account?")}{' '}
                     <Link href="/signup" style={{ color: 'var(--primary)', fontWeight: '600' }}>
-                        Sign Up
+                        {t('Sign Up')}
                     </Link>
                 </p>
             </div>

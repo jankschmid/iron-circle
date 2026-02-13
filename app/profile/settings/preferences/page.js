@@ -166,6 +166,41 @@ export default function PreferencesSettingsPage() {
                     />
                 )}
 
+                {/* Auto Tracking Toggle */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                    marginTop: '24px'
+                }}>
+                    <div>
+                        <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Auto Tracking 📍</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            Automatically start gym sessions when you arrive at a gym.
+                        </div>
+                    </div>
+                    <label className="switch">
+                        <input
+                            type="checkbox"
+                            checked={user?.auto_tracking_enabled || false}
+                            onChange={async (e) => {
+                                // Optimistic
+                                updateUserProfile({ auto_tracking_enabled: e.target.checked });
+
+                                const { error } = await supabase
+                                    .from('profiles')
+                                    .update({ auto_tracking_enabled: e.target.checked })
+                                    .eq('id', user.id);
+
+                                if (error) {
+                                    console.error("Failed to update auto-tracking:", error);
+                                    updateUserProfile({ auto_tracking_enabled: !e.target.checked }); // Revert
+                                }
+                            }}
+                        />
+                        <span className="slider round"></span>
+                    </label>
+                </div>
+
                 <style jsx>{`
                     .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
                     .switch input { opacity: 0; width: 0; height: 0; }

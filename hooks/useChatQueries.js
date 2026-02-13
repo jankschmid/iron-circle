@@ -67,10 +67,9 @@ export function useConversations(userId) {
                             avatar = profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.user_id}`;
                         }
                     }
-                } else if (convo.type === 'community' || convo.type === 'gym') {
-                    // Fetch community info for avatar if missing
-                    if (!convo.name && convo.gym_id) {
-                        const { data: gym } = await supabase.from('gyms').select('name').eq('id', convo.gym_id).single();
+                    // Always try to fetch the latest Gym Name for these types
+                    if (convo.gym_id) {
+                        const { data: gym } = await supabase.from('gyms').select('name').eq('id', convo.gym_id).maybeSingle();
                         if (gym) displayName = gym.name;
                     }
                 }
@@ -86,8 +85,31 @@ export function useConversations(userId) {
                 };
             }));
 
+            // Deduplicate by Gym ID for community/gym types (Keep the oldest to match GymHub)
+            const uniqueMap = new Map();
+            processed.forEach(c => {
+                if (c.type === 'private' || !c.gym_id) {
+                    uniqueMap.set(c.id, c); // Always keep private or non-gym chats
+                } else {
+                    // For gym/community chats, grouping by gym_id
+                    const existing = uniqueMap.get('gym_' + c.gym_id);
+                    if (!existing) {
+                        uniqueMap.set('gym_' + c.gym_id, c);
+                    } else {
+                        // Keep the OLDER one (smaller created_at timestamp)
+                        const t1 = new Date(c.created_at || 0).getTime();
+                        const t2 = new Date(existing.created_at || 0).getTime();
+                        if (t1 < t2) {
+                            uniqueMap.set('gym_' + c.gym_id, c);
+                        }
+                    }
+                }
+            });
+
+            const uniqueConversations = Array.from(uniqueMap.values());
+
             // Sort by last message time
-            return processed.sort((a, b) => {
+            return uniqueConversations.sort((a, b) => {
                 const timeA = new Date(a.lastMessage?.created_at || a.created_at || 0).getTime();
                 const timeB = new Date(b.lastMessage?.created_at || b.created_at || 0).getTime();
                 return timeB - timeA;

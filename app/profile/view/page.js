@@ -22,6 +22,22 @@ function ProfileContent() {
     const [stats, setStats] = useState({ volume: 0, streak: 0 });
     const [loading, setLoading] = useState(true);
 
+    // New State for Tabs
+    const [viewMode, setViewMode] = useState('routines'); // 'routines' | 'history'
+    const [history, setHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+
+    // Fetch History Effect
+    useEffect(() => {
+        if (viewMode === 'history' && friendId && history.length === 0) {
+            setLoadingHistory(true);
+            fetchFriendWorkouts(friendId).then(data => {
+                setHistory(data);
+                setLoadingHistory(false);
+            });
+        }
+    }, [viewMode, friendId, fetchFriendWorkouts, history.length]);
+
     // 1. Fetch Profile & Workouts
     useEffect(() => {
         if (!friendId) return;
@@ -334,46 +350,134 @@ function ProfileContent() {
                 </div>
             </section>
 
-            <section>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Created Routines</h3>
-                <div style={{ display: 'grid', gap: '12px' }}>
-                    {workouts.length === 0 ? (
-                        <div style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No public routines found.</div>
-                    ) : (
-                        workouts.map((t) => (
-                            <div key={t.id} style={{
-                                background: 'var(--surface)',
-                                padding: '16px',
-                                borderRadius: 'var(--radius-md)',
-                                border: '1px solid var(--border)',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
-                                <div>
-                                    <div style={{ fontWeight: '600' }}>{t.name}</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                        {t.exercises?.length || 0} Exercises • {t.visibility}
+            {/* Tabs */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px' }}>
+                <button
+                    onClick={() => setViewMode('routines')}
+                    style={{
+                        flex: 1,
+                        padding: '12px',
+                        background: 'transparent',
+                        border: 'none',
+                        borderBottom: viewMode === 'routines' ? '2px solid var(--primary)' : '2px solid transparent',
+                        color: viewMode === 'routines' ? 'var(--primary)' : 'var(--text-muted)',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                    }}
+                >
+                    Routines
+                </button>
+                <button
+                    onClick={() => setViewMode('history')}
+                    style={{
+                        flex: 1,
+                        padding: '12px',
+                        background: 'transparent',
+                        border: 'none',
+                        borderBottom: viewMode === 'history' ? '2px solid var(--primary)' : '2px solid transparent',
+                        color: viewMode === 'history' ? 'var(--primary)' : 'var(--text-muted)',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                    }}
+                >
+                    History
+                </button>
+            </div>
+
+            {viewMode === 'routines' ? (
+                <section>
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                        {workouts.length === 0 ? (
+                            <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>No public routines found.</div>
+                        ) : (
+                            workouts.map((t) => (
+                                <div key={t.id} style={{
+                                    background: 'var(--surface)',
+                                    padding: '16px',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: '1px solid var(--border)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <div>
+                                        <div style={{ fontWeight: '600' }}>{t.name}</div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            {t.exercises?.length || 0} Exercises • {t.visibility}
+                                        </div>
                                     </div>
+                                    <button
+                                        onClick={() => handleCopyWorkout(t)}
+                                        style={{
+                                            padding: '6px 16px',
+                                            background: 'var(--primary-dim)',
+                                            color: 'var(--primary)',
+                                            borderRadius: '100px',
+                                            fontSize: '0.8rem',
+                                            fontWeight: '600',
+                                            border: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Save
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => handleCopyWorkout(t)}
-                                    style={{
-                                        padding: '6px 12px',
-                                        background: 'var(--primary-dim)',
-                                        color: 'var(--primary)',
-                                        borderRadius: '8px',
-                                        fontSize: '0.8rem',
-                                        fontWeight: '600'
-                                    }}
-                                >
-                                    Save
-                                </button>
+                            ))
+                        )}
+                    </div>
+                </section>
+            ) : (
+                <section>
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                        {history.length === 0 ? (
+                            <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>
+                                {loadingHistory ? 'Loading history...' : 'No workout history visible.'}
                             </div>
-                        ))
-                    )}
-                </div>
-            </section>
+                        ) : (
+                            history.map((w) => (
+                                <div key={w.id} style={{
+                                    background: 'var(--surface)',
+                                    padding: '16px',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: '1px solid var(--border)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <div>
+                                        <div style={{ fontWeight: '600' }}>{w.name}</div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            {new Date(w.endTime).toLocaleDateString()} • {w.exercises?.length || 0} Ex • {(w.volume / 1000).toFixed(0)}k Vol
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleCopyWorkout({
+                                            name: w.name,
+                                            exercises: w.exercises.map(e => ({
+                                                id: e.id,
+                                                name: e.name,
+                                                sets: e.sets
+                                            }))
+                                        })}
+                                        style={{
+                                            padding: '6px 16px',
+                                            background: 'var(--surface-highlight)',
+                                            color: 'var(--text-main)',
+                                            borderRadius: '100px',
+                                            fontSize: '0.8rem',
+                                            fontWeight: '600',
+                                            border: '1px solid var(--border)',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </section>
+            )}
         </div>
     );
 }

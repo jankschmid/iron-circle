@@ -37,7 +37,7 @@ export default function NewGroupPage() {
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
             <header style={{ padding: '24px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <Link href="/social/chat/new" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
+                <Link href="/connect?tab=chat&subtab=groups" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
                     ←
                 </Link>
                 <h1 style={{ fontSize: '1.5rem' }}>New Group</h1>

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function QuickLogModal({ onClose, activePlanId, dayId }) {
+    const { t } = useTranslation();
     const { createManualWorkout, exercises, exerciseError, refreshExercises } = useStore();
     const [loading, setLoading] = useState(false);
 
@@ -16,11 +18,11 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
     const [notes, setNotes] = useState('');
 
     const activities = [
-        { label: 'Cardio', icon: '🏃' },
-        { label: 'Stretch', icon: '🧘' },
-        { label: 'Mobility', icon: '🤸' },
-        { label: 'Sport', icon: '🏀' },
-        { label: 'Walk', icon: '🚶' }
+        { label: 'Cardio', icon: '🏃', transKey: 'Cardio' },
+        { label: 'Stretch', icon: '🧘', transKey: 'Stretch' },
+        { label: 'Mobility', icon: '🤸', transKey: 'Mobility' },
+        { label: 'Sport', icon: '🏀', transKey: 'Sport' },
+        { label: 'Walk', icon: '🚶', transKey: 'Walk' }
     ];
 
     // Filter exercises based on selected type
@@ -72,7 +74,7 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
             }
 
             if (finalActivities.length === 0) {
-                alert("Please add at least one activity.");
+                alert(t("Please add at least one activity."));
                 setLoading(false);
                 return;
             }
@@ -109,7 +111,7 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
             onClose();
         } catch (e) {
             console.error(e);
-            alert("Failed to log activity");
+            alert(t("Failed to log activity"));
         } finally {
             setLoading(false);
         }
@@ -144,8 +146,8 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                     <div>
-                        <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Log Activity</h2>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Build your session</div>
+                        <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{t('Log Activity')}</h2>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Build your session')}</div>
                     </div>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: 'var(--text-muted)' }}>×</button>
                 </div>
@@ -177,7 +179,7 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
                                 }}
                             >
                                 <span style={{ fontSize: '1.2rem' }}>{act.icon}</span>
-                                <span>{act.label}</span>
+                                <span>{t(act.transKey)}</span>
                             </button>
                         ))}
                     </div>
@@ -198,7 +200,7 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
                                     fontSize: '1rem'
                                 }}
                             >
-                                <option value="">General {activityType} (No Specific Exercise)</option>
+                                <option value="">{t('General')} {t(activityType)} ({t('No Specific Exercise')})</option>
                                 {filteredExercises.map(ex => (
                                     <option key={ex.id} value={ex.id}>{ex.name}</option>
                                 ))}
@@ -206,8 +208,8 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
                         </div>
                     ) : (
                         <div style={{ marginBottom: '16px', fontSize: '0.8rem', color: 'var(--text-muted)', padding: '8px', background: 'var(--background)', borderRadius: '8px' }}>
-                            Using "General {activityType}"
-                            {refreshExercises && <span onClick={refreshExercises} style={{ marginLeft: '8px', textDecoration: 'underline', cursor: 'pointer', color: 'var(--primary)' }}>Refresh Data</span>}
+                            {t('Using')} "{t('General')} {t(activityType)}"
+                            {refreshExercises && <span onClick={refreshExercises} style={{ marginLeft: '8px', textDecoration: 'underline', cursor: 'pointer', color: 'var(--primary)' }}>{t('Refresh Data')}</span>}
                         </div>
                     )}
 
@@ -245,14 +247,14 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
                             cursor: 'pointer'
                         }}
                     >
-                        + Add {selectedExerciseId ? (exercises.find(e => e.id === selectedExerciseId)?.name || 'Activity') : `General ${activityType}`}
+                        + {t('Add')} {selectedExerciseId ? (exercises.find(e => e.id === selectedExerciseId)?.name || t('Activity')) : `${t('General')} ${t(activityType)}`}
                     </button>
                 </div>
 
                 {/* --- ADDED LIST --- */}
                 {addedActivities.length > 0 && (
                     <div style={{ marginBottom: '24px' }}>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '8px' }}>Session Plan</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '8px' }}>{t('Session Plan')}</div>
                         {addedActivities.map((act, idx) => (
                             <div key={idx} style={{
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -269,18 +271,18 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
                             </div>
                         ))}
                         <div style={{ textAlign: 'right', fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                            Total: <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{addedActivities.reduce((acc, c) => acc + c.duration, 0)} min</span>
+                            {t('Total')}: <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{addedActivities.reduce((acc, c) => acc + c.duration, 0)} {t('min')}</span>
                         </div>
                     </div>
                 )}
 
                 {/* Notes Input */}
                 <div style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px', fontSize: '0.9rem' }}>Notes (Optional)</label>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Notes (Optional)')}</label>
                     <textarea
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                        placeholder="How was it?"
+                        placeholder={t('How was it?')}
                         style={{
                             width: '100%',
                             background: 'var(--surface-highlight)',
@@ -311,7 +313,7 @@ export default function QuickLogModal({ onClose, activePlanId, dayId }) {
                         opacity: loading ? 0.7 : 1
                     }}
                 >
-                    {loading ? 'Saving...' : `Save Session ${addedActivities.length > 0 ? `(${addedActivities.reduce((acc, c) => acc + c.duration, 0)}m)` : `(${duration}m)`}`}
+                    {loading ? t('Saving...') : `${t('Save Session')} ${addedActivities.length > 0 ? `(${addedActivities.reduce((acc, c) => acc + c.duration, 0)}m)` : `(${duration}m)`}`}
                 </button>
 
             </motion.div>

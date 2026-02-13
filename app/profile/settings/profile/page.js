@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import AvatarEditor from '@/components/AvatarEditor';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function ProfileStatsPage() {
+    const { t } = useTranslation();
     const { user, updateUserProfile } = useStore();
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState(null);
@@ -30,7 +32,7 @@ export default function ProfileStatsPage() {
         }
     }, [user]);
 
-    if (!user) return <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>Loading...</div>;
+    if (!user) return <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>{t('Loading...')}</div>;
 
     const handleSave = async () => {
         setIsLoading(true);
@@ -46,10 +48,10 @@ export default function ProfileStatsPage() {
                     name: formData.name
                 }
             });
-            setMessage('Profile updated successfully!');
+            setMessage(t('Profile updated successfully!'));
         } catch (e) {
             console.error(e);
-            setMessage('Failed to update profile.');
+            setMessage(t('Failed to update profile.'));
         } finally {
             setIsLoading(false);
         }
@@ -59,7 +61,7 @@ export default function ProfileStatsPage() {
         <div className="container" style={{ paddingBottom: '100px' }}>
             <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <Link href="/profile/settings" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>←</Link>
-                <h1 style={{ fontSize: '1.5rem' }}>My Profile</h1>
+                <h1 style={{ fontSize: '1.5rem' }}>{t('My Profile')}</h1>
             </header>
 
             <div style={{ maxWidth: '100%', margin: '0 auto' }}>
@@ -101,7 +103,7 @@ export default function ProfileStatsPage() {
 
                 <section style={{ marginBottom: '32px' }}>
                     <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>Display Name</label>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Display Name')}</label>
                         <input
                             type="text"
                             value={formData.name}
@@ -112,7 +114,7 @@ export default function ProfileStatsPage() {
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                         <div>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>Height (cm)</label>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Height (cm)')}</label>
                             <input
                                 type="number"
                                 value={formData.height}
@@ -121,7 +123,7 @@ export default function ProfileStatsPage() {
                             />
                         </div>
                         <div>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>Weight (kg)</label>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Weight (kg)')}</label>
                             <input
                                 type="number"
                                 value={formData.weight}
@@ -138,10 +140,10 @@ export default function ProfileStatsPage() {
                             onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                             style={inputStyle}
                         >
-                            <option value="prefer_not_to_say">Prefer not to say</option>
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                            <option value="other">Other</option>
+                            <option value="prefer_not_to_say">{t('Prefer not to say')}</option>
+                            <option value="male">{t('Male')}</option>
+                            <option value="female">{t('Female')}</option>
+                            <option value="other">{t('Other')}</option>
                         </select>
                     </div>
 
@@ -162,7 +164,7 @@ export default function ProfileStatsPage() {
                             marginTop: '16px'
                         }}
                     >
-                        {isLoading ? 'Saving...' : 'Save Profile'}
+                        {isLoading ? t('Saving...') : t('Save Profile')}
                     </button>
                 </section>
 

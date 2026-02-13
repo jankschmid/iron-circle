@@ -5,7 +5,10 @@ import { usePathname } from 'next/navigation';
 
 import { useStore } from '@/lib/store';
 
+import { useTranslation } from '@/context/TranslationContext'; // Import Hook
+
 export default function BottomNav() {
+    const { t } = useTranslation(); // Use Hook
     const pathname = usePathname();
     const { user, unreadCount } = useStore();
 
@@ -19,11 +22,11 @@ export default function BottomNav() {
     };
 
     const navItems = [
-        { path: '/', label: 'Home', icon: '🏠' },
-        { path: '/workout', label: 'Workout', icon: '💪' },
-        ...(user?.gymId ? [{ path: `/community?gymId=${user.gymId}`, label: 'Gym', icon: '🏟️' }] : []),
-        { path: '/connect', label: 'Connect', icon: '🌍' },
-        { path: '/profile', label: 'Me', icon: '👤' },
+        { path: '/', label: t('Home'), icon: '🏠' },
+        { path: '/workout', label: t('Workout'), icon: '💪' },
+        ...(user?.gymId ? [{ path: `/community?gymId=${user.gymId}`, label: t('Gym'), icon: '🏟️' }] : []),
+        { path: '/connect', label: t('Connect'), icon: '🌍' },
+        { path: '/profile', label: t('Me'), icon: '👤' },
     ];
 
     return (

@@ -1,13 +1,22 @@
 "use client";
 
 import Link from 'next/link';
+import { useTranslation } from '@/context/TranslationContext';
+import LanguageSelector from '@/components/ui/LanguageSelector';
 
 export default function SettingsHubPage() {
+    const { t } = useTranslation();
+
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
-            <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <Link href="/profile" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>←</Link>
-                <h1 style={{ fontSize: '1.5rem' }}>Settings</h1>
+            <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <Link href="/profile" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>←</Link>
+                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>{t('Settings')}</h1>
+                </div>
+
+                {/* Language Selector */}
+                <LanguageSelector />
             </header>
 
             <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: '1fr' }}>
@@ -17,8 +26,8 @@ export default function SettingsHubPage() {
                     <div className="setting-card">
                         <div className="icon">🔐</div>
                         <div className="content">
-                            <h3>Account & Security</h3>
-                            <p>Email, Password, Data Sync & Privacy</p>
+                            <h3>{t('Account & Security')}</h3>
+                            <p>{t('Email, Password, Data Sync & Privacy')}</p>
                         </div>
                         <div className="arrow">→</div>
                     </div>
@@ -29,8 +38,8 @@ export default function SettingsHubPage() {
                     <div className="setting-card">
                         <div className="icon">👤</div>
                         <div className="content">
-                            <h3>My Profile</h3>
-                            <p>Avatar, Name, Height, Weight & Gender</p>
+                            <h3>{t('My Profile')}</h3>
+                            <p>{t('Avatar, Name, Height, Weight & Gender')}</p>
                         </div>
                         <div className="arrow">→</div>
                     </div>
@@ -41,8 +50,8 @@ export default function SettingsHubPage() {
                     <div className="setting-card">
                         <div className="icon">⚙️</div>
                         <div className="content">
-                            <h3>Training Preferences</h3>
-                            <p>Workout Goals & Smart Suggestions</p>
+                            <h3>{t('Training Preferences')}</h3>
+                            <p>{t('Workout Goals & Smart Suggestions')}</p>
                         </div>
                         <div className="arrow">→</div>
                     </div>
@@ -53,8 +62,8 @@ export default function SettingsHubPage() {
                     <div className="setting-card">
                         <div className="icon">🏢</div>
                         <div className="content">
-                            <h3>Gym & Team</h3>
-                            <p>Membership, Trainer & Staff Access</p>
+                            <h3>{t('Gym & Team')}</h3>
+                            <p>{t('Membership, Trainer & Staff Access')}</p>
                         </div>
                         <div className="arrow">→</div>
                     </div>
@@ -65,16 +74,17 @@ export default function SettingsHubPage() {
                     <div className="setting-card">
                         <div className="icon">👻</div>
                         <div className="content">
-                            <h3>Privacy & Data</h3>
-                            <p>Ghost Mode, Visibility & Monitors</p>
+                            <h3>{t('Privacy & Data')}</h3>
+                            <p>{t('Ghost Mode, Visibility & Monitors')}</p>
                         </div>
                         <div className="arrow">→</div>
                     </div>
                 </Link>
 
             </div>
-
+            {/* Same styles as before */}
             <style jsx>{`
+                .container { max-width: 600px; margin: 0 auto; padding: 0 20px; }
                 .setting-card {
                     background: var(--surface);
                     padding: 20px;
@@ -100,23 +110,10 @@ export default function SettingsHubPage() {
                     justify-content: center;
                     border-radius: 50%;
                 }
-                .content {
-                    flex: 1;
-                }
-                .content h3 {
-                    margin: 0 0 4px 0;
-                    font-size: 1.1rem;
-                    color: var(--text-main);
-                }
-                .content p {
-                    margin: 0;
-                    font-size: 0.9rem;
-                    color: var(--text-muted);
-                }
-                .arrow {
-                    color: var(--text-muted);
-                    font-size: 1.2rem;
-                }
+                .content { flex: 1; }
+                .content h3 { margin: 0 0 4px 0; font-size: 1.1rem; color: var(--text-main); }
+                .content p { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
+                .arrow { color: var(--text-muted); font-size: 1.2rem; }
             `}</style>
         </div>
     );

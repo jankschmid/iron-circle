@@ -223,9 +223,17 @@ export default function ChatTab() {
                 </div>
             )}
 
-            {/* Communities Modal */}
             {showCommunitiesModal && (
-                <CommunitiesModal onClose={() => setShowCommunitiesModal(false)} />
+                <CommunitiesModal
+                    onClose={() => setShowCommunitiesModal(false)}
+                    fetchCommunities={fetchCommunities}
+                    joinCommunity={joinCommunity}
+                    user={user}
+                    onSuccess={(conversationId) => {
+                        setShowCommunitiesModal(false);
+                        if (conversationId) refetch(); // Refresh list
+                    }}
+                />
             )}
         </div>
     );
@@ -310,10 +318,7 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
 
     return (
         <div style={{ position: 'relative' }}>
-            <Link href={(chat.type === 'community' || chat.type === 'gym')
-                ? `/community?gymId=${chat.gym_id}`
-                : `/social/chat/conversation?id=${chat.id}`
-            } style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Link href={`/social/chat/conversation?id=${chat.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',

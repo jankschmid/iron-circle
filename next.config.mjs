@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: false, // Fix double-mount AbortErrors in local dev
-    output: 'export',
+    // output: 'export', // Commented out to enable API routes (DeepL)
     images: {
         unoptimized: true
     },

@@ -10,6 +10,7 @@ import { getSmartSuggestion } from '@/lib/algorithms';
 
 import Link from 'next/link'; // Added for Safety
 import WarmupScreen from './WarmupScreen';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function WorkoutActive() {
     const {
@@ -31,6 +32,7 @@ export default function WorkoutActive() {
     const [showFinishConfirm, setShowFinishConfirm] = useState(false);
     const [isPrivate, setIsPrivate] = useState(false);
     const [showPicker, setShowPicker] = useState(false);
+    const { t } = useTranslation();
 
     // Strict Mode Check
     const isStrict = activeAssignment?.plan_id && activeWorkout?.planId === activeAssignment.plan_id && activeAssignment.settings?.is_strict;
@@ -64,14 +66,14 @@ export default function WorkoutActive() {
 
     const handleCancel = () => {
         setConfirmAction({
-            title: "Cancel Workout?",
-            message: "Are you sure you want to cancel? This will discard all progress for this session.",
+            title: t("Cancel Workout?"),
+            message: t("Are you sure you want to cancel? This will discard all progress for this session."),
             onConfirm: () => {
                 cancelWorkout();
                 setConfirmAction(null);
             },
             isDangerous: true,
-            confirmText: "Discard Workout"
+            confirmText: t("Discard Workout")
         });
     };
 
@@ -79,14 +81,15 @@ export default function WorkoutActive() {
         if (isStrict) return; // Guard
         const exerciseDef = exercises.find(e => e.id === log.exerciseId);
         setConfirmAction({
-            title: `Remove ${exerciseDef?.name || 'Exercise'}?`,
-            message: "This will remove the exercise and all its sets from the current session.",
+            title: `${t('Remove')} ${exerciseDef?.name || t('Exercise')}?`,
+            message: t("This will remove the exercise and all its sets from the current session."),
             onConfirm: () => {
                 removeExerciseFromWorkout(log.exerciseId);
                 setConfirmAction(null);
             },
             isDangerous: true,
-            confirmText: "Remove"
+            isDangerous: true,
+            confirmText: t("Remove")
         });
     };
 
@@ -107,14 +110,14 @@ export default function WorkoutActive() {
                 <div>
                     <h2 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {activeWorkout.name}
-                        {isStrict && <span style={{ fontSize: '0.7rem', background: 'var(--error)', color: 'white', padding: '2px 8px', borderRadius: '4px' }}>🔒 STRICT</span>}
+                        {isStrict && <span style={{ fontSize: '0.7rem', background: 'var(--error)', color: 'white', padding: '2px 8px', borderRadius: '4px' }}>🔒 {t('STRICT')}</span>}
                     </h2>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--success)' }}>● Live Session {activeAssignment ? '(Coached)' : ''}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--success)' }}>● {t('Live Session')} {activeAssignment ? `(${t('Coached')})` : ''}</div>
                 </div>
                 {/* ... Buttons ... */}
                 <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={handleCancel} style={{ background: 'transparent', color: 'var(--error)', padding: '8px 12px', fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', border: '1px solid var(--error)', borderRadius: '100px' }}>CANCEL</button>
-                    <button onClick={() => setShowFinishConfirm(true)} style={{ background: 'var(--warning)', color: '#000', padding: '8px 16px', borderRadius: '100px', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', border: 'none' }}>FINISH</button>
+                    <button onClick={handleCancel} style={{ background: 'transparent', color: 'var(--error)', padding: '8px 12px', fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', border: '1px solid var(--error)', borderRadius: '100px' }}>{t('CANCEL')}</button>
+                    <button onClick={() => setShowFinishConfirm(true)} style={{ background: 'var(--warning)', color: '#000', padding: '8px 16px', borderRadius: '100px', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', border: 'none' }}>{t('FINISH')}</button>
                 </div>
             </header>
 
@@ -122,15 +125,15 @@ export default function WorkoutActive() {
             {showFinishConfirm && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
                     <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '320px', textAlign: 'center', border: '1px solid var(--border)' }}>
-                        <h3 style={{ marginBottom: '16px' }}>Finish Workout?</h3>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Are you sure you want to finish and save this session?</p>
+                        <h3 style={{ marginBottom: '16px' }}>{t('Finish Workout?')}</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>{t('Are you sure you want to finish and save this session?')}</p>
                         <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px' }}>
                             <input type="checkbox" id="privateCheck" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} style={{ width: '20px', height: '20px', accentColor: 'var(--primary)', cursor: 'pointer' }} />
-                            <label htmlFor="privateCheck" style={{ color: 'var(--text-main)', cursor: 'pointer', fontWeight: '500', display: 'flex', flexDirection: 'column' }}><span>Ghost Mode 👻</span><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>Hide from feed & leaderboards</span></label>
+                            <label htmlFor="privateCheck" style={{ color: 'var(--text-main)', cursor: 'pointer', fontWeight: '500', display: 'flex', flexDirection: 'column' }}><span>{t('Ghost Mode')} 👻</span><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>{t('Hide from feed & leaderboards')}</span></label>
                         </div>
                         <div style={{ display: 'flex', gap: '12px' }}>
-                            <button onClick={() => setShowFinishConfirm(false)} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
-                            <button onClick={handleFinish} style={{ flex: 1, padding: '12px', background: 'var(--success)', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}>Finish</button>
+                            <button onClick={() => setShowFinishConfirm(false)} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}>{t('Cancel')}</button>
+                            <button onClick={handleFinish} style={{ flex: 1, padding: '12px', background: 'var(--success)', border: 'none', color: '#000', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}>{t('Finish')}</button>
                         </div>
                     </div>
                 </div>
@@ -157,9 +160,9 @@ export default function WorkoutActive() {
 
                             {/* Table Header */}
                             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(50px, 1fr) minmax(50px, 1fr) minmax(40px, 1fr) 40px', gap: '8px', marginBottom: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                                <div>KG</div>
-                                <div>REPS</div>
-                                <div>RPE</div>
+                                <div>{t('KG')}</div>
+                                <div>{t('REPS')}</div>
+                                <div>{t('RPE')}</div>
                                 <div></div>
                             </div>
 
@@ -202,8 +205,8 @@ export default function WorkoutActive() {
                             {/* Add/Remove Set Buttons (Hidden in Strict Mode) */}
                             {!isStrict && (
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                                    <button onClick={() => addSetToWorkout(log.exerciseId)} style={{ flex: 1, padding: '8px', background: 'var(--surface-highlight)', color: 'var(--primary)', border: 'none', borderRadius: '4px', fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer' }}>+ Add Set</button>
-                                    <button onClick={() => removeSetFromWorkout(log.exerciseId, log.sets.length - 1)} disabled={log.sets.length <= 1} style={{ flex: 1, padding: '8px', background: 'var(--surface-highlight)', color: log.sets.length <= 1 ? 'var(--text-muted)' : 'var(--warning)', border: 'none', borderRadius: '4px', fontWeight: '600', fontSize: '0.9rem', opacity: log.sets.length <= 1 ? 0.3 : 1, pointerEvents: log.sets.length <= 1 ? 'none' : 'auto', cursor: 'pointer' }}>- Remove Set</button>
+                                    <button onClick={() => addSetToWorkout(log.exerciseId)} style={{ flex: 1, padding: '8px', background: 'var(--surface-highlight)', color: 'var(--primary)', border: 'none', borderRadius: '4px', fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer' }}>+ {t('Add Set')}</button>
+                                    <button onClick={() => removeSetFromWorkout(log.exerciseId, log.sets.length - 1)} disabled={log.sets.length <= 1} style={{ flex: 1, padding: '8px', background: 'var(--surface-highlight)', color: log.sets.length <= 1 ? 'var(--text-muted)' : 'var(--warning)', border: 'none', borderRadius: '4px', fontWeight: '600', fontSize: '0.9rem', opacity: log.sets.length <= 1 ? 0.3 : 1, pointerEvents: log.sets.length <= 1 ? 'none' : 'auto', cursor: 'pointer' }}>- {t('Remove Set')}</button>
                                 </div>
                             )}
                         </div>
@@ -217,7 +220,7 @@ export default function WorkoutActive() {
                     onClick={() => setShowPicker(true)}
                     style={{ width: '100%', padding: '16px', marginTop: '32px', background: 'transparent', border: '1px dashed var(--primary)', color: 'var(--primary)', borderRadius: 'var(--radius-md)', fontWeight: '600', fontSize: '1rem', cursor: 'pointer' }}
                 >
-                    + Add Exercise
+                    + {t('Add Exercise')}
                 </button>
             )}
 

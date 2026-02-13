@@ -9,10 +9,12 @@ import { useEffect, useState, Suspense } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { useTranslation } from '@/context/TranslationContext';
 
 const MapPicker = dynamic(() => import('../../components/MapPicker'), { ssr: false, loading: () => <div className="spinner"></div> });
 
 function TrackerContent() {
+    const { t } = useTranslation();
     const { user, saveUserGym, removeUserGym, updateUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity, deleteSession, updateSession, friends, inviteToSession, joinSession, updateGym, deleteGlobalGym } = useStore();
     const { status, currentLocation, distanceToGym, isAtGym, workoutSession, startTracking, stopTracking, warning } = useGeoTracker();
 
@@ -126,7 +128,7 @@ function TrackerContent() {
                 // joinSession already checks for active status!
                 const success = await joinSession(joinGroupId, joinGymId);
                 if (success) {
-                    setSuccessMessage("Joined workout session!");
+                    setSuccessMessage(t("Joined workout session!"));
                 } else {
                     // Alert handled in joinSession usually, but we can prevent auto-retry
                 }
@@ -258,7 +260,7 @@ function TrackerContent() {
             // Ideally we re-fetch or update local state.
             // Let's manually update local state for immediate feedback
             setHistory(prev => prev.map(s => s.id === editingSession.id ? { ...s, ...editingSession } : s));
-            alert("Session updated");
+            alert(t("Session updated"));
         } catch (err) {
             console.error(err);
         }
@@ -354,7 +356,7 @@ function TrackerContent() {
             setSearchResults(formattedAddresses);
         } catch (err) {
             console.error('Address search error:', err);
-            alert("Failed to search address");
+            alert(t("Failed to search address"));
         }
     };
 
@@ -372,7 +374,7 @@ function TrackerContent() {
         try {
             // Check if user already has this gym
             if (user.gyms?.some(g => g.id === gymId)) {
-                setWarningMsg('You already have this gym in your list!');
+                setWarningMsg(t('You already have this gym in your list!'));
                 return;
             }
 
@@ -415,10 +417,10 @@ function TrackerContent() {
             setSearchQuery('');
             setSearchResults([]);
 
-            setSuccessMessage(`Successfully joined ${gymName}!`);
+            setSuccessMessage(`${t('Successfully joined')} ${gymName}!`);
         } catch (err) {
             console.error("Join gym error:", err); // Keep internal log
-            setWarningMsg(`Failed to join gym: ${err.message || 'Unknown error'}`);
+            setWarningMsg(`${t('Failed to join gym')}: ${err.message || t('Unknown error')}`);
         }
     };
 
@@ -469,10 +471,10 @@ function TrackerContent() {
             setNewGymName('');
             setAddressSearchQuery('');
 
-            setSuccessMessage(`Successfully added ${name}!`);
+            setSuccessMessage(`${t('Successfully added')} ${name}!`);
         } catch (err) {
             console.error("Failed to save gym:", JSON.stringify(err, null, 2));
-            setWarningMsg(`Failed to save gym: ${err.message || 'Unknown error'}`);
+            setWarningMsg(`${t('Failed to save gym')}: ${err.message || t('Unknown error')}`);
         }
     };
 
@@ -492,8 +494,8 @@ function TrackerContent() {
                     padding: '20px'
                 }}>
                     <div>
-                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--text-main)' }}>Connection Issue</h2>
-                        <p>We're having trouble loading your data.</p>
+                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--text-main)' }}>{t('Connection Issue')}</h2>
+                        <p>{t("We're having trouble loading your data.")}</p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
@@ -509,7 +511,7 @@ function TrackerContent() {
                                 fontWeight: 'bold'
                             }}
                         >
-                            Retry Connection
+                            {t('Retry Connection')}
                         </button>
                         <button
                             onClick={async () => {
@@ -527,7 +529,7 @@ function TrackerContent() {
                                 cursor: 'pointer'
                             }}
                         >
-                            Log Out & Reset
+                            {t('Log Out & Reset')}
                         </button>
                     </div>
                 </div>
@@ -544,7 +546,7 @@ function TrackerContent() {
             }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
                     <div className="spinner"></div>
-                    <p>Syncing...</p>
+                    <p>{t('Syncing...')}</p>
                 </div>
                 <style jsx>{`
                     .spinner {
@@ -582,12 +584,12 @@ function TrackerContent() {
         try {
             const result = await joinCommunity(community.id, community.gyms.id, community.gyms.name);
             if (result.success) {
-                setSuccessMessage(`Joined ${community.name}!`);
+                setSuccessMessage(`${t('Joined')} ${community.name}!`);
                 setShowCommunities(false);
                 setShowManage(false); // Go back to tracker
             }
         } catch (err) {
-            setWarning("Failed to join: " + err.message);
+            setWarning(`${t("Failed to join")}: ${err.message}`);
         } finally {
             setJoiningCommunity(null);
         }
@@ -619,14 +621,14 @@ function TrackerContent() {
                             gap: '16px'
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Find Communities</h2>
+                                <h2 style={{ fontSize: '1.5rem', margin: 0 }}>{t('Find Communities')}</h2>
                                 <button onClick={() => setShowCommunities(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
                             </div>
 
                             <input
                                 autoFocus
                                 type="text"
-                                placeholder="Search by gym name or city..."
+                                placeholder={t('Search by gym name or city...')}
                                 value={communitySearchQuery}
                                 onChange={(e) => handleSearchCommunities(e.target.value)}
                                 style={{
@@ -676,7 +678,7 @@ function TrackerContent() {
                                 ))}
                                 {communities.length === 0 && communitySearchQuery.length > 2 && (
                                     <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
-                                        No communities found.
+                                        {t('No communities found.')}
                                     </div>
                                 )}
                             </div>
@@ -695,7 +697,7 @@ function TrackerContent() {
                             router.replace('/tracker', { scroll: false });
                         }
                     }} style={{ background: 'none', border: 'none', fontSize: '1.5rem', marginRight: '16px', cursor: 'pointer', color: 'var(--text-main)' }}>←</button>
-                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Manage Gyms</h1>
+                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>{t('Manage Gyms')}</h1>
                 </div>
 
                 {/* Success Message */}
@@ -754,12 +756,12 @@ function TrackerContent() {
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                         {gym.address || gym.name}
                                     </div>
-                                    {gym.isDefault && <span style={{ fontSize: '0.7rem', color: 'var(--brand-yellow)', fontWeight: 'bold' }}>DEFAULT</span>}
+                                    {gym.isDefault && <span style={{ fontSize: '0.7rem', color: 'var(--brand-yellow)', fontWeight: 'bold' }}>{t('DEFAULT')}</span>}
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     {!gym.isDefault && (
                                         <button onClick={() => setDefaultGym(gym.id)} style={{ padding: '8px', fontSize: '0.8rem', background: 'var(--surface-highlight)', color: 'var(--text-main)', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-                                            Set Default
+                                            {t('Set Default')}
                                         </button>
                                     )}
                                     {/* Settings Button (Personal & Global) */}
@@ -792,7 +794,7 @@ function TrackerContent() {
                                             }
                                         });
                                     }} style={{ padding: '8px', fontSize: '0.8rem', background: 'rgba(255, 23, 68, 0.1)', color: 'var(--error)', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-                                        Remove
+                                        {t('Remove')}
                                     </button>
                                 </div>
                             </div>

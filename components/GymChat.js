@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MessageBubble from '@/components/Chat/MessageBubble';
 
-export default function GymChat({ communityId, news }) {
+export default function GymChat({ communityId, gymId, news }) {
     const supabase = createClient();
     const { user } = useStore();
     const queryClient = useQueryClient();
@@ -18,61 +18,71 @@ export default function GymChat({ communityId, news }) {
     // 1. Resolve Conversation from Community ID
     useEffect(() => {
         const fetchConvo = async () => {
-            // Find conversation of type 'community' (or 'gym'?) linked to this community
-            // We need to know how communities are linked.
-            // Usually community.id -> conversation context or metadata?
-            // Existing logic: "joinCommunity" creates/finds conversation.
+            // Priority: gymId (if passed) or community lookup
+            // But conversation search depends on gym_id?
 
-            // Let's search for a conversation that is LINKED to this community.
-            // Assuming we stored community_id in conversation metadata or we search participants?
-            // Actually, in `app/community/page.js`, we join and get `conversationId`.
-            // But here we are just viewing.
+            // If we have gymId, we can search for conversation linked to this gym.
+            const targetGymId = gymId;
 
-            // Let's try to find a conversation for this gym/community.
-            // Schema check: conversations table has gym_id? Yes?
-            // Let's look up conversations where type='community' AND gym_id = (gym of this community) OR just linked to this community.
+            if (!targetGymId && !communityId) return;
 
-            // For now, let's assume we can fetch it via the community-gym link.
-            // Strategy: 
-            // A. Fetch community -> get Gym ID.
-            // B. Fetch conversation where type='community' AND gym_id = community.gym_id (if 1:1)
+            // Resolve gymId if missing
+            let resolvedGymId = targetGymId;
+            if (!resolvedGymId) {
+                const { data: comm } = await supabase.from('communities').select('gym_id').eq('id', communityId).single();
+                resolvedGymId = comm?.gym_id;
+            }
 
-            const { data: comm } = await supabase.from('communities').select('gym_id').eq('id', communityId).single();
-            if (!comm) return;
+            if (!resolvedGymId) return;
 
             const { data: convo } = await supabase.from('conversations')
                 .select('*')
-                .eq('gym_id', comm.gym_id)
-                .eq('type', 'community') // or 'gym'? User called it 'gym' in page.js sometimes
+                .eq('gym_id', resolvedGymId)
+                .in('type', ['gym', 'community']) // Allow both types
+                .order('created_at', { ascending: true }) // Prefer oldest (original)
                 .limit(1)
-                .maybeSingle(); // Use maybeSingle to avoid 406 if multiple (shouldn't be)
+                .maybeSingle();
 
-            // If explicit conversation not found, we might need a fallback or create one? 
-            // Ideally it exists because user is member.
             if (convo) {
                 setConversation(convo);
+
+                // Auto-join if not participant
+                if (user?.id) {
+                    const { data: part } = await supabase
+                        .from('conversation_participants')
+                        .select('user_id')
+                        .eq('conversation_id', convo.id)
+                        .eq('user_id', user.id)
+                        .maybeSingle();
+
+                    if (!part) {
+                        await supabase.from('conversation_participants').insert({
+                            conversation_id: convo.id,
+                            user_id: user.id
+                        });
+                        queryClient.invalidateQueries(['conversations', user.id]);
+                    }
+                }
             }
         };
         fetchConvo();
-    }, [communityId]);
+    }, [communityId, gymId, user?.id]);
 
     // 2. Chat Query & Staff Map
     const [staffMap, setStaffMap] = useState({});
 
     useEffect(() => {
         const fetchStaff = async () => {
-            if (!conversation?.gym_id && !communityId) return;
-            // Get Gym ID if likely available or derive it.
-            // If conversation has gym_id, use it.
-            // If not, use community lookup.
-            let gId = conversation?.gym_id;
+            // Robust Gym ID resolving
+            let gId = gymId;
+            if (!gId && conversation?.gym_id) gId = conversation.gym_id;
             if (!gId && communityId) {
                 const { data } = await supabase.from('communities').select('gym_id').eq('id', communityId).single();
                 gId = data?.gym_id;
             }
 
             if (gId) {
-                const { data: staff } = await supabase.from('user_gyms')
+                const { data: staff, error } = await supabase.from('user_gyms')
                     .select('user_id, role')
                     .eq('gym_id', gId)
                     .in('role', ['owner', 'admin', 'trainer']);
@@ -85,7 +95,7 @@ export default function GymChat({ communityId, news }) {
             }
         };
         fetchStaff();
-    }, [conversation?.gym_id, communityId]);
+    }, [gymId, conversation?.gym_id, communityId]);
 
     const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
         queryKey: ['messages', conversation?.id],

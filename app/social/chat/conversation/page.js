@@ -111,9 +111,16 @@ function ChatContent() {
 
                 setConversation(convoData);
 
-                // Check Membership
+                // Check Membership & Fix Name
                 if (convoData.type === 'community' || convoData.type === 'gym') {
-                    // ... (keep existing check)
+                    // Fetch Gym Name
+                    if (convoData.gym_id) {
+                        const { data: gym } = await supabase.from('gyms').select('name').eq('id', convoData.gym_id).maybeSingle();
+                        if (gym) {
+                            convoData.name = gym.name;
+                        }
+                    }
+
                     const { data: communityData } = await supabase.from('communities').select('id').eq('gym_id', convoData.gym_id).maybeSingle();
                     if (communityData) {
                         const { data: mem } = await supabase.from('community_members').select('user_id').eq('community_id', communityData.id).eq('user_id', user.id).maybeSingle();
@@ -392,7 +399,7 @@ function ChatContent() {
                 backdropFilter: 'blur(12px)', justifyContent: 'space-between',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <Link href={conversation?.type === 'group' ? '/chat?tab=groups' : (conversation?.type === 'community' || conversation?.type === 'gym') ? '/chat?tab=communities' : '/chat'} style={{
+                    <Link href={conversation?.type === 'group' ? '/connect?tab=chat&subtab=groups' : (conversation?.type === 'community' || conversation?.type === 'gym') ? '/connect?tab=chat&subtab=communities' : '/connect?tab=chat'} style={{
                         fontSize: '1.2rem', color: 'var(--foreground)', textDecoration: 'none',
                         background: 'rgba(255,255,255,0.1)', width: '32px', height: '32px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%'

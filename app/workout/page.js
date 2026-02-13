@@ -11,8 +11,10 @@ import PlanManager from '@/components/PlanManager';
 import TemplateSelector from '@/components/TemplateSelector';
 import QuickLogModal from '@/components/QuickLogModal';
 import { AnimatePresence } from 'framer-motion';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function WorkoutPage() {
+    const { t } = useTranslation();
     const { activeWorkout, workoutPlans, fetchPlans, startWorkout, workoutSummary, clearWorkoutSummary, user, history } = useStore();
     const [view, setView] = useState('plan'); // 'plan' | 'library' | 'stats'
     const [showPlans, setShowPlans] = useState(false);
@@ -63,7 +65,7 @@ export default function WorkoutPage() {
                                 transition: 'all 0.2s'
                             }}
                         >
-                            {tab}
+                            {t(tab)}
                         </button>
                     ))}
                 </div>
@@ -78,14 +80,14 @@ export default function WorkoutPage() {
                                 {/* Active Plan Header */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                     <div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Current</div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('Current')}</div>
                                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{activePlan.name}</div>
                                     </div>
                                     <button
                                         onClick={() => setShowPlans(true)}
                                         style={{ fontSize: '0.9rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}
                                     >
-                                        Change
+                                        {t('Change')}
                                     </button>
                                 </div>
 
@@ -105,10 +107,10 @@ export default function WorkoutPage() {
                                             }}>
                                                 <div style={{ marginBottom: '12px' }}>
                                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                                        Routine {index + 1}
+                                                        {t('Routine')} {index + 1}
                                                     </div>
                                                     <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--foreground)' }}>
-                                                        {day.template ? day.template.name : (day.label || 'Unnamed Routine')}
+                                                        {day.template ? day.template.name : (day.label || t('Unnamed Routine'))}
                                                     </div>
                                                 </div>
 
@@ -127,11 +129,11 @@ export default function WorkoutPage() {
                                                             marginTop: 'auto'
                                                         }}
                                                     >
-                                                        Start Workout
+                                                        {t('Start Workout')}
                                                     </button>
                                                 ) : (
                                                     <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                                                        No template linked
+                                                        {t('No template linked')}
                                                     </div>
                                                 )}
                                             </div>
@@ -202,7 +204,7 @@ export default function WorkoutPage() {
                                                                 fontWeight: 'bold',
                                                                 borderRadius: '0 0 0 8px'
                                                             }}>
-                                                                DONE
+                                                                {t('DONE')}
                                                             </div>
                                                         )}
                                                         {isMissed && (
@@ -216,16 +218,16 @@ export default function WorkoutPage() {
                                                                 fontWeight: 'bold',
                                                                 borderRadius: '0 0 0 8px'
                                                             }}>
-                                                                MISSED
+                                                                {t('MISSED')}
                                                             </div>
                                                         )}
 
                                                         <div style={{ marginBottom: '12px' }}>
                                                             <div style={{ fontSize: '0.75rem', color: day.isCompleted ? 'var(--text-muted)' : 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                                                Day {day.day_order}
+                                                                {t('Day')} {day.day_order}
                                                             </div>
                                                             <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: day.isCompleted ? 'var(--text-muted)' : 'var(--foreground)' }}>
-                                                                {day.template ? day.template.name : (day.label === 'Rest Day' ? 'Rest Day 💤' : day.label)}
+                                                                {day.template ? day.template.name : (day.label === 'Rest Day' ? t('Rest Day 💤') : day.label)}
                                                             </div>
                                                         </div>
 
@@ -243,7 +245,7 @@ export default function WorkoutPage() {
                                                                         opacity: 0.8,
                                                                         cursor: 'default'
                                                                     }}>
-                                                                        ✓ Done
+                                                                        ✓ {t('Done')}
                                                                     </button>
                                                                     <button
                                                                         onClick={() => startWorkout(day.template_id, activePlan.id, day.id)}
@@ -274,7 +276,7 @@ export default function WorkoutPage() {
                                                                         marginTop: 'auto'
                                                                     }}
                                                                 >
-                                                                    Start Workout
+                                                                    {t('Start Workout')}
                                                                 </button>
                                                             )
                                                         ) : (
@@ -294,7 +296,7 @@ export default function WorkoutPage() {
                                                                     cursor: 'pointer'
                                                                 }}
                                                             >
-                                                                Log Activity 🧘
+                                                                {t('Log Activity')} 🧘
                                                             </button>
                                                         )}
                                                     </div>
@@ -306,9 +308,9 @@ export default function WorkoutPage() {
                                     /* Flex Plan View */
                                     <div style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--surface)', borderRadius: '16px', border: '2px dashed var(--border)' }}>
                                         <div style={{ fontSize: '2rem', marginBottom: '12px' }}>♾️</div>
-                                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px' }}>Flex Schedule</div>
+                                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px' }}>{t('Flex Schedule')}</div>
                                         <div style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-                                            No fixed days. Log whatever you train today.
+                                            {t('No fixed days. Log whatever you train today.')}
                                         </div>
                                         <button
                                             onClick={() => setView('library')}
@@ -323,7 +325,7 @@ export default function WorkoutPage() {
                                                 cursor: 'pointer'
                                             }}
                                         >
-                                            + Log Session
+                                            + {t('Log Session')}
                                         </button>
                                     </div>
                                 )}
@@ -342,8 +344,8 @@ export default function WorkoutPage() {
                                 }}
                             >
                                 <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📅</div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '4px' }}>Start a Plan</div>
-                                <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Choose a schedule or create a flex plan.</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '4px' }}>{t('Start a Plan')}</div>
+                                <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t('Choose a schedule or create a flex plan.')}</div>
                             </div>
                         )}
                     </div>
@@ -352,8 +354,8 @@ export default function WorkoutPage() {
                 {view === 'library' && (
                     <div className="container">
                         <div style={{ marginBottom: '16px' }}>
-                            <h3 style={{ margin: 0 }}>Workout Library</h3>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Manage your templates and presets.</p>
+                            <h3 style={{ margin: 0 }}>{t('Workout Library')}</h3>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t('Manage your templates and presets.')}</p>
                         </div>
                         <TemplateSelector />
                     </div>

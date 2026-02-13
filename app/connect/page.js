@@ -6,8 +6,10 @@ import BottomNav from '@/components/BottomNav';
 import SocialTab from '@/components/connect/SocialTab';
 import ChatTab from '@/components/connect/ChatTab';
 import FeedTab from '@/components/connect/FeedTab';
+import { useTranslation } from '@/context/TranslationContext';
 
 function ConnectPageContent() {
+    const { t } = useTranslation();
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState('feed'); // 'feed' | 'circle' | 'chat'
 
@@ -29,7 +31,7 @@ function ConnectPageContent() {
                 borderBottom: '1px solid var(--border)'
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h1 className="text-gradient" style={{ margin: 0 }}>Connect</h1>
+                    <h1 className="text-gradient" style={{ margin: 0 }}>{t('Connect')}</h1>
                 </div>
 
 
@@ -50,7 +52,7 @@ function ConnectPageContent() {
                             transition: 'all 0.2s ease'
                         }}
                     >
-                        Feed
+                        {t('Feed')}
                     </button>
                     <button
                         onClick={() => setActiveTab('circle')}
@@ -66,7 +68,7 @@ function ConnectPageContent() {
                             transition: 'all 0.2s ease'
                         }}
                     >
-                        Circle
+                        {t('Circle')}
                     </button>
                     <button
                         onClick={() => setActiveTab('chat')}
@@ -82,7 +84,7 @@ function ConnectPageContent() {
                             transition: 'all 0.2s ease'
                         }}
                     >
-                        Chat
+                        {t('Chat')}
                     </button>
                 </div>
             </header >
