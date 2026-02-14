@@ -40,7 +40,13 @@ export default function GymFinder() {
             },
             (error) => {
                 console.warn("Location access denied or failed", error);
-                setLocationError(t("Couldn't get your location. Showing all gyms."));
+
+                let msg = t("Couldn't get your location.");
+                if (error.code === 1) msg = t("Location permission denied.");
+                if (error.code === 2) msg = t("Location unavailable.");
+                if (error.code === 3) msg = t("Location request timed out.");
+
+                setLocationError(msg + " " + t("Showing all gyms."));
                 // Fallback to fetch all (or top 50)
                 fetchGyms(null, null).then(data => {
                     setGyms(data || []);
