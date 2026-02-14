@@ -9,7 +9,6 @@ export default function EnvDebugPage() {
         setEnvStatus({
             NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Present' : 'Missing',
             NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Present (Starts with ' + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.substring(0, 5) + '...)' : 'Missing',
-            NEXT_PUBLIC_GOOGLE_MAPS_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ? 'Present (Starts with ' + process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY.substring(0, 5) + '...)' : 'Missing',
         });
     }, []);
 
