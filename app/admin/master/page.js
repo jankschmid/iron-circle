@@ -75,7 +75,12 @@ export default function MasterAdminPage() {
                 p_search: debouncedSearch
             });
 
-            if (error) throw error;
+            if (error) {
+                console.error("fetchGyms RPC Error:", error);
+                throw error;
+            }
+            console.log("fetchGyms RPC Data:", data);
+
             if (data) {
                 setGyms(data.data || []);
                 setTotalCount(data.total || 0);

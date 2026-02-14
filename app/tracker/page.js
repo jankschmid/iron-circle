@@ -655,7 +655,7 @@ function TrackerContent() {
                                             <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{comm.name}</div>
                                             <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{comm.description || 'No description'}</div>
                                             <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-                                                📍 {comm.gyms?.name || 'Unknown Gym'} • 👥 {comm.member_count || 0} members
+                                                📍 {comm.gyms?.name || t('Unknown Gym')} • 👥 {comm.member_count || 0} {t('members')}
                                             </div>
                                         </div>
                                         <button
@@ -672,7 +672,7 @@ function TrackerContent() {
                                                 opacity: joiningCommunity === comm.id ? 0.7 : 1
                                             }}
                                         >
-                                            {joiningCommunity === comm.id ? '...' : 'Join'}
+                                            {joiningCommunity === comm.id ? t('...') : t('Join')}
                                         </button>
                                     </div>
                                 ))}
@@ -787,7 +787,7 @@ function TrackerContent() {
                                     {/* Remove Button for Everyone (Leave Gym) */}
                                     <button onClick={() => {
                                         setConfirmDialog({
-                                            message: `Remove "${gym.label || gym.name}" from your list?`,
+                                            message: t('Remove "{{gym}}" from your list?', { gym: gym.label || gym.name }),
                                             onConfirm: async () => {
                                                 await removeUserGym(gym.id);
                                                 setConfirmDialog(null);
@@ -816,7 +816,7 @@ function TrackerContent() {
                             onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--brand-yellow)'; e.currentTarget.style.color = 'var(--brand-yellow)'; }}
                             onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
                         >
-                            + Add New Gym
+                            + {t('Add New Gym')}
                         </button>
 
                         <button
@@ -836,7 +836,7 @@ function TrackerContent() {
                                 gap: '8px'
                             }}
                         >
-                            <span>👥</span> Find Communities
+                            <span>👥</span> {t('Find Communities')}
                         </button>
                     </div>
                 )
@@ -848,18 +848,18 @@ function TrackerContent() {
                             <button onClick={() => setAddMode('gps')} style={{ padding: '24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '1.1rem', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <span style={{ fontSize: '1.5rem' }}>📍</span>
                                 <div>
-                                    <div style={{ fontWeight: 'bold' }}>Use GPS Location</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Auto-detect where you are now</div>
+                                    <div style={{ fontWeight: 'bold' }}>{t('Use GPS Location')}</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Auto-detect where you are now')}</div>
                                 </div>
                             </button>
                             <button onClick={() => setAddMode('manual')} style={{ padding: '24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', fontSize: '1.1rem', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <span style={{ fontSize: '1.5rem' }}>🗺️</span>
                                 <div>
-                                    <div style={{ fontWeight: 'bold' }}>Search Address</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Find by name or street</div>
+                                    <div style={{ fontWeight: 'bold' }}>{t('Search Address')}</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Find by name or street')}</div>
                                 </div>
                             </button>
-                            <button onClick={() => setAddMode(false)} style={{ padding: '12px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => setAddMode(false)} style={{ padding: '12px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>{t('Cancel')}</button>
                         </div>
                     )
                 }
@@ -886,15 +886,15 @@ function TrackerContent() {
                                 flexDirection: 'column',
                                 gap: '16px'
                             }}>
-                                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Gym Settings</h2>
+                                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>{t('Gym Settings')}</h2>
                                 <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                                    Settings for <strong>{editingSettingsGym.name || editingSettingsGym.label}</strong>
+                                    {t('Settings for')} <strong>{editingSettingsGym.name || editingSettingsGym.label}</strong>
                                 </p>
 
                                 <div>
-                                    <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', marginBottom: '12px' }}>Personal Settings</h3>
+                                    <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', marginBottom: '12px' }}>{t('Personal Settings')}</h3>
                                     <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                                        Auto-Tracking Radius: {editingSettingsGym.radius}m
+                                        {t('Auto-Tracking Radius')}: {editingSettingsGym.radius}m
                                     </label>
                                     <input
                                         type="range"
@@ -911,16 +911,16 @@ function TrackerContent() {
                                         <span>1km</span>
                                     </div>
                                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                                        Adjust this if auto-tracking stops while you are still at the gym. A larger radius covers more area.
+                                        {t('Adjust this if auto-tracking stops while you are still at the gym. A larger radius covers more area.')}
                                     </p>
                                 </div>
 
                                 {editingSettingsGym.isCreator && !editingSettingsGym.isVerified && (
                                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                                        <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', marginBottom: '12px' }}>Gym Details (Global)</h3>
+                                        <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', marginBottom: '12px' }}>{t('Gym Details (Global)')}</h3>
 
                                         <div style={{ marginBottom: '12px' }}>
-                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Gym Name</label>
+                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{t('Gym Name')}</label>
                                             <input
                                                 type="text"
                                                 value={editingSettingsGym.name}
@@ -933,7 +933,7 @@ function TrackerContent() {
                                         </div>
 
                                         <div>
-                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Address</label>
+                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{t('Address')}</label>
                                             <input
                                                 type="text"
                                                 value={editingSettingsGym.address || ''}
@@ -948,12 +948,12 @@ function TrackerContent() {
                                         {/* Map Picker Toggle in Settings Modal */}
                                         <div style={{ marginTop: '12px' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                                <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Location (Pin)</label>
+                                                <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{t('Location (Pin)')}</label>
                                                 <button
                                                     onClick={() => setShowEditMap(!showEditMap)}
                                                     style={{ fontSize: '0.8rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                                                 >
-                                                    {showEditMap ? 'Hide Map' : 'Adjust Pin on Map'}
+                                                    {showEditMap ? t('Hide Map') : t('Adjust Pin on Map')}
                                                 </button>
                                             </div>
 
@@ -982,13 +982,13 @@ function TrackerContent() {
                                                         }}
                                                     />
                                                     <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-                                                        Drag the marker to the exact gym entrance.
+                                                        {t('Drag the marker to the exact gym entrance.')}
                                                     </p>
                                                 </div>
                                             )}
                                         </div>
                                         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                                            Changes to Name and Address affect <strong>all users</strong> of this gym.
+                                            {t('Changes to Name and Address affect all users of this gym.')}
                                         </p>
                                     </div>
                                 )}
@@ -1006,7 +1006,7 @@ function TrackerContent() {
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        Cancel
+                                        {t('Cancel')}
                                     </button>
                                     <button
                                         onClick={async () => {
@@ -1048,11 +1048,11 @@ function TrackerContent() {
                                             }
 
                                             if (radiusResult && radiusResult.success && globalResult.success) {
-                                                setSuccessMessage("Settings updated!");
+                                                setSuccessMessage(t("Settings updated!"));
                                                 setEditingSettingsGym(null);
                                             } else {
-                                                if (!radiusResult || !radiusResult.success) setWarningMsg("Failed to update radius.");
-                                                if (!globalResult.success) setWarningMsg("Failed to update gym details.");
+                                                if (!radiusResult || !radiusResult.success) setWarningMsg(t("Failed to update radius."));
+                                                if (!globalResult.success) setWarningMsg(t("Failed to update gym details."));
                                             }
                                         }}
                                         style={{
@@ -1066,7 +1066,7 @@ function TrackerContent() {
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        Save
+                                        {t('Save')}
                                     </button>
                                 </div>
                             </div>
@@ -1112,7 +1112,7 @@ function TrackerContent() {
                             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                                 <input
                                     type="text"
-                                    placeholder="Search gym by name..."
+                                    placeholder={t("Search gym by name...")}
                                     value={searchQuery}
                                     onChange={(e) => {
                                         setSearchQuery(e.target.value);
@@ -1158,7 +1158,7 @@ function TrackerContent() {
                                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{result.display_name}</div>
                                                     )}
                                                 </div>
-                                                {result.isExisting && <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 'bold' }}>JOIN</span>}
+                                                {result.isExisting && <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 'bold' }}>{t('JOIN')}</span>}
                                             </div>
                                         </div>
                                     ))}
@@ -1168,15 +1168,15 @@ function TrackerContent() {
                             {/* No results - offer to create new gym */}
                             {searchQuery.length >= 2 && searchResults.length === 0 && !manualLocation && (
                                 <div style={{ textAlign: 'center', padding: '24px', background: 'var(--surface)', borderRadius: '8px', marginBottom: '16px' }}>
-                                    <p style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>No gyms found with that name</p>
+                                    <p style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>{t('No gyms found with that name')}</p>
                                     <button
                                         onClick={handleCreateNewGym}
                                         style={{ padding: '12px 24px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
                                     >
-                                        Create New Gym
+                                        {t('Create New Gym')}
                                     </button>
                                     <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '12px' }}>
-                                        Create a new gym location
+                                        {t('Create a new gym location')}
                                     </p>
                                 </div>
                             )}
@@ -1184,11 +1184,11 @@ function TrackerContent() {
                             {/* Selected location - create new gym */}
                             {manualLocation && (
                                 <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                                    <p style={{ fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-muted)' }}>Creating new gym at:</p>
+                                    <p style={{ fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-muted)' }}>{t('Creating new gym at:')}</p>
                                     <p style={{ fontSize: '0.9rem', marginBottom: '16px', fontWeight: 'bold' }}>{manualLocation.name}</p>
                                     <input
                                         type="text"
-                                        placeholder="Gym Name (e.g. Gold's Gym)"
+                                        placeholder={t("Gym Name (e.g. Gold's Gym)")}
                                         value={newGymLabel}
                                         onChange={(e) => setNewGymLabel(e.target.value)}
                                         style={{ display: 'block', width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
@@ -1198,16 +1198,16 @@ function TrackerContent() {
                                     <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surface)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                             <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                                                📍 Location Pin
+                                                📍 {t('Location Pin')}
                                                 <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                                                    {manualLocation?.lat ? `${manualLocation.lat.toFixed(4)}, ${manualLocation.lng.toFixed(4)}` : 'No location set'}
+                                                    {manualLocation?.lat ? `${manualLocation.lat.toFixed(4)}, ${manualLocation.lng.toFixed(4)}` : t('No location set')}
                                                 </div>
                                             </div>
                                             <button
                                                 onClick={() => setShowSearchMap(!showSearchMap)}
                                                 style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline', fontWeight: 'bold' }}
                                             >
-                                                {showSearchMap ? 'Hide Map' : (manualLocation ? 'Adjust Pin' : 'Set Pin on Map')}
+                                                {showSearchMap ? t('Hide Map') : (manualLocation ? t('Adjust Pin') : t('Set Pin on Map'))}
                                             </button>
                                         </div>
 
@@ -1216,7 +1216,7 @@ function TrackerContent() {
                                                 initialLat={manualLocation?.lat || 51.1657}
                                                 initialLng={manualLocation?.lng || 10.4515}
                                                 onLocationSelect={(lat, lng) => {
-                                                    setManualLocation(prev => ({ ...prev, lat, lng, name: prev?.name || 'Custom Location' }));
+                                                    setManualLocation(prev => ({ ...prev, lat, lng, name: prev?.name || t('Custom Location') }));
                                                 }}
                                             />
                                         )}
@@ -1227,11 +1227,11 @@ function TrackerContent() {
                                         onClick={() => handleSaveGym(newGymLabel || manualLocation.name.split(',')[0], manualLocation.lat, manualLocation.lng, manualLocation.name, 'manual')}
                                         style={{ width: '100%', padding: '16px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '100px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
                                     >
-                                        Create & Add Gym
+                                        {t('Create & Add Gym')}
                                     </button>
                                 </div>
                             )}
-                            <button onClick={() => { setAddMode(false); setSearchQuery(''); setSearchResults([]); setManualLocation(null); }} style={{ width: '100%', marginTop: '16px', padding: '12px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>Cancel</button>
+                            <button onClick={() => { setAddMode(false); setSearchQuery(''); setSearchResults([]); setManualLocation(null); }} style={{ width: '100%', marginTop: '16px', padding: '12px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>{t('Cancel')}</button>
                         </div>
                     )
                 }
@@ -1240,12 +1240,12 @@ function TrackerContent() {
                 {
                     addMode === 'create' && (
                         <div>
-                            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-main)' }}>Create New Gym</h3>
+                            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-main)' }}>{t('Create New Gym')}</h3>
 
                             {/* Step 1: Enter Gym Name */}
                             <input
                                 type="text"
-                                placeholder="Gym Name (e.g. Gold's Gym Downtown)"
+                                placeholder={t("Gym Name (e.g. Gold's Gym Downtown)")}
                                 value={newGymName}
                                 onChange={(e) => setNewGymName(e.target.value)}
                                 style={{ display: 'block', width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
@@ -1257,7 +1257,7 @@ function TrackerContent() {
                                     <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                                         <input
                                             type="text"
-                                            placeholder="Search address (e.g. 123 Main St, City)"
+                                            placeholder={t("Search address (e.g. 123 Main St, City)")}
                                             value={addressSearchQuery}
                                             onChange={(e) => setAddressSearchQuery(e.target.value)}
                                             style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--text-main)' }}
@@ -1265,12 +1265,12 @@ function TrackerContent() {
                                         <button
                                             onClick={() => {
                                                 if (!manualLocation) {
-                                                    setManualLocation({ lat: 51.1657, lng: 10.4515, name: 'Custom Location' });
+                                                    setManualLocation({ lat: 51.1657, lng: 10.4515, name: t('Custom Location') });
                                                 }
                                                 setShowSearchMap(!showSearchMap);
                                             }}
                                             style={{ padding: '0 16px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: '1.2rem' }}
-                                            title="Pick on Map"
+                                            title={t("Pick on Map")}
                                         >
                                             🗺️
                                         </button>
@@ -1282,17 +1282,17 @@ function TrackerContent() {
                                                 initialLat={Number(manualLocation?.lat || 51.1657)}
                                                 initialLng={Number(manualLocation?.lng || 10.4515)}
                                                 onLocationSelect={(lat, lng) => {
-                                                    setManualLocation(prev => ({ ...prev, lat, lng, name: prev?.name || 'Custom Location' }));
+                                                    setManualLocation(prev => ({ ...prev, lat, lng, name: prev?.name || t('Custom Location') }));
                                                 }}
                                             />
                                             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px', textAlign: 'center' }}>
-                                                Tip: Drag the pin to your exact gym location.
+                                                {t('Tip: Drag the pin to your exact gym location.')}
                                             </p>
                                         </div>
                                     )}
 
                                     {addressSearchQuery.length > 0 && addressSearchQuery.length < 3 && (
-                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '-12px', marginBottom: '16px' }}>Type at least 3 characters to search...</p>
+                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '-12px', marginBottom: '16px' }}>{t('Type at least 3 characters to search...')}</p>
                                     )}
 
                                     {/* Address Search Results */}
@@ -1317,7 +1317,7 @@ function TrackerContent() {
                                     {/* Save Button */}
                                     {manualLocation && (
                                         <div style={{ marginTop: '16px', padding: '16px', background: 'var(--surface)', borderRadius: '8px' }}>
-                                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Ready to create:</p>
+                                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '8px' }}>{t('Ready to create:')}</p>
                                             <p style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '4px' }}>{newGymName}</p>
                                             <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '16px' }}>{manualLocation.name}</p>
 
@@ -1325,7 +1325,7 @@ function TrackerContent() {
                                             <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--background)' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                                     <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                                                        📍 Location Pin
+                                                        📍 {t('Location Pin')}
                                                         <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
                                                             {Number(manualLocation.lat).toFixed(4)}, {Number(manualLocation.lng).toFixed(4)}
                                                         </div>
@@ -1334,7 +1334,7 @@ function TrackerContent() {
                                                         onClick={() => setShowConfirmMap(!showConfirmMap)}
                                                         style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline', fontWeight: 'bold' }}
                                                     >
-                                                        {showConfirmMap ? 'Hide Map' : 'Adjust Pin'}
+                                                        {showConfirmMap ? t('Hide Map') : t('Adjust Pin')}
                                                     </button>
                                                 </div>
 
@@ -1352,14 +1352,14 @@ function TrackerContent() {
                                                 onClick={() => handleSaveGym(newGymName, manualLocation.lat, manualLocation.lng, manualLocation.name, 'manual')}
                                                 style={{ width: '100%', padding: '16px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '100px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
                                             >
-                                                Create & Add Gym
+                                                {t('Create & Add Gym')}
                                             </button>
                                         </div>
                                     )}
                                 </>
                             )}
 
-                            <button onClick={() => { setAddMode(false); setSearchQuery(''); setSearchResults([]); setManualLocation(null); setNewGymName(''); setAddressSearchQuery(''); }} style={{ width: '100%', marginTop: '16px', padding: '12px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>Cancel</button>
+                            <button onClick={() => { setAddMode(false); setSearchQuery(''); setSearchResults([]); setManualLocation(null); setNewGymName(''); setAddressSearchQuery(''); }} style={{ width: '100%', marginTop: '16px', padding: '12px', background: 'none', border: 'none', color: 'var(--text-muted)' }}>{t('Cancel')}</button>
                         </div>
                     )
                 }
@@ -1407,7 +1407,7 @@ function TrackerContent() {
                                         fontSize: '1rem'
                                     }}
                                 >
-                                    Cancel
+                                    {t('Cancel')}
                                 </button>
                                 <button
                                     onClick={confirmDialog.onConfirm}
@@ -1423,7 +1423,7 @@ function TrackerContent() {
                                         fontWeight: 'bold'
                                     }}
                                 >
-                                    Confirm
+                                    {t('Confirm')}
                                 </button>
                             </div>
                         </div>
@@ -1437,17 +1437,17 @@ function TrackerContent() {
     return (
         <div className="container" style={{ paddingBottom: '100px', paddingTop: 'calc(40px + var(--safe-top))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h1 style={{ fontSize: '2rem', marginBottom: '8px', color: 'var(--text-main)' }}>Gym Tracker</h1>
+                <h1 style={{ fontSize: '2rem', marginBottom: '8px', color: 'var(--text-main)' }}>{t('Gym Tracker')}</h1>
                 <button
                     onClick={() => setShowManage(true)}
                     style={{ fontSize: '0.9rem', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                 >
-                    Manage Gyms
+                    {t('Manage Gyms')}
                 </button>
             </div>
 
             <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>
-                {user.auto_tracking_enabled ? 'Auto-Tracking Enabled' : 'Manual Mode'}
+                {user.auto_tracking_enabled ? t('Auto-Tracking Enabled') : t('Manual Mode')}
             </p>
 
             {warning && (
@@ -1505,7 +1505,7 @@ function TrackerContent() {
                         {workoutSession ? '🔥' : '📍'}
                     </span>
                     <span style={{ fontSize: '0.9rem', fontWeight: 'bold', marginTop: '8px', color: 'var(--text-main)', letterSpacing: '1px' }}>
-                        {workoutSession ? 'ACTIVE' : 'READY'}
+                        {workoutSession ? t('ACTIVE') : t('READY')}
                     </span>
                 </div>
 
@@ -1516,12 +1516,12 @@ function TrackerContent() {
                             <h2 style={{ fontSize: '3.5rem', fontWeight: '800', fontFamily: 'monospace', color: 'var(--text-main)', textShadow: '0 0 20px rgba(255,255,255,0.1)' }}>
                                 {formatTime(elapsed)}
                             </h2>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '2px' }}>Session Duration</p>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '2px' }}>{t('Session Duration')}</p>
                             <div style={{ marginTop: '16px', padding: '8px 16px', background: 'rgba(255,255,255,0.05)', borderRadius: '100px', display: 'inline-block' }}>
                                 <span style={{ color: 'var(--brand-yellow)', fontWeight: 'bold' }}>
                                     {(() => {
                                         const g = user.gyms?.find(gym => gym.id === workoutSession.gym_id);
-                                        return g?.name || g?.label || workoutSession.gyms?.name || 'Gym Session';
+                                        return g?.name || g?.label || workoutSession.gyms?.name || t('Gym Session');
                                     })()}
                                 </span>
                             </div>
@@ -1529,20 +1529,20 @@ function TrackerContent() {
                     ) : (
                         <>
                             <h2 style={{ fontSize: '1.4rem', marginBottom: '8px', color: 'var(--text-main)' }}>
-                                {isAtGym ? "You're at the Gym!" : "Not at Gym"}
+                                {isAtGym ? t("You're at the Gym!") : t("Not at Gym")}
                             </h2>
                             <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                                Active Gym: <span style={{ color: 'var(--brand-yellow)', fontWeight: 'bold' }}>
+                                {t('Active Gym:')} <span style={{ color: 'var(--brand-yellow)', fontWeight: 'bold' }}>
                                     {user.gyms?.length > 0 ? (() => {
                                         const active = user.gyms?.find(g => g.id === user.gymId) || user.gyms[0];
-                                        return active.name || active.label || 'None';
-                                    })() : 'None'}
+                                        return active.name || active.label || t('None');
+                                    })() : t('None')}
                                 </span>
                             </div>
                             {user.auto_tracking_enabled && (
                                 <div style={{ fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
                                     <span>🛰️</span>
-                                    <span>Auto-Tracking: {status === 'tracking' ? 'Active' : status === 'denied' ? 'Permission Denied' : status === 'error' ? 'Error' : 'Initializing...'}</span>
+                                    <span>{t('Auto-Tracking')}: {status === 'tracking' ? t('Active') : status === 'denied' ? t('Permission Denied') : status === 'error' ? t('Error') : t('Initializing...')}</span>
                                 </div>
                             )}
                             {currentLocation && (
@@ -1552,7 +1552,7 @@ function TrackerContent() {
                             )}
                             {distanceToGym !== null && distanceToGym < 9000 && (
                                 <p style={{ color: 'var(--text-dim)', fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                    DISTANCE: {Math.round(distanceToGym)}m
+                                    {t('DISTANCE')}: {Math.round(distanceToGym)}m
                                 </p>
                             )}
                         </>
@@ -1583,7 +1583,7 @@ function TrackerContent() {
                                 transition: 'all 0.2s ease'
                             }}
                         >
-                            {workoutSession ? 'Stop Workout' : ((!user.gyms || user.gyms.length === 0) ? 'Add a Gym First' : 'Start Tracking')}
+                            {workoutSession ? t('Stop Workout') : ((!user.gyms || user.gyms.length === 0) ? t('Add a Gym First') : t('Start Tracking'))}
                         </button>
 
                         {/* Invite Friends Button - Only show when session is active */}

@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
+import { useTranslation } from '@/context/TranslationContext';
 
 
 export default function GymFinder() {
+    const { t } = useTranslation();
     const { fetchGyms, joinCommunity } = useStore();
     const [gyms, setGyms] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -38,7 +40,7 @@ export default function GymFinder() {
             },
             (error) => {
                 console.warn("Location access denied or failed", error);
-                setLocationError("Couldn't get your location. Showing all gyms.");
+                setLocationError(t("Couldn't get your location. Showing all gyms."));
                 // Fallback to fetch all (or top 50)
                 fetchGyms(null, null).then(data => {
                     setGyms(data || []);
@@ -55,7 +57,7 @@ export default function GymFinder() {
             // joinCommunity handles the user_gyms insert and updates the store
             // The parent component (Home) should react to user.gymId change and hide this component
         } catch (err) {
-            alert("Failed to join gym: " + err.message);
+            alert(t("Failed to join gym: ") + err.message);
             setJoiningId(null);
         }
     };
@@ -64,7 +66,7 @@ export default function GymFinder() {
         return (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
-                <p>Finding gyms near you...</p>
+                <p>{t('Finding gyms near you...')}</p>
                 <style jsx>{`
                     .spinner {
                         width: 30px; height: 30px;
@@ -83,9 +85,9 @@ export default function GymFinder() {
         <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: '24px', border: '1px solid var(--border)' }}>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '8px' }}>📍</div>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>Find Your Gym</h2>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>{t('Find Your Gym')}</h2>
                 <p style={{ color: 'var(--text-muted)' }}>
-                    Connect with your local gym to see the live leaderboard, join events, and track your workouts.
+                    {t('Connect with your local gym to see the live leaderboard, join events, and track your workouts.')}
                 </p>
                 {locationError && <p style={{ color: 'var(--brand-yellow)', fontSize: '0.8rem', marginTop: '8px' }}>{locationError}</p>}
             </div>
@@ -93,8 +95,8 @@ export default function GymFinder() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflowY: 'auto' }}>
                 {gyms.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
-                        No gyms found. <br />
-                        <button onClick={locateAndFetch} style={{ marginTop: '12px', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>Try Again</button>
+                        {t('No gyms found.')} <br />
+                        <button onClick={locateAndFetch} style={{ marginTop: '12px', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer' }}>{t('Try Again')}</button>
                     </div>
                 ) : (
                     gyms.map(gym => (
@@ -108,7 +110,7 @@ export default function GymFinder() {
                                 </div>
                                 <div>
                                     <div style={{ fontWeight: 'bold' }}>{gym.name}</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{gym.city || 'Unknown City'}</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{gym.city || t('Unknown City')}</div>
                                 </div>
                             </div>
                             <button
@@ -125,7 +127,7 @@ export default function GymFinder() {
                                     opacity: joiningId && joiningId !== gym.id ? 0.5 : 1
                                 }}
                             >
-                                {joiningId === gym.id ? 'Joining...' : 'Select'}
+                                {joiningId === gym.id ? t('Joining...') : t('Select')}
                             </button>
                         </div>
                     ))
@@ -133,9 +135,9 @@ export default function GymFinder() {
             </div>
 
             <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Don't see your gym?</p>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{t("Don't see your gym?")}</p>
                 <button style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontSize: '0.9rem', cursor: 'pointer', textDecoration: 'underline' }}>
-                    Create a Gym
+                    {t('Create a Gym')}
                 </button>
             </div>
         </div>

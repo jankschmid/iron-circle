@@ -88,8 +88,10 @@ export function TranslationProvider({ children }) {
                 .single();
 
             // PostgREST 23505 (Unique Violation) might happen if race condition, ignore it.
+            // PostgREST 23505 (Unique Violation) might happen if race condition, ignore it.
             if (error && error.code !== '23505') {
-                console.error("i18n: Auto-insert failed", error);
+                // Silently fail for non-admins (RLS Policy)
+                // console.warn("i18n: Auto-insert failed (likely permission)", error.message); 
             } else {
                 console.log("i18n: Auto-inserted key.");
                 // Optimistically add to local state to avoid refetch

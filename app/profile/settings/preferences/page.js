@@ -166,6 +166,54 @@ export default function PreferencesSettingsPage() {
                     />
                 )}
 
+                {/* Training Goal Selector */}
+                <section style={{ marginBottom: '32px' }}>
+                    <div style={{
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '16px'
+                    }}>
+                        <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Training Style 🏋️‍♂️</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                            Affects your XP gains! (e.g. Endurance = more XP for cardio).
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            {['Muscle', 'Strength', 'Endurance', 'Weight Loss'].map(g => (
+                                <button
+                                    key={g}
+                                    onClick={async () => {
+                                        // Optimistic Update
+                                        updateUserProfile({ goal: g });
+                                        // Persist
+                                        const { error } = await supabase.from('profiles').update({ goal: g }).eq('id', user.id);
+                                        if (error) {
+                                            console.error("Failed to update goal:", error);
+                                            alert("Failed to save goal");
+                                        } else {
+                                            // Make sure store updates (fetchProfile might be needed if not using real-time)
+                                            // The updateUserProfile above handles local state
+                                        }
+                                    }}
+                                    style={{
+                                        padding: '12px',
+                                        borderRadius: '8px',
+                                        border: '1px solid var(--border)',
+                                        background: (user.goal === g) ? 'var(--primary)' : 'var(--background)',
+                                        color: (user.goal === g) ? '#000' : 'var(--text-muted)',
+                                        fontWeight: (user.goal === g) ? 'bold' : 'normal',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {g}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
                 {/* Auto Tracking Toggle */}
                 <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',

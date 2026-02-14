@@ -7,8 +7,10 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import CommunitiesModal from '@/components/CommunitiesModal';
 import { useConversations } from '@/hooks/useChatQueries';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function ChatTab() {
+    const { t } = useTranslation();
     const { user, fetchCommunities, joinCommunity, leaveCommunity } = useStore();
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState('messages'); // 'messages', 'groups', 'communities'
@@ -78,7 +80,7 @@ export default function ChatTab() {
     }
 
     if (isError) {
-        return <div className="p-4 text-center text-red-500" style={{ paddingTop: '20px' }}>Error loading chats: {error.message}</div>;
+        return <div className="p-4 text-center text-red-500" style={{ paddingTop: '20px' }}>{t('Error loading chats')}: {error.message}</div>;
     }
 
     // Split into active and inactive (left) communities
@@ -96,7 +98,7 @@ export default function ChatTab() {
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     {/* Replaced H1 with simple label or remove if parent has header */}
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>Conversations</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>{t('Conversations')}</div>
 
                     {/* Add Action Button */}
                     {activeTab === 'communities' ? (
@@ -128,7 +130,7 @@ export default function ChatTab() {
                                 transition: 'all 0.2s ease', border: 'none', cursor: 'pointer'
                             }}
                         >
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            {t(tab.charAt(0).toUpperCase() + tab.slice(1))}
                         </button>
                     ))}
                 </div>
@@ -138,22 +140,22 @@ export default function ChatTab() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
                 {activeConversations.length === 0 && !loading ? (
                     <div style={{ textAlign: 'center', color: '#666', marginTop: '40px' }}>
-                        <p>No chats found.</p>
+                        <p>{t('No chats found.')}</p>
                         {activeTab === 'communities' && (
                             <button
                                 onClick={() => setShowCommunitiesModal(true)}
                                 style={{ marginTop: '16px', background: 'var(--primary)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
                             >
-                                Find Communities
+                                {t('Find Communities')}
                             </button>
                         )}
                         {activeTab === 'messages' && (
-                            <p style={{ fontSize: '0.9rem', marginTop: '8px' }}>Start a workout with friends to chat!</p>
+                            <p style={{ fontSize: '0.9rem', marginTop: '8px' }}>{t('Start a workout with friends to chat!')}</p>
                         )}
                         {activeTab === 'groups' && (
                             <Link href="/social/chat/new/group">
                                 <button style={{ marginTop: '16px', background: 'var(--primary)', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                    Create Group
+                                    {t('Create Group')}
                                 </button>
                             </Link>
                         )}
@@ -171,7 +173,7 @@ export default function ChatTab() {
                             onClick={() => setShowInactiveCommunities(!showInactiveCommunities)}
                             style={{ background: 'transparent', border: 'none', color: '#666', width: '100%', textAlign: 'center', cursor: 'pointer', fontSize: '0.9rem' }}
                         >
-                            {showInactiveCommunities ? 'Hide' : 'Show'} Left Communities ({inactiveConversations.length})
+                            {showInactiveCommunities ? t('Hide') : t('Show')} {t('Left Communities')} ({inactiveConversations.length})
                         </button>
                     </div>
                 )}
@@ -240,13 +242,14 @@ export default function ChatTab() {
 }
 
 function ChatCard({ chat, onUpdate, setConfirmDialog }) {
+    const { t } = useTranslation();
     const { leaveCommunity } = useStore();
     const [showMenu, setShowMenu] = useState(false);
     const supabase = createClient();
 
     const handleLeave = async () => {
         setConfirmDialog({
-            message: `Leave ${chat.name}?`,
+            message: t('Leave {{name}}?', { name: chat.name }),
             type: 'confirm',
             onConfirm: async () => {
                 try {
@@ -279,7 +282,7 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
 
     const handleDelete = async () => {
         setConfirmDialog({
-            message: "Delete this conversation? It will be hidden from your list.",
+            message: t("Delete this conversation? It will be hidden from your list."),
             type: 'confirm',
             onConfirm: async () => {
                 try {
@@ -295,7 +298,7 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
                     if (error) {
                         console.error("Delete error:", error);
                         setConfirmDialog({
-                            message: "Failed to delete chat: " + error.message,
+                            message: t("Failed to delete chat: ") + error.message,
                             type: 'alert',
                             onConfirm: () => setConfirmDialog(null)
                         });
@@ -307,7 +310,7 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
                 } catch (e) {
                     console.error("Delete error:", e);
                     setConfirmDialog({
-                        message: "Failed to delete chat: " + e.message,
+                        message: t("Failed to delete chat: ") + e.message,
                         type: 'alert',
                         onConfirm: () => setConfirmDialog(null)
                     });
@@ -330,17 +333,17 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
                     opacity: chat.isMember === false ? 0.5 : 1,
                     filter: chat.isMember === false ? 'grayscale(50%)' : 'none'
                 }}>
-                    <img src={chat.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${chat.id}`} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
+
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chat.name || 'Chat'}</h3>
+                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chat.name || t('Chat')}</h3>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                 {chat.timestamp ? new Date(chat.timestamp).toLocaleDateString() : ''}
                             </span>
                         </div>
                         <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {chat.lastMessage?.content || chat.lastMessage || 'No messages'}
+                            {chat.lastMessage?.content || chat.lastMessage || t('No messages')}
                         </p>
                     </div>
 
@@ -368,11 +371,11 @@ function ChatCard({ chat, onUpdate, setConfirmDialog }) {
                     }}>
                         {(chat.type !== 'private') && (
                             <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLeave(); }} style={{ background: 'transparent', border: 'none', color: 'var(--error)', padding: '8px', width: '100%', textAlign: 'left', cursor: 'pointer', fontWeight: 'bold' }}>
-                                Leave
+                                {t('Leave')}
                             </button>
                         )}
                         <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', padding: '8px', width: '100%', textAlign: 'left', cursor: 'pointer' }}>
-                            Delete
+                            {t('Delete')}
                         </button>
                     </div>
                 </>

@@ -6,9 +6,11 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ToastProvider';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function SocialTab() {
     const { friends, user, getWeeklyStats, joinSession, removeFriend } = useStore();
+    const { t } = useTranslation();
     const { weeklyVolume, weeklyWorkouts, weeklyTime } = getWeeklyStats(); // User's own weekly stats
     const router = useRouter();
     const supabase = createClient();
@@ -43,8 +45,8 @@ export default function SocialTab() {
                     padding: '20px'
                 }}>
                     <div>
-                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--foreground)' }}>Connection Issue</h2>
-                        <p>We're having trouble loading your data.</p>
+                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', color: 'var(--foreground)' }}>{t('Connection Issue')}</h2>
+                        <p>{t("We're having trouble loading your data.")}</p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
@@ -60,7 +62,7 @@ export default function SocialTab() {
                                 fontWeight: 'bold'
                             }}
                         >
-                            Retry Connection
+                            {t('Retry Connection')}
                         </button>
                     </div>
                 </div>
@@ -76,7 +78,7 @@ export default function SocialTab() {
             }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
                     <div className="spinner"></div>
-                    <p>Syncing...</p>
+                    <p>{t('Syncing...')}</p>
                 </div>
                 <style jsx>{`
                     .spinner {
@@ -158,24 +160,24 @@ export default function SocialTab() {
                     padding: '8px 16px',
                     borderRadius: '100px'
                 }}>
-                    + Find Friends
+                    + {t('Find Friends')}
                 </Link>
             </div>
 
             {/* Leaderboard */}
             <section style={{ marginBottom: '40px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ fontSize: '1.2rem' }}>Weekly Leaderboard</h3>
+                    <h3 style={{ fontSize: '1.2rem' }}>{t('Weekly Leaderboard')}</h3>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
                         style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: 'none', fontSize: '0.8rem', padding: '4px' }}
                     >
-                        <option value="Volume">Volume</option>
-                        <option value="Workouts">Workouts</option>
-                        <option value="Time">Time</option>
-                        <option value="Level">Level</option>
-                        <option value="XP">XP</option>
+                        <option value="Volume">{t('Volume')}</option>
+                        <option value="Workouts">{t('Workouts')}</option>
+                        <option value="Time">{t('Time')}</option>
+                        <option value="Level">{t('Level')}</option>
+                        <option value="XP">{t('XP')}</option>
                     </select>
                 </div>
 
@@ -196,7 +198,23 @@ export default function SocialTab() {
                                 }}>
                                     {athlete.rank}
                                 </div>
-                                <img src={athlete.avatar} style={{ width: '32px', height: '32px', borderRadius: '50%', margin: '0 12px' }} />
+                                <div style={{ position: 'relative', margin: '0 12px' }}>
+                                    <img src={athlete.avatar} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                                    {athlete.prestige_level > 0 && (
+                                        <img
+                                            src={`/assets/prestige/Prestige_${String(athlete.prestige_level).padStart(2, '0')}.png`}
+                                            style={{
+                                                position: 'absolute',
+                                                bottom: -4,
+                                                right: -4,
+                                                width: '14px',
+                                                height: '14px',
+                                                filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))'
+                                            }}
+                                            onError={(e) => e.currentTarget.style.display = 'none'}
+                                        />
+                                    )}
+                                </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '600' }}>{athlete.name}</div>
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{athlete.handle}</div>
@@ -212,12 +230,26 @@ export default function SocialTab() {
 
             {/* Activity Feed / Friends */}
             <section>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Friend Activity</h3>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{t('Friend Activity')}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     {friends.map(friend => (
                         <div key={friend.id} style={{ display: 'flex', gap: '16px' }}>
                             <div style={{ position: 'relative' }}>
-                                <img src={friend.avatar} style={{ width: '48px', height: '48px', borderRadius: '50%' }} />
+                                <img src={friend.avatar} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} />
+                                {friend.prestige_level > 0 && (
+                                    <img
+                                        src={`/assets/prestige/Prestige_${String(friend.prestige_level).padStart(2, '0')}.png`}
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: -4,
+                                            right: -4,
+                                            width: '20px',
+                                            height: '20px',
+                                            filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))'
+                                        }}
+                                        onError={(e) => e.currentTarget.style.display = 'none'}
+                                    />
+                                )}
                                 {friend.status === 'active' && (
                                     <div style={{ position: 'absolute', bottom: 0, right: 0, width: '12px', height: '12px', background: 'var(--success)', borderRadius: '50%', border: '2px solid var(--background)' }} />
                                 )}
@@ -249,7 +281,7 @@ export default function SocialTab() {
                                     <div style={{ fontWeight: '600' }}>{friend.name}</div>
                                 </Link>
                                 <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                                    {friend.status === 'active' ? `Training ${friend.activity?.detail}` : `Last active ${friend.lastActive}`}
+                                    {friend.status === 'active' ? `${t('Training')} ${friend.activity?.detail}` : `${t('Last active')} ${friend.lastActive}`}
                                 </div>
                                 {friend.status === 'active' && (
                                     <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
@@ -275,7 +307,7 @@ export default function SocialTab() {
                                                         joinSession(friend.activity.group_id, friend.activity.gym_id);
                                                         router.push('/workout/active');
                                                     } else {
-                                                        toast.error("Cannot join this session (No Group ID)");
+                                                        toast.error(t("Cannot join this session (No Group ID)"));
                                                     }
                                                 }}
                                                 style={{
@@ -288,7 +320,7 @@ export default function SocialTab() {
                                                     border: 'none',
                                                     cursor: 'pointer'
                                                 }}>
-                                                Valhalla ⚔️
+                                                {t('Valhalla ⚔️')}
                                             </button>
                                         )}
                                     </div>
@@ -314,7 +346,7 @@ export default function SocialTab() {
                         cursor: 'pointer'
                     }}
                 >
-                    View Your Circle ({friends.length})
+                    {t('View Your Circle')} ({friends.length})
                 </button>
             </section>
 
@@ -337,14 +369,14 @@ export default function SocialTab() {
                         gap: '16px'
                     }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Your Circle</h2>
+                            <h2 style={{ fontSize: '1.5rem', margin: 0 }}>{t('Your Circle')}</h2>
                             <button onClick={() => setShowFriendsModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}>×</button>
                         </div>
 
                         <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
                             {friends.length === 0 ? (
                                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                    No friends yet. <Link href="/social/add" style={{ color: 'var(--primary)' }}>Find some!</Link>
+                                    {t('No friends yet.')} <Link href="/social/add" style={{ color: 'var(--primary)' }}>{t('Find some!')}</Link>
                                 </div>
                             ) : (
                                 friends.map(friend => (
@@ -378,7 +410,7 @@ export default function SocialTab() {
                                                 fontWeight: '600'
                                             }}
                                         >
-                                            Remove
+                                            {t('Remove')}
                                         </button>
                                     </div>
                                 ))
@@ -396,16 +428,16 @@ export default function SocialTab() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
                 }} onClick={() => setRemovingFriendId(null)}>
                     <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '350px' }} onClick={e => e.stopPropagation()}>
-                        <h3 style={{ marginBottom: '16px', color: 'var(--error)' }}>Remove Friend?</h3>
+                        <h3 style={{ marginBottom: '16px', color: 'var(--error)' }}>{t('Remove Friend?')}</h3>
                         <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-                            Are you sure you want to remove this person from your circle?
+                            {t('Are you sure you want to remove this person from your circle?')}
                         </p>
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <button
                                 onClick={() => setRemovingFriendId(null)}
                                 style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }}
                             >
-                                Cancel
+                                {t('Cancel')}
                             </button>
                             <button
                                 onClick={async () => {
@@ -415,12 +447,12 @@ export default function SocialTab() {
                                     if (success) {
                                         setRemovingFriendId(null);
                                     } else {
-                                        toast.error("Failed to remove friend.");
+                                        toast.error(t("Failed to remove friend."));
                                     }
                                 }}
                                 style={{ flex: 1, padding: '12px', background: 'var(--error)', border: 'none', color: '#fff', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
                             >
-                                Remove
+                                {t('Remove')}
                             </button>
                         </div>
                     </div>

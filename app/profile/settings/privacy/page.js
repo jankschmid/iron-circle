@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import HardwareBackButton from '@/components/HardwareBackButton';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function PrivacySettingsPage() {
     const { user, updatePrivacySettings } = useStore();
     const router = useRouter();
+    const { t } = useTranslation();
     const [settings, setSettings] = useState({
         profile_visibility: 'public',
         gym_monitor_streaming: true,
@@ -49,7 +51,7 @@ export default function PrivacySettingsPage() {
             {/* Header */}
             <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <Link href="/profile/settings" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>←</Link>
-                <h1 style={{ fontSize: '1.5rem' }}>Privacy & Data</h1>
+                <h1 style={{ fontSize: '1.5rem' }}>{t('Privacy & Data')}</h1>
             </header>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -57,8 +59,8 @@ export default function PrivacySettingsPage() {
                 {/* 1. Profile Visibility */}
                 <section style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
                     <div style={{ marginBottom: '16px' }}>
-                        <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>Profile Visibility</h3>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Control who can see your profile, stats, and workout history.</p>
+                        <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{t('Profile Visibility')}</h3>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t('Control who can see your profile, stats, and workout history.')}</p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', background: 'var(--background)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
@@ -79,7 +81,7 @@ export default function PrivacySettingsPage() {
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                {option === 'friends' ? 'Friends Only' : option}
+                                {option === 'friends' ? t('Friends Only') : t(option)}
                             </button>
                         ))}
                     </div>
@@ -91,9 +93,9 @@ export default function PrivacySettingsPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                 }}>
                     <div style={{ paddingRight: '16px' }}>
-                        <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>Gym Monitor Streaming</h3>
+                        <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{t('Gym Monitor Streaming')}</h3>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                            Allow your name and current exercise to appear on screens in <b>Verified Partner Gyms</b>.
+                            {t('Allow your name and current exercise to appear on screens in')} <b>{t('Verified Partner Gyms')}</b>.
                         </p>
                     </div>
                     <Switch
@@ -108,9 +110,9 @@ export default function PrivacySettingsPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                 }}>
                     <div style={{ paddingRight: '16px' }}>
-                        <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>Global Live Status</h3>
+                        <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{t('Global Live Status')}</h3>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                            Let friends see when you are currently working out. Turn OFF to go <b>Ghost Mode 👻</b>.
+                            {t('Let friends see when you are currently working out. Turn OFF to go')} <b>{t('Ghost Mode 👻')}</b>.
                         </p>
                     </div>
                     <Switch
@@ -120,11 +122,9 @@ export default function PrivacySettingsPage() {
                 </section>
 
                 <div style={{ marginTop: '16px', padding: '16px', borderRadius: 'var(--radius-md)', background: 'rgba(255, 50, 50, 0.1)', border: '1px solid rgba(255, 50, 50, 0.2)' }}>
-                    <h4 style={{ color: 'var(--warning)', marginBottom: '8px' }}>Data Privacy Note (GDPR)</h4>
+                    <h4 style={{ color: 'var(--warning)', marginBottom: '8px' }}>{t('Data Privacy Note (GDPR)')}</h4>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                        IronCircle sends only necessary data to gym monitors (Username, Exercise, Set).
-                        We never share biometric data like weight or body fat percentage on public screens.
-                        You can revoke monitor access at any time using the toggle above.
+                        {t('IronCircle sends only necessary data to gym monitors (Username, Exercise, Set). We never share biometric data like weight or body fat percentage on public screens. You can revoke monitor access at any time using the toggle above.')}
                     </p>
                 </div>
 

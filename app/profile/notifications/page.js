@@ -22,66 +22,72 @@ export default function NotificationsPage() {
     const fetchRequests = async () => {
         setLoading(true);
         try {
-            // Fetch both friend requests and workout invites
-            const [friendRequests, workoutInvites] = await Promise.all([
-                // Friend requests
+            // Fetch both friend requests and notifications
+            const [friendRequests, notifData] = await Promise.all([
+                // Friend requests (Existing Logic)
                 (async () => {
-                    const { data: friendshipData, error: friendshipError } = await supabase
+                    const { data, error } = await supabase
                         .from('friendships')
                         .select('id, user_id, created_at')
                         .eq('friend_id', user.id)
                         .eq('status', 'pending');
-
-                    if (friendshipError) throw friendshipError;
-                    if (!friendshipData || friendshipData.length === 0) return [];
-
-                    const senderIds = friendshipData.map(f => f.user_id);
-                    const { data: profilesData } = await supabase
-                        .from('profiles')
-                        .select('id, name, username, avatar_url')
-                        .in('id', senderIds);
-
-                    return friendshipData.map(f => {
-                        const senderProfile = profilesData?.find(p => p.id === f.user_id);
-                        return {
-                            ...f,
-                            type: 'friend_request',
-                            sender: senderProfile || { name: 'Unknown', username: 'unknown', avatar_url: null }
-                        };
-                    });
+                    if (error) throw error;
+                    return data || [];
                 })(),
-                // Workout invites
+                // Notifications
                 (async () => {
-                    const { data: notifData, error: notifError } = await supabase
+                    const { data, error } = await supabase
                         .from('notifications')
                         .select('*')
                         .eq('user_id', user.id)
-                        .in('type', ['workout_invite', 'template_share', 'workout_share']) // Fetch all types
+                        .in('type', ['workout_invite', 'template_share', 'workout_share', 'trainer_invite']) // Added trainer_invite
                         .eq('read', false)
                         .order('created_at', { ascending: false });
-
-                    if (notifError) throw notifError;
-                    if (!notifData || notifData.length === 0) return [];
-
-                    const inviterIds = notifData.map(n => n.data?.inviterId || n.data?.sharerId).filter(Boolean);
-                    const { data: profilesData } = await supabase
-                        .from('profiles')
-                        .select('id, name, username, avatar_url')
-                        .in('id', inviterIds);
-
-                    return notifData.map(n => {
-                        const senderProfile = profilesData?.find(p => p.id === n.data?.inviterId);
-                        return {
-                            ...n,
-                            type: n.type, // Keep original type
-                            sender: senderProfile || { name: 'Unknown', username: 'unknown', avatar_url: null }
-                        };
-                    });
+                    if (error) throw error;
+                    return data || [];
                 })()
             ]);
 
-            // Combine and sort by created_at
-            const combined = [...friendRequests, ...workoutInvites].sort(
+            // Collect all user IDs to fetch profiles
+            const senderIds = new Set();
+            friendRequests.forEach(r => senderIds.add(r.user_id));
+            if (notifData) {
+                notifData.forEach(n => {
+                    const id = n.data?.inviterId || n.data?.sharerId;
+                    if (id) senderIds.add(id);
+                });
+            }
+
+            // Fetch Profiles
+            let profilesMap = {};
+            if (senderIds.size > 0) {
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('id, name, username, avatar_url')
+                    .in('id', Array.from(senderIds));
+
+                if (profiles) {
+                    profiles.forEach(p => profilesMap[p.id] = p);
+                }
+            }
+
+            // Transform Types
+            const formattedFriendRequests = friendRequests.map(f => ({
+                ...f,
+                type: 'friend_request',
+                sender: profilesMap[f.user_id] || { name: 'Unknown', username: 'unknown', avatar_url: null }
+            }));
+
+            const formattedNotifs = (notifData || []).map(n => {
+                const senderId = n.data?.inviterId || n.data?.sharerId;
+                return {
+                    ...n,
+                    sender: profilesMap[senderId] || { name: 'Unknown', username: 'unknown', avatar_url: null }
+                };
+            });
+
+            // Combine
+            const combined = [...formattedFriendRequests, ...formattedNotifs].sort(
                 (a, b) => new Date(b.created_at) - new Date(a.created_at)
             );
 
@@ -94,50 +100,55 @@ export default function NotificationsPage() {
     };
 
     const handleAction = async (request, action) => {
+        // Universal Mark as Read for notifications
+        if (request.type !== 'friend_request') {
+            await supabase.from('notifications').update({ read: true }).eq('id', request.id);
+        }
+
         if (request.type === 'friend_request') {
             if (action === 'accept') {
-                const { error } = await supabase
-                    .from('friendships')
-                    .update({ status: 'accepted' })
-                    .eq('id', request.id);
-
-                if (!error) {
-                    setRequests(prev => prev.filter(r => r.id !== request.id));
-                    fetchFriends(); // Refresh Circle immediately
-                    router.refresh(); // Optional, but keeps server components fresh
-                }
-            } else if (action === 'decline') {
-                const { error } = await supabase
-                    .from('friendships')
-                    .delete()
-                    .eq('id', request.id);
-
-                if (!error) {
-                    setRequests(prev => prev.filter(r => r.id !== request.id));
-                }
+                await supabase.from('friendships').update({ status: 'accepted' }).eq('id', request.id);
+                fetchFriends(); // Update store
+            } else {
+                await supabase.from('friendships').delete().eq('id', request.id);
             }
-        } else if (request.type === 'workout_invite') {
-            if (action === 'join') {
-                // Mark notification as read
-                await supabase
-                    .from('notifications')
-                    .update({ read: true })
-                    .eq('id', request.id);
-
-                // Navigate to tracker - joinSession will be called there
-                router.push(`/tracker?join=${request.data.groupId}&gym=${request.data.gymId}`);
+            setRequests(prev => prev.filter(r => r.id !== request.id));
+        }
+        else if (request.type === 'trainer_invite') {
+            if (!request.sender?.id) {
+                alert("This invitation is invalid or expired (missing sender details).");
+                await supabase.from('notifications').delete().eq('id', request.id);
                 setRequests(prev => prev.filter(r => r.id !== request.id));
-            } else if (action === 'decline') {
-                // Mark as read
-                const { error } = await supabase
-                    .from('notifications')
-                    .update({ read: true })
-                    .eq('id', request.id);
-
-                if (!error) {
-                    setRequests(prev => prev.filter(r => r.id !== request.id));
-                }
+                return;
             }
+
+            if (action === 'accept') {
+                const { error } = await supabase
+                    .from('trainer_relationships')
+                    .update({ status: 'active' })
+                    .eq('trainer_id', request.sender.id)
+                    .eq('client_id', user.id);
+
+                if (error) {
+                    console.error("Accept error:", error);
+                    alert("Error accepting trainer: " + error.message);
+                } else {
+                    alert("Trainer accepted!");
+                }
+            } else {
+                await supabase
+                    .from('trainer_relationships')
+                    .update({ status: 'rejected' })
+                    .eq('trainer_id', request.sender.id)
+                    .eq('client_id', user.id);
+            }
+            setRequests(prev => prev.filter(r => r.id !== request.id));
+        }
+        else if (request.type === 'workout_invite' && action === 'join') {
+            router.push(`/tracker?join=${request.data.groupId}&gym=${request.data.gymId}`);
+        }
+        else {
+            setRequests(prev => prev.filter(r => r.id !== request.id));
         }
     };
 
@@ -172,101 +183,55 @@ export default function NotificationsPage() {
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: '600' }}>{req.sender.name || req.sender.username}</div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                    {req.type === 'friend_request'
-                                        ? `@${req.sender.username} • sent a friend request`
-                                        : req.type === 'workout_invite'
-                                            ? `@${req.sender.username} • invited you to workout at ${req.data?.gymName || 'the gym'}`
-                                            : req.type === 'template_share'
-                                                ? `@${req.sender.username} • shared a workout routine with you`
-                                                : `@${req.sender.username} • shared a finished workout`
-                                    }
+                                    {req.type === 'friend_request' && `@${req.sender.username} • sent a friend request`}
+                                    {req.type === 'trainer_invite' && (
+                                        <span>
+                                            @{req.sender.username} • wants to be your Personal Trainer
+                                            {req.data?.gymName && (
+                                                <span style={{
+                                                    display: 'inline-block',
+                                                    marginLeft: '8px',
+                                                    padding: '2px 8px',
+                                                    background: 'var(--surface-highlight)',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.75rem',
+                                                    color: 'var(--brand-yellow)'
+                                                }}>
+                                                    📍 {req.data.gymName}
+                                                </span>
+                                            )}
+                                        </span>
+                                    )}
+                                    {req.type === 'workout_invite' && `@${req.sender.username} • invited you to workout`}
+                                    {req.type === 'template_share' && `@${req.sender.username} • shared a routine`}
+                                    {req.type === 'workout_share' && `@${req.sender.username} • shared a workout`}
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                                    {req.type === 'friend_request' ? (
+                                    {/* ACTIONS */}
+                                    {req.type === 'friend_request' && (
                                         <>
-                                            <button
-                                                onClick={() => handleAction(req, 'accept')}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '8px',
-                                                    background: 'var(--primary)',
-                                                    color: '#000',
-                                                    border: 'none',
-                                                    borderRadius: '8px',
-                                                    fontWeight: '600',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Accept
-                                            </button>
-                                            <button
-                                                onClick={() => handleAction(req, 'decline')}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '8px',
-                                                    background: 'var(--surface-highlight)',
-                                                    color: 'var(--text-dim)',
-                                                    border: '1px solid var(--border)',
-                                                    borderRadius: '8px',
-                                                    fontWeight: '600',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Decline
-                                            </button>
+                                            <button onClick={() => handleAction(req, 'accept')} className="btn-primary" style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', fontWeight: 'bold', background: 'var(--primary)', color: 'black' }}>Accept</button>
+                                            <button onClick={() => handleAction(req, 'decline')} className="btn-secondary" style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Decline</button>
                                         </>
-                                    ) : (
+                                    )}
+
+                                    {req.type === 'trainer_invite' && (
                                         <>
-                                            <button
-                                                onClick={() => handleAction(req, 'join')}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '8px',
-                                                    background: 'var(--brand-yellow)',
-                                                    color: '#000',
-                                                    border: 'none',
-                                                    borderRadius: '8px',
-                                                    fontWeight: '600',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                🏋️ Join Workout
-                                            </button>
-                                            <button
-                                                onClick={() => handleAction(req, 'decline')}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '8px',
-                                                    background: 'var(--surface-highlight)',
-                                                    color: 'var(--text-dim)',
-                                                    border: '1px solid var(--border)',
-                                                    borderRadius: '8px',
-                                                    fontWeight: '600',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Decline
-                                            </button>
+                                            <button onClick={() => handleAction(req, 'accept')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', fontWeight: 'bold', background: 'var(--primary)', color: 'black' }}>Accept Trainer</button>
+                                            <button onClick={() => handleAction(req, 'decline')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Decline</button>
+                                        </>
+                                    )}
+
+                                    {req.type === 'workout_invite' && (
+                                        <>
+                                            <button onClick={() => handleAction(req, 'join')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', fontWeight: 'bold', background: 'var(--brand-yellow)', color: 'black' }}>Join Workout</button>
+                                            <button onClick={() => handleAction(req, 'decline')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Decline</button>
                                         </>
                                     )}
 
                                     {(req.type === 'template_share' || req.type === 'workout_share') && (
-                                        <button
-                                            onClick={() => handleAction(req, 'view')}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px',
-                                                background: 'var(--surface-highlight)',
-                                                color: 'var(--text-main)',
-                                                border: '1px solid var(--border)',
-                                                borderRadius: '8px',
-                                                fontWeight: '600',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Dismiss
-                                        </button>
+                                        <button onClick={() => handleAction(req, 'dismiss')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)' }}>Dismiss</button>
                                     )}
                                 </div>
                             </div>

@@ -106,7 +106,7 @@ $$;
 
 -- 6. RPC: Invite Client (Directly)
 CREATE OR REPLACE FUNCTION invite_client_by_id(
-    client_id UUID
+    p_client_id UUID
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -118,7 +118,7 @@ BEGIN
     -- Check if relationship already exists
     SELECT EXISTS (
         SELECT 1 FROM trainer_relationships 
-        WHERE trainer_id = auth.uid() AND client_id = invite_client_by_id.client_id
+        WHERE trainer_id = auth.uid() AND client_id = p_client_id
     ) INTO exists_check;
 
     IF exists_check THEN
@@ -127,7 +127,7 @@ BEGIN
 
     -- Insert Pending
     INSERT INTO trainer_relationships (trainer_id, client_id, status)
-    VALUES (auth.uid(), client_id, 'pending');
+    VALUES (auth.uid(), p_client_id, 'pending');
 
     RETURN jsonb_build_object('success', true);
 END;

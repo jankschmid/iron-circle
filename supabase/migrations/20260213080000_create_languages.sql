@@ -13,17 +13,30 @@ CREATE TABLE IF NOT EXISTS app_languages (
 ALTER TABLE app_languages ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Everyone can read active languages
-CREATE POLICY "Public read access" ON app_languages FOR SELECT USING (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'app_languages' AND policyname = 'Public read access'
+    ) THEN
+        CREATE POLICY "Public read access" ON app_languages FOR SELECT USING (true);
+    END IF;
+END $$;
 
 -- Policy: Only Admins can insert/update/delete
--- Assuming is_super_admin check from profiles or similar logic
-CREATE POLICY "Admins can manage languages" ON app_languages
-FOR ALL
-USING (
-  auth.uid() IN (
-    SELECT id FROM profiles WHERE is_super_admin = true
-  )
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'app_languages' AND policyname = 'Admins can manage languages'
+    ) THEN
+        CREATE POLICY "Admins can manage languages" ON app_languages
+        FOR ALL
+        USING (
+          auth.uid() IN (
+            SELECT id FROM profiles WHERE is_super_admin = true
+          )
+        );
+    END IF;
+END $$;
 
 -- Seed initial data
 INSERT INTO app_languages (code, label, flag) VALUES

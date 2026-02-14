@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
 import { useTranslation } from '@/context/TranslationContext';
+import { useToast } from '@/components/ToastProvider';
 import GymChat from './GymChat';
 import GymAdminModal from './GymAdminModal';
 
@@ -522,6 +523,8 @@ export function GymChallenges({ challenges }) {
     const supabase = createClient();
     const [myChallenges, setMyChallenges] = useState({});
 
+    const [showSubmitModal, setShowSubmitModal] = useState(null); // challengeId
+
     useEffect(() => {
         if (!user) return;
         const fetchParticipation = async () => {
@@ -547,37 +550,135 @@ export function GymChallenges({ challenges }) {
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {challenges.map(c => {
-                const joined = myChallenges[c.id];
-                return (
-                    <div key={c.id} style={{ background: 'var(--surface)', borderRadius: '16px', padding: '16px', border: '1px solid var(--border)' }}>
-                        <h3 style={{ margin: '0 0 8px 0' }}>{c.title}</h3>
-                        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '16px' }}>{c.description}</p>
+        <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {challenges.map(c => {
+                    const joined = myChallenges[c.id];
+                    return (
+                        <div key={c.id} style={{ background: 'var(--surface)', borderRadius: '16px', padding: '16px', border: '1px solid var(--border)' }}>
+                            <h3 style={{ margin: '0 0 8px 0' }}>{c.title}</h3>
+                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '16px' }}>{c.description}</p>
 
-                        {joined ? (
-                            <div style={{ background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
-                                    <span>{t('Progress')}</span>
-                                    <span>{joined.progress || 0} / {c.target_value || 100}</span>
+                            {joined ? (
+                                <div style={{ background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
+                                        <span>{t('Progress')}</span>
+                                        <span>{joined.progress || 0} / {c.target_value || 100}</span>
+                                    </div>
+                                    <div style={{ height: '8px', background: '#333', borderRadius: '4px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${Math.min(100, ((joined.progress || 0) / (c.target_value || 1) * 100))}%`, height: '100%', background: 'var(--primary)' }} />
+                                    </div>
+                                    <button
+                                        onClick={() => setShowSubmitModal(c)}
+                                        style={{ width: '100%', marginTop: '12px', padding: '8px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                                    >
+                                        {t('Submit Result')}
+                                    </button>
                                 </div>
-                                <div style={{ height: '8px', background: '#333', borderRadius: '4px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${Math.min(100, ((joined.progress || 0) / (c.target_value || 1) * 100))}%`, height: '100%', background: 'var(--primary)' }} />
-                                </div>
-                                <button style={{ width: '100%', marginTop: '12px', padding: '8px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}>
-                                    {t('Submit Result')}
+                            ) : (
+                                <button
+                                    onClick={() => handleJoin(c.id)}
+                                    style={{ width: '100%', padding: '12px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                    {t('Join Challenge')}
                                 </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => handleJoin(c.id)}
-                                style={{ width: '100%', padding: '12px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                {t('Join Challenge')}
-                            </button>
-                        )}
-                    </div>
-                );
-            })}
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {showSubmitModal && (
+                <SubmitResultModal
+                    challenge={showSubmitModal}
+                    onClose={() => setShowSubmitModal(null)}
+                />
+            )}
+        </>
+    );
+}
+
+function SubmitResultModal({ challenge, onClose }) {
+    const { t } = useTranslation();
+    const supabase = createClient();
+    const [value, setValue] = useState('');
+    const [proof, setProof] = useState('');
+    const [note, setNote] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const { toast } = useToast();
+
+    const handleSubmit = async () => {
+        if (!value) return toast.error(t("Please enter a value"));
+        setLoading(true);
+
+        try {
+            const { data, error } = await supabase.rpc('submit_challenge_result', {
+                p_challenge_id: challenge.id,
+                p_value: parseFloat(value),
+                p_proof_url: proof || null,
+                p_note: note || null
+            });
+
+            if (error) throw error;
+
+            if (data.success) {
+                toast.success(t("Result Submitted! Pending verification."));
+                onClose();
+            } else {
+                toast.error(`${t("Submission failed")}: ${data.message}`);
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error(`${t("Error")}: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 200,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }} onClick={onClose}>
+            <div style={{
+                background: 'var(--surface)', width: '100%', maxWidth: '400px',
+                borderRadius: '16px', padding: '24px', border: '1px solid var(--border)'
+            }} onClick={e => e.stopPropagation()}>
+                <h3 style={{ margin: '0 0 16px 0' }}>{t('Submit Result')}</h3>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>{challenge.title}</p>
+
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Value')} (e.g. kg, reps)</label>
+                <input
+                    type="number"
+                    value={value} onChange={e => setValue(e.target.value)}
+                    placeholder="0"
+                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', marginBottom: '16px' }}
+                />
+
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Proof URL')} ({t('Optional')})</label>
+                <input
+                    type="text"
+                    value={proof} onChange={e => setProof(e.target.value)}
+                    placeholder="https://..."
+                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', marginBottom: '16px' }}
+                />
+
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Note')}</label>
+                <textarea
+                    value={note} onChange={e => setNote(e.target.value)}
+                    placeholder={t('Notes (Optional)')}
+                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', marginBottom: '24px', resize: 'vertical' }}
+                />
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    <button onClick={onClose} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}>
+                        {t('Cancel')}
+                    </button>
+                    <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: '12px', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                        {loading ? t('Saving...') : t('Submit')}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

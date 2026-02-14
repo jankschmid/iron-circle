@@ -128,6 +128,56 @@ export default function ProgressPage() {
                 </div>
             </section>
 
+            {/* Monthly Progress (4 Weeks) */}
+            <section style={{ marginBottom: '32px' }}>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: '12px' }}>Monthly Progress</h3>
+                <div style={{
+                    background: 'var(--surface)',
+                    padding: '24px',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--border)',
+                    height: '200px',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'space-between',
+                    gap: '24px'
+                }}>
+                    {/* Mock Data for 4 Weeks - In real app, aggregate history by week */}
+                    {[1, 0.8, 1.1, 1.2].map((factor, i) => (
+                        <div key={i} style={{
+                            width: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '8px',
+                            height: '100%',
+                            justifyContent: 'flex-end'
+                        }}>
+                            <div style={{
+                                width: '100%',
+                                height: `${Math.min(100, factor * 60)}%`, // Mock scale
+                                background: i === 3 ? 'var(--primary)' : 'var(--surface-highlight)',
+                                borderRadius: '8px',
+                                transition: 'height 0.5s ease',
+                                position: 'relative'
+                            }}>
+                                {i === 3 && (
+                                    <div style={{
+                                        position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)',
+                                        fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 'bold'
+                                    }}>
+                                        THIS WEEK
+                                    </div>
+                                )}
+                            </div>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                Week {i + 1}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
             {/* Stats Grid */}
             <section style={{ marginBottom: '32px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <StatCard label="Total Workouts" value={totalWorkouts} icon="🏋️‍♂️" />

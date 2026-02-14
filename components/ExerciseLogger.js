@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 
 export default function ExerciseLogger({ exerciseId, setId, previousData, onLog, initialData, type = 'Strength', suggestion = null }) {
-    // Initialize state from existing data
-    const [weight, setWeight] = useState((initialData?.weight !== undefined && initialData.weight !== null) ? initialData.weight : '');
-    const [reps, setReps] = useState((initialData?.reps !== undefined && initialData.reps !== null) ? initialData.reps : '');
+    // Initialize state from existing data - treat 0 as empty to show placeholder
+    const [weight, setWeight] = useState((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '');
+    const [reps, setReps] = useState((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '');
     // For Cardio: Weight = Distance (m/km) or Ignored, Reps = Time (seconds/minutes)
     // Let's standardize: Reps field stores DURATION (seconds) for Cardio/Stretch. Weight stores Distance (optional) or is hidden.
 
@@ -20,89 +20,88 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
     const isCardio = type === 'Cardio' || type === 'Stretch';
     const isStretch = type === 'Stretch';
 
+    const isPush = suggestion?.isPush; // Check if it's an Overload suggestion
+
     // Apply Suggestion
     const applySuggestion = () => {
         if (!suggestion) return;
         setWeight(suggestion.weight);
         setReps(suggestion.reps);
-        // We don't auto-save (onLog) yet, let user confirm or adjust.
-        // Or should we? "Click: Füllt die Felder automatisch aus." -> Usually implies fill inputs.
+
+        // Haptic Feedback for "Locking in" the smart value
+        if (navigator.vibrate) navigator.vibrate(20);
     };
 
-    // Update local state if initialData changes
+    // Calculate Dynamic Styling
+    const getInputStyle = (inputType) => {
+        const baseStyle = {
+            background: 'var(--surface-highlight)',
+            width: '100%',
+            padding: '12px',
+            borderRadius: 'var(--radius-sm)',
+            textAlign: 'center',
+            border: '1px solid transparent',
+            transition: 'all 0.2s',
+            color: 'var(--text-main)',
+            fontWeight: '600'
+        };
 
-    // Update local state if initialData changes
-    useEffect(() => {
-        if (initialData) {
-            setWeight((initialData.weight !== undefined && initialData.weight !== null) ? initialData.weight : '');
-            setReps((initialData.reps !== undefined && initialData.reps !== null) ? initialData.reps : '');
+        const currentVal = inputType === 'weight' ? parseFloat(weight) : parseFloat(reps);
+        const ghostVal = suggestion ? (inputType === 'weight' ? suggestion.weight : suggestion.reps) : (previousData ? (inputType === 'weight' ? previousData.lastWeight : previousData.lastReps) : 0);
 
-            // If Cardio, convert reps (seconds) to MM:SS for display
-            if (isCardio && initialData.reps) {
-                const mins = Math.floor(initialData.reps / 60);
-                const secs = initialData.reps % 60;
-                setDurationStr(`${mins}:${secs < 10 ? '0' : ''}${secs}`);
-            }
-
-            if (initialData.rpe !== undefined) setRpe(initialData.rpe);
-            setIsLogged(!!initialData.completed);
+        // 1. Gold Border if PR
+        if (isPR && inputType === 'weight') {
+            baseStyle.border = '2px solid #fbbf24'; // Gold
+            baseStyle.boxShadow = '0 0 10px rgba(251, 191, 36, 0.3)';
         }
-    }, [initialData, isCardio]);
+        // 2. Fire Badge (Simulated validation visual)
+        else if (currentVal > ghostVal && ghostVal > 0) {
+            // Beating the ghost? Subtle highlight
+            baseStyle.border = '1px solid var(--accent)';
+        }
 
-    // Handle Duration Input Change (MM:SS or just Minutes?)
-    // Let's allow free text like "10" (min) or "10:30"
+        return baseStyle;
+    };
+
+    // Trigger Haptic on PR
+    useEffect(() => {
+        if (isPR && navigator.vibrate) {
+            navigator.vibrate([30, 50, 30]); // Short Double Pulse
+        }
+    }, [isPR]);
+
+    const handleBlur = () => {
+        // Optional: formatting or auto-save draft
+    };
+
     const handleDurationChange = (val) => {
         setDurationStr(val);
-        // Parse to seconds for internal storage (reps)
+        // Simple parsing: if contains ':', assume MM:SS, else assume Minutes
         if (val.includes(':')) {
-            const [m, s] = val.split(':').map(Number);
-            if (!isNaN(m)) setReps((m * 60) + (s || 0));
+            const [m, s] = val.split(':').map(str => parseFloat(str) || 0);
+            setReps((m * 60) + s);
         } else {
-            const m = parseFloat(val);
-            if (!isNaN(m)) setReps(m * 60); // Assume minutes if just number
+            setReps((parseFloat(val) || 0) * 60);
         }
     };
 
     const handleLog = () => {
-        if (isLogged) {
-            // UNCHECK / EDIT
-            setIsLogged(false);
-            onLog({ weight, reps, rpe, completed: false });
-            return;
-        }
+        if ((!weight && weight !== 0) && (!reps && reps !== 0)) return;
 
-        if ((!weight || !reps) && !isCardio) {
-            return;
-        }
+        const logData = {
+            weight: parseFloat(weight) || 0,
+            reps: parseFloat(reps) || 0,
+            rpe: parseFloat(rpe) || 0,
+            completed: true
+        };
 
-        if (isCardio && !reps && !weight) {
-            // Allow at least one
-            // Actually for stretch, maybe just checking it off is enough? 
-            // If Stretch and no time, maybe just logging defaults?
-        }
-
-        const w = parseFloat(weight) || 0;
-        const r = parseFloat(reps) || 0; // Duration in seconds if Cardio
-
-        // Check PR logic (Simple Volume)
-        if (!isCardio) {
-            const currentVolume = w * r;
-            const previousVolume = previousData ? previousData.lastWeight * previousData.lastReps : 0;
-            if (previousVolume > 0 && currentVolume > previousVolume) setIsPR(true);
-            else setIsPR(false);
-        }
-
-        onLog({ weight: w, reps: r, rpe, completed: true });
+        // Determine PR locally if we can, or rely on parent
+        // For now, just call onLog
+        onLog(logData);
         setIsLogged(true);
-    };
 
-    const handleBlur = () => {
-        // Auto-save on blur
-        if (weight || reps || rpe) {
-            const w = parseFloat(weight) || 0;
-            const r = parseFloat(reps) || 0;
-            onLog({ weight: w, reps: r, rpe, completed: isLogged });
-        }
+        // Haptic
+        if (navigator.vibrate) navigator.vibrate(50);
     };
 
     return (
@@ -117,75 +116,91 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
             opacity: isLogged ? 0.6 : 1,
             transition: 'opacity 0.3s'
         }}>
-            {/* Smart Chip (Absolute or relative above?) - Let's use Grid spanning */}
-            {suggestion && !isLogged && !weight && !reps && (
-                <div style={{
-                    gridColumn: '1 / -1',
-                    marginBottom: '8px',
-                    display: 'flex',
-                    justifyContent: 'center'
-                }}>
-                    <button
-                        onClick={applySuggestion}
-                        style={{
-                            background: 'var(--accent)',
-                            color: '#000',
-                            border: 'none',
-                            padding: '4px 12px',
-                            borderRadius: '100px',
-                            fontSize: '0.8rem',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                        }}
-                    >
-                        <span>⚡ Vorschlag: {suggestion.weight}kg × {suggestion.reps}</span>
-                        {suggestion.reason && <span style={{ fontWeight: 'normal', opacity: 0.8 }}>({suggestion.reason})</span>}
-                    </button>
-                </div>
-            )}
 
             {/* Input 1: Weight (Strength) OR Distance/Intensity (Cardio) */}
             <div style={{ position: 'relative' }}>
                 <input
                     type={isCardio ? "text" : "number"}
-                    placeholder={isCardio ? (isStretch ? 'Reps/Time' : 'Dist (km)') : (previousData ? previousData.lastWeight : '-')}
+                    placeholder={
+                        suggestion
+                            ? `${suggestion.weight}kg`
+                            : (isCardio ? (isStretch ? 'Reps/Time' : 'Dist (km)') : (previousData ? previousData.lastWeight : '-'))
+                    }
+                    className={isPush && !weight ? "placeholder-blue" : ""}
                     value={isLogged ? ((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '') : weight}
                     onChange={(e) => setWeight(e.target.value)}
                     onBlur={handleBlur}
+                    onClick={() => {
+                        // Quick-Fill on Click if empty and suggestion exists
+                        if (isPush && !weight && suggestion) applySuggestion();
+                    }}
                     disabled={isLogged}
                     style={{
-                        background: 'var(--surface-highlight)',
-                        color: 'var(--text-main)',
-                        width: '100%',
-                        padding: '12px',
-                        borderRadius: 'var(--radius-sm)',
-                        textAlign: 'center',
-                        border: isPR ? '1px solid var(--accent)' : 'none'
+                        ...getInputStyle('weight'),
+                        // Overwrite color for placeholder logic via CSS class or inline mock?
+                        // Inline mock for colored placeholder is hard in pure JS.
+                        // But we can color the text blue if empty? No, input text color is for value.
+                        // We will use a label overlay or just rely on the 'placeholder-blue' class being added globally?
+                        // Let's assume we can't easily style placeholder color inline safely without ::placeholder pseudo.
+                        // Hack: If empty and isPush, we show the VALUE as suggestion and select it?
+                        // No, that's annoying.
+                        // Better: We add a small floating label "Target: 50kg" in Blue above.
                     }}
                 />
                 {!isCardio && <span style={{ position: 'absolute', right: '4px', top: '12px', fontSize: '0.6rem', color: 'var(--text-dim)' }}>kg</span>}
+
+                {/* Blue Ghost Floating Label */}
+                {isPush && !weight && suggestion && (
+                    <div
+                        onClick={applySuggestion}
+                        style={{
+                            position: 'absolute',
+                            left: 0, right: 0, top: 0, bottom: 0,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#0ea5e9', // Blue-500
+                            fontWeight: 'bold',
+                            fontSize: '0.9rem',
+                            background: 'rgba(14, 165, 233, 0.1)',
+                            pointerEvents: 'none', // Let input handle click? No, we want to capture click to fill?
+                            // Actually input handles click.
+                        }}
+                    >
+                        {suggestion.weight}
+                    </div>
+                )}
             </div>
 
             {/* Input 2: Reps (Strength) OR Duration (Cardio) */}
             <div style={{ position: 'relative' }}>
                 <input
                     type={isCardio ? "text" : "number"}
-                    placeholder={isCardio ? 'Time (min)' : (previousData ? previousData.lastReps : '-')}
+                    placeholder={suggestion ? `${suggestion.reps}` : (isCardio ? 'Time (min)' : (previousData ? previousData.lastReps : '-'))}
                     value={isLogged ? ((isCardio && durationStr) ? durationStr : ((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '')) : (isCardio ? durationStr : reps)}
                     onChange={(e) => isCardio ? handleDurationChange(e.target.value) : setReps(e.target.value)}
                     onBlur={handleBlur}
-                    disabled={isLogged}
-                    style={{
-                        background: 'var(--surface-highlight)',
-                        color: 'var(--text-main)',
-                        width: '100%',
-                        padding: '12px',
-                        borderRadius: 'var(--radius-sm)',
-                        textAlign: 'center'
+                    onClick={() => {
+                        if (isPush && !reps && suggestion) applySuggestion();
                     }}
+                    disabled={isLogged}
+                    style={getInputStyle('reps')}
                 />
+                {/* Blue Ghost Floating Label for Reps */}
+                {isPush && !reps && suggestion && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            left: 0, right: 0, top: 0, bottom: 0,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#0ea5e9',
+                            fontWeight: 'bold',
+                            fontSize: '0.9rem',
+                            background: 'rgba(14, 165, 233, 0.1)',
+                            pointerEvents: 'none'
+                        }}
+                    >
+                        {suggestion.reps}
+                    </div>
+                )}
             </div>
 
             {/* RPE Input */}
@@ -205,7 +220,8 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
                     padding: '12px',
                     borderRadius: 'var(--radius-sm)',
                     textAlign: 'center',
-                    fontSize: '0.9rem'
+                    fontSize: '0.9rem',
+                    border: 'none'
                 }}
             />
 
@@ -213,7 +229,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
             <button
                 onClick={handleLog}
                 style={{
-                    background: isLogged ? 'var(--success)' : 'var(--primary)',
+                    background: isLogged ? 'var(--success)' : (isPush && weight && reps ? '#0ea5e9' : 'var(--primary)'), // Blue check if pushing?
                     color: isLogged ? '#FFF' : '#000',
                     border: 'none',
                     borderRadius: 'var(--radius-sm)',
@@ -221,15 +237,18 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    transform: isLogged ? 'scale(0.95)' : 'scale(1)'
                 }}
             >
-                {isLogged ? '✓' : '+'}
+                {isLogged ? '✓' : (isPush && weight && reps ? '🔥' : '+')}
             </button>
 
-            {isPR && isLogged && (
-                <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--accent)', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                    🏆 NEW PR!
+            {/* PR Toast / Badge Row */}
+            {(isPR || (isPush && isLogged)) && (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', fontSize: '0.8rem', fontWeight: 'bold', marginTop: '-4px' }}>
+                    {isPR ? <span style={{ color: '#fbbf24' }}>🏆 NEW PR!</span> : <span style={{ color: '#0ea5e9' }}>🔥 OVERLOAD!</span>}
                 </div>
             )}
         </div>

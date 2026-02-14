@@ -58,7 +58,7 @@ export function useConversations(userId) {
                         otherUserId = other.user_id;
                         const { data: profile } = await supabase
                             .from('profiles')
-                            .select('name, avatar_url')
+                            .select('name, avatar_url, prestige_level')
                             .eq('id', other.user_id)
                             .maybeSingle();
 
@@ -81,7 +81,8 @@ export function useConversations(userId) {
                     lastMessage: lastMsg,
                     unreadCount: 0, // TODO: Calc unread
                     last_read_at: participantInfo?.last_read_at,
-                    otherUserId
+                    otherUserId,
+                    prestige_level: profile?.prestige_level || 0
                 };
             }));
 

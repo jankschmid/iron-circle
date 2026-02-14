@@ -147,9 +147,8 @@ export default function OnboardingWizard() {
                 gender: formData.gender,
                 height: parseFloat(formData.height),
                 weight: parseFloat(formData.weight),
-                // Fix: 'goal' is string (Muscle), 'workout_goal' is int (Annual Target).
-                // Store style in Bio, leave workout_goal to default (150).
-                bio: `Goal: ${formData.goal}`,
+                bio: '', // Bio is optional, goal is separate now
+                goal: formData.goal,
                 privacy_settings: {
                     profile_visibility: formData.profileVisibility,
                     live_status: !formData.ghostMode,

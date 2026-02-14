@@ -3,9 +3,11 @@
 import { useStore } from '@/lib/store';
 import { useState } from 'react';
 
+import { useTranslation } from '@/context/TranslationContext';
 import ErrorBoundary from './ErrorBoundary';
 
 function LiveStatusContent() {
+    const { t } = useTranslation();
     const { friends, user, workoutSession, activeWorkout, exercises } = useStore();
     const [selectedFriend, setSelectedFriend] = useState(null);
 
@@ -20,7 +22,7 @@ function LiveStatusContent() {
             avatar: user.avatar,
             activity: {
                 tracker: workoutSession ? {
-                    location: workoutSession.gyms?.name || 'Unknown Gym',
+                    location: workoutSession.gyms?.name || t('Unknown Gym'),
                     startTime: workoutSession.start_time
                 } : null,
                 workout: activeWorkout ? {
@@ -46,8 +48,8 @@ function LiveStatusContent() {
     return (
         <section>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h3 style={{ fontSize: '1.2rem' }}>Live Circle</h3>
-                <span style={{ fontSize: '0.9rem', color: 'var(--success)' }}>● {allActive.length} Active</span>
+                <h3 style={{ fontSize: '1.2rem' }}>{t('Live Circle')}</h3>
+                <span style={{ fontSize: '0.9rem', color: 'var(--success)' }}>● {allActive.length} {t('Active')}</span>
             </div>
 
             <div style={{
@@ -105,7 +107,7 @@ function LiveStatusContent() {
                                 minHeight: '50px'
                             }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '2px' }}>
-                                    Current Workout
+                                    {t('Current Workout')}
                                 </div>
                                 {workout ? (
                                     <>
@@ -120,7 +122,7 @@ function LiveStatusContent() {
                                     </>
                                 ) : (
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-                                        No Workout Started
+                                        {t('No Workout Started')}
                                     </div>
                                 )}
                             </div>
@@ -133,7 +135,7 @@ function LiveStatusContent() {
                                 minHeight: '50px'
                             }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '2px' }}>
-                                    Location
+                                    {t('Location')}
                                 </div>
                                 {tracker ? (
                                     <>
@@ -146,7 +148,7 @@ function LiveStatusContent() {
                                     </>
                                 ) : (
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-                                        Not in Gym
+                                        {t('Not in Gym')}
                                     </div>
                                 )}
                             </div>
@@ -155,7 +157,7 @@ function LiveStatusContent() {
                 })}
                 {allActive.length === 0 && (
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', width: '100%', fontStyle: 'italic' }}>
-                        No one is training right now. Be the first.
+                        {t('No one is training right now. Be the first.')}
                     </div>
                 )}
             </div>
@@ -205,7 +207,7 @@ function LiveStatusContent() {
                             />
                             <div>
                                 <h3 style={{ fontSize: '1.3rem', margin: 0 }}>{selectedFriend.name}</h3>
-                                <div style={{ color: 'var(--success)', fontSize: '0.9rem' }}>● Currently Live</div>
+                                <div style={{ color: 'var(--success)', fontSize: '0.9rem' }}>● {t('Currently Live')}</div>
                             </div>
                         </div>
 
@@ -217,12 +219,12 @@ function LiveStatusContent() {
                                     {/* Workout Section */}
                                     <div style={{ background: 'var(--surface-highlight)', padding: '16px', borderRadius: '12px', marginBottom: '12px' }}>
                                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
-                                            Current Workout
+                                            {t('Current Workout')}
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div>
                                                 <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--primary)' }}>
-                                                    {workout ? (workout.detail || workout.name) : 'No Workout Started'}
+                                                    {workout ? (workout.detail || workout.name) : t('No Workout Started')}
                                                 </div>
                                                 <div style={{ fontSize: '0.95rem', color: 'var(--text-main)' }}>
                                                     {workout?.status || ''}
@@ -240,16 +242,16 @@ function LiveStatusContent() {
                                     <div style={{ background: 'var(--surface-highlight)', padding: '16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
                                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                                Location
+                                                {t('Location')}
                                             </div>
                                             <div style={{ fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                                                {tracker ? `📍 ${tracker.location}` : 'Not in Gym'}
+                                                {tracker ? `📍 ${tracker.location}` : t('Not in Gym')}
                                             </div>
                                         </div>
                                         {tracker && (
                                             <div style={{ textAlign: 'right' }}>
                                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                                    Session Time
+                                                    {t('Session Time')}
                                                 </div>
                                                 <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--accent)' }}>
                                                     {Math.floor((new Date() - new Date(tracker.startTime)) / 1000 / 60)}m
@@ -261,9 +263,9 @@ function LiveStatusContent() {
                                     {/* Full Progress Preview (if available) */}
                                     {workout?.fullLogs && (
                                         <div style={{ maxHeight: '250px', overflowY: 'auto', borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px' }}>
-                                            <div style={{ fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '12px' }}>Workout Progress</div>
+                                            <div style={{ fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '12px' }}>{t('Workout Progress')}</div>
                                             {workout.fullLogs.map((log, i) => {
-                                                const exName = log.exerciseName || exercises.find(e => e.id === log.exercise_id)?.name || 'Unknown Exercise';
+                                                const exName = log.exerciseName || exercises.find(e => e.id === log.exercise_id)?.name || t('Unknown Exercise');
                                                 const total = log.sets.length;
                                                 const completed = log.sets.filter(s => s.completed).length;
                                                 const isDone = completed === total && total > 0;
@@ -278,7 +280,7 @@ function LiveStatusContent() {
                                                     }}>
                                                         <span style={{ fontSize: '0.9rem' }}>{exName}</span>
                                                         <span style={{ fontSize: '0.85rem' }}>
-                                                            {isDone ? 'Finished' : `${completed}/${total} Sets`}
+                                                            {isDone ? t('Finished') : `${completed}/${total} ${t('Sets')}`}
                                                         </span>
                                                     </div>
                                                 );
@@ -288,7 +290,7 @@ function LiveStatusContent() {
 
                                     {!workout?.fullLogs && workout && (
                                         <div style={{ fontStyle: 'italic', color: 'var(--text-dim)', fontSize: '0.9rem', marginTop: '16px' }}>
-                                            No detailed plan data available.
+                                            {t('No detailed plan data available.')}
                                         </div>
                                     )}
                                 </div>

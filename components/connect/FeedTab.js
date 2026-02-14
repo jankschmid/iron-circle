@@ -5,9 +5,11 @@ import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function FeedTab() {
     const { user, friends, exercises } = useStore();
+    const { t } = useTranslation();
     const [feed, setFeed] = useState([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
@@ -32,7 +34,7 @@ export default function FeedTab() {
                 .from('workouts')
                 .select(`
                     *,
-                    profile:user_id (name, username, avatar_url, level, xp),
+                    profile:user_id (name, username, avatar_url, level, xp, prestige_level),
                     likes:workout_likes (user_id),
                     logs:workout_logs (exercise_id, sets)
                 `)
@@ -92,34 +94,34 @@ export default function FeedTab() {
     };
 
     const summarizeWorkout = (logs, exerciseList) => {
-        if (!logs || logs.length === 0) return "No exercises recorded.";
+        if (!logs || logs.length === 0) return t("No exercises recorded.");
 
         // Count total sets and PRs (if we had PR data attached)
         const exerciseNames = logs.map(l => {
             const ex = exerciseList.find(e => e.id === l.exercise_id);
-            return ex ? ex.name : 'Unknown Exercise';
+            return ex ? ex.name : t('Unknown Exercise');
         });
 
         // Unique names
         const unique = [...new Set(exerciseNames)];
         if (unique.length > 3) {
-            return `${unique.slice(0, 3).join(', ')} + ${unique.length - 3} more`;
+            return `${unique.slice(0, 3).join(', ')} + ${unique.length - 3} ${t('more')}`;
         }
         return unique.join(', ');
     };
 
-    if (!user) return <div className="p-4">Loading...</div>;
+    if (!user) return <div className="p-4">{t('Loading...')}</div>;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Find Friends CTA if empty */}
             {loading ? (
-                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Loading updates...</div>
+                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>{t('Loading updates...')}</div>
             ) : feed.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                     <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🌍</div>
-                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>Your Feed is Empty</p>
-                    <p style={{ marginBottom: '16px' }}>Add friends to see their workouts here!</p>
+                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{t('Your Feed is Empty')}</p>
+                    <p style={{ marginBottom: '16px' }}>{t('Add friends to see their workouts here!')}</p>
                     <Link href="/social/add" style={{
                         background: 'var(--primary)',
                         color: 'black',
@@ -129,7 +131,7 @@ export default function FeedTab() {
                         fontWeight: 'bold',
                         display: 'inline-block'
                     }}>
-                        Find Friends
+                        {t('Find Friends')}
                     </Link>
                 </div>
             ) : (
@@ -142,23 +144,39 @@ export default function FeedTab() {
                     }}>
                         {/* Header */}
                         <div style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border-light)' }}>
-                            <img
-                                src={post.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user_id}`}
-                                style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
-                            />
+                            <div style={{ position: 'relative' }}>
+                                <img
+                                    src={post.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user_id}`}
+                                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }}
+                                />
+                                {post.user?.prestige_level > 0 && (
+                                    <img
+                                        src={`/assets/prestige/Prestige_${String(post.user.prestige_level).padStart(2, '0')}.png`}
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: -4,
+                                            right: -4,
+                                            width: '20px',
+                                            height: '20px',
+                                            filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))'
+                                        }}
+                                        onError={(e) => e.currentTarget.style.display = 'none'}
+                                    />
+                                )}
+                            </div>
                             <div>
-                                <div style={{ fontWeight: 'bold' }}>{post.user?.name || 'Unknown'}
-                                    {post.user?.level && <span style={{ fontSize: '0.7rem', background: 'var(--surface-highlight)', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px', color: 'var(--primary)' }}>Lvl {post.user.level}</span>}
+                                <div style={{ fontWeight: 'bold' }}>{post.user?.name || t('Unknown')}
+                                    {post.user?.level && <span style={{ fontSize: '0.7rem', background: 'var(--surface-highlight)', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px', color: 'var(--primary)' }}>{t('Lvl')} {post.user.level}</span>}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    {formatDistanceToNow(new Date(post.end_time))} ago
+                                    {formatDistanceToNow(new Date(post.end_time))} {t('ago')}
                                 </div>
                             </div>
                         </div>
 
                         {/* Content */}
                         <div style={{ padding: '16px' }}>
-                            <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{post.name || 'Workout'}</h3>
+                            <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{post.name || t('Workout')}</h3>
                             <p style={{ fontSize: '0.9rem', color: 'var(--text-dim)', marginBottom: '12px' }}>
                                 {post.summary}
                             </p>
@@ -186,7 +204,7 @@ export default function FeedTab() {
                                     fontWeight: '600'
                                 }}
                             >
-                                {post.isLiked ? '❤️' : '🤍'} {post.likeCount || 0} Push
+                                {post.isLiked ? '❤️' : '🤍'} {post.likeCount || 0} {t('Push')}
                             </button>
                         </div>
                     </div>

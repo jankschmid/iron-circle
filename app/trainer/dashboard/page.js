@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
 import Link from 'next/link';
+import { useToast } from '@/components/ToastProvider';
 
 export default function TrainerDashboard() {
     const { user } = useStore();
@@ -49,6 +50,19 @@ export default function TrainerDashboard() {
         setInviteLink(link);
     };
 
+    // Auto-Search with Debounce
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchQuery && searchQuery.length >= 3) {
+                handleSearch();
+            } else {
+                setSearchResults([]);
+            }
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
     const handleSearch = async () => {
         if (!searchQuery || searchQuery.length < 3) return;
         setIsSearching(true);
@@ -60,14 +74,16 @@ export default function TrainerDashboard() {
         }
     };
 
+    const { success, error: toastError } = useToast();
+
     const handleAddClient = async (clientId) => {
-        const { data, error } = await supabase.rpc('invite_client_by_id', { client_id: clientId });
+        const { data, error } = await supabase.rpc('invite_client_by_id', { p_client_id: clientId });
         if (data?.success) {
-            alert("Invite sent!"); // Ideally replace with Toast
+            success("Invite sent!");
             // Remove from list or mark as invited?
             setSearchResults(prev => prev.map(p => p.id === clientId ? { ...p, is_client: true } : p));
         } else {
-            alert("Error: " + (data?.message || error?.message));
+            toastError("Error: " + (data?.message || error?.message));
         }
     };
 
@@ -160,8 +176,19 @@ export default function TrainerDashboard() {
                                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{profile.username}</div>
                                         </div>
                                     </div>
-                                    {profile.is_client ? (
+                                    {profile.client_status === 'active' ? (
                                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '8px' }}>Added</span>
+                                    ) : profile.client_status === 'pending' ? (
+                                        <button
+                                            onClick={() => handleAddClient(profile.id)}
+                                            style={{
+                                                padding: '8px 16px', borderRadius: '100px',
+                                                background: 'var(--surface-highlight)', color: 'var(--warning)', border: '1px solid var(--warning)',
+                                                fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer'
+                                            }}
+                                        >
+                                            Resend
+                                        </button>
                                     ) : (
                                         <button
                                             onClick={() => handleAddClient(profile.id)}

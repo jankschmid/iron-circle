@@ -137,14 +137,71 @@ export default function WorkoutSummary({ data, onContinue }) {
                         </div>
                     </div>
 
+                    {/* PR Celebration List */}
+                    {data.analysis && data.analysis.newRecords && data.analysis.newRecords.length > 0 && (
+                        <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+                            {data.analysis.newRecords.map((rec, idx) => (
+                                <motion.div
+                                    key={idx}
+                                    initial={{ x: -20, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    transition={{ delay: 0.2 + (idx * 0.1) }}
+                                    style={{
+                                        background: 'linear-gradient(to right, rgba(251, 191, 36, 0.1), transparent)',
+                                        borderLeft: '4px solid #fbbf24',
+                                        padding: '12px',
+                                        marginBottom: '8px',
+                                        borderRadius: '4px'
+                                    }}
+                                >
+                                    <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#fbbf24' }}>🏆 NEW RECORD</div>
+                                    <div style={{ fontSize: '1rem', color: '#fff' }}>
+                                        {/* We need exercise name, let's assume we can fetch or pass it. For now, ID */}
+                                        {/* Ideally the store passed the name. Let's fallback to "Exercise" if missing */}
+                                        Exercise Logged: {rec.value}kg <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>(Prev: {rec.previous}kg)</span>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Performance Trend Card */}
+                    {data.analysis && (
+                        <div style={{
+                            marginBottom: '24px',
+                            background: 'var(--surface-highlight)',
+                            padding: '16px',
+                            borderRadius: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Volume Trend</div>
+                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                                    {Math.abs(data.analysis.volumeDelta)}%
+                                    {data.analysis.volumeDelta >= 0 ?
+                                        <span style={{ color: 'var(--success)', marginLeft: '4px' }}>▲</span>
+                                        : <span style={{ color: 'var(--error)', marginLeft: '4px' }}>▼</span>
+                                    }
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>vs. Monthly Avg</div>
+                            </div>
+                            <div style={{ width: '1px', height: '40px', background: 'var(--border)' }} />
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Intensity</div>
+                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>-</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Target</div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Stats Grid */}
                     <div style={{
                         display: 'grid',
                         gridTemplateColumns: '1fr 1fr',
                         gap: '12px',
                         marginBottom: '32px',
-                        background: 'var(--surface-highlight)',
-                        padding: '16px',
                         borderRadius: '16px'
                     }}>
                         <div>
@@ -156,6 +213,25 @@ export default function WorkoutSummary({ data, onContinue }) {
                             <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{(volume / 1000).toFixed(1)}k kg</div>
                         </div>
                     </div>
+
+                    {/* XP Breakdown */}
+                    {data.breakdown && data.breakdown.length > 0 && (
+                        <div style={{
+                            marginBottom: '24px',
+                            background: 'rgba(255,255,255,0.05)',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            textAlign: 'left'
+                        }}>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '8px', textTransform: 'uppercase' }}>XP Breakdown</div>
+                            {data.breakdown.map((item, idx) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.9rem' }}>
+                                    <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
+                                    <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>+{item.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     <button
                         onClick={onContinue}
