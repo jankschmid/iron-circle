@@ -26,11 +26,11 @@ export default function OperationsBoard({ userId }) {
             const { data: ops, error: fetchError } = await supabase
                 .from('user_operations')
                 .select(`
-                id, current_progress, is_completed, is_claimed, expires_at,
+                id, current_progress, is_completed, expires_at,
                 template:operations_templates(title, description, target_value, target_metric, xp_reward, type)
             `)
                 .eq('user_id', userId)
-                .eq('is_claimed', false) // Only show unclaimed
+                // .eq('is_claimed', false) // REMOVED: Column does not exist. Assuming is_completed means claimed/done.
                 .order('expires_at', { ascending: true }); // Dailies first usually
 
             if (fetchError) throw fetchError;
@@ -124,7 +124,10 @@ export default function OperationsBoard({ userId }) {
                 <AnimatePresence>
                     {operations.map(op => {
                         const progress = Math.min((op.current_progress / op.template.target_value) * 100, 100);
-                        const isReadyToClaim = op.is_completed && !op.is_claimed;
+                        // Fix: Schema has no is_claimed. 
+                        // We assume is_completed = CLAIMED.
+                        // So Ready = Progress Met AND NOT Claimed (is_completed false)
+                        const isReadyToClaim = !op.is_completed && op.current_progress >= op.template.target_value;
                         const icon = getIcon(op.template.target_metric, op.template.type);
 
                         return (

@@ -4,7 +4,7 @@ import { useStore } from '@/lib/store';
 import { useState, useEffect } from 'react';
 import BottomNav from '@/components/BottomNav';
 import LiveStatus from '@/components/LiveStatus';
-import OperationsBoard from '@/components/OperationsBoard';
+import OperationsDashboard from '@/components/OperationsDashboard';
 import GoalSelectorModal from '@/components/GoalSelectorModal'; // Added
 import GymFinder from '@/components/GymFinder';
 import Link from 'next/link';
@@ -203,7 +203,7 @@ export default function Home() {
 
                     {/* Active Operations */}
                     <section style={{ marginTop: '24px', marginBottom: '24px' }}>
-                        <OperationsBoard userId={user.id} />
+                        <OperationsDashboard userId={user.id} />
                     </section>
 
                     <section style={{ marginTop: '32px' }}>

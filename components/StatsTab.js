@@ -94,16 +94,16 @@ export default function StatsTab() {
             </div>
 
             {/* Fun Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={{ background: 'var(--surface)', padding: '16px', borderRadius: 'var(--radius-md)', textAlign: 'center', border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: '1.5rem' }}>🔥</div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.2rem', margin: '4px 0' }}>{user.streak || 0}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Day Streak')}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: 'var(--radius-md)', textAlign: 'center', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <div style={{ fontSize: '2rem' }}>🔥</div>
+                    <div style={{ fontWeight: '900', fontSize: '1.5rem', margin: '0', color: '#fff' }}>{user.streak || 0}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{t('Day Streak')}</div>
                 </div>
-                <div style={{ background: 'var(--surface)', padding: '16px', borderRadius: 'var(--radius-md)', textAlign: 'center', border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: '1.5rem' }}>🏋️</div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.2rem', margin: '4px 0' }}>{user.lifetime_workouts || 0}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Lifetime Sessions')}</div>
+                <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: 'var(--radius-md)', textAlign: 'center', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <div style={{ fontSize: '2rem' }}>🏋️</div>
+                    <div style={{ fontWeight: '900', fontSize: '1.5rem', margin: '0', color: '#fff' }}>{user.lifetime_workouts || 0}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>{t('Lifetime Sessions')}</div>
                 </div>
             </div>
         </div>

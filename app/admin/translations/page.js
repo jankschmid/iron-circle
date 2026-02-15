@@ -93,32 +93,11 @@ export default function TranslationsAdminPage() {
     };
 
     const handleAutoTranslate = async () => {
-        // if (!confirm(`Auto-translate missing keys for ${selectedLang.toUpperCase()} using DeepL?`)) return;
-
-        setAutoTranslating(true);
-        setMessage({ type: 'info', text: 'DeepL is translating...' });
-
-        try {
-            const res = await fetch('/api/admin/translate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetLang: selectedLang })
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-                setMessage({ type: 'success', text: data.message });
-                fetchKeys(); // Refresh
-                router.refresh();
-            } else {
-                setMessage({ type: 'error', text: data.error || 'Translation failed' });
-            }
-        } catch (err) {
-            setMessage({ type: 'error', text: 'Network error during translation.' });
-        } finally {
-            setAutoTranslating(false);
-        }
+        // TEMPORARY FIX FOR ANDROID STATIC EXPORT:
+        // API Routes cannot be used with output: 'export'.
+        // We need to move this logic to Supabase Edge Functions.
+        alert("Auto-translation is temporarily disabled for the Android Build (Static Export compatibility). Please use the Vercel dashboard version for admin tasks or wait for the Supabase Edge Function update.");
+        return;
     };
 
     const handleAddLanguage = async () => {

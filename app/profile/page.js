@@ -4,17 +4,18 @@ import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 import Link from 'next/link';
 import WorkoutHeatmap from '@/components/WorkoutHeatmap';
-import { getLevelProgress, checkPrestigeEligible } from '@/lib/gamification';
+import { getLevelProgress, checkPrestigeEligible, XP_TO_LEVEL_100 } from '@/lib/gamification';
 import { useTranslation } from '@/context/TranslationContext';
 import PrestigeModal from '@/components/PrestigeModal';
 import StatsTab from '@/components/StatsTab';
+import AchievementsGallery from '@/components/AchievementsGallery';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 export default function ProfilePage() {
     const { t } = useTranslation();
-    const { user, getWeeklyStats, getPersonalBests, gyms, friends, history } = useStore();
+    const { user, setUser, getWeeklyStats, getPersonalBests, gyms, friends, history } = useStore();
     const router = useRouter();
     const [supabase] = useState(() => createClient());
     const [isLongLoading, setIsLongLoading] = useState(false);
@@ -121,8 +122,13 @@ export default function ProfilePage() {
     const { totalWorkouts, totalVolume } = getWeeklyStats();
     const personalBests = getPersonalBests();
 
-    // Gamification
-    const levelData = getLevelProgress(user.current_xp || user.xp || 0);
+    // Gamification - Use CYCLE XP for level progress
+    // Fallback to capped lifetime if cycle_xp missing (migration overlap)
+    const effectiveCycleXP = (user.cycle_xp !== undefined && user.cycle_xp !== null)
+        ? user.cycle_xp
+        : Number(user.lifetime_xp || 0);
+
+    const levelData = getLevelProgress(effectiveCycleXP);
     const { totalNeeded } = levelData;
 
     const handleLogout = async () => {
@@ -136,21 +142,70 @@ export default function ProfilePage() {
     const isMaxPrestige = (user.prestige_level || 0) >= 12;
 
     const handlePrestigeConfirm = async () => {
-        const newPrestige = (user.prestige_level || 0) + 1;
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                level: 1,
-                current_xp: 0,
-                prestige_level: newPrestige
-            })
-            .eq('id', user.id);
+        // CLIENT-SIDE PRESTIGE LOGIC (For Static Export)
+        // Replicates app/actions/gamification.js logic
+        try {
+            // 1. Fetch Fresh Profile Data
+            const { data: profile, error: freshError } = await supabase
+                .from("profiles")
+                .select("level, prestige_level, xp_overflow, cycle_xp, lifetime_xp")
+                .eq("id", user.id)
+                .single();
 
-        if (error) {
-            console.error("Prestige Error:", error);
-        } else {
-            setShowPrestige(false);
-            window.location.reload();
+            if (freshError) throw new Error("Could not verify profile");
+
+            // 2. Validate Level 100 Cap
+            const currentCycleXP = profile.cycle_xp !== undefined ? profile.cycle_xp : (profile.prestige_level > 0 ? 0 : profile.lifetime_xp); // Robust fallback
+            // const XP_REQ = 534600; // Hardcoded fallback or import
+            const XP_REQ = XP_TO_LEVEL_100;
+
+            if (currentCycleXP < XP_REQ) {
+                return { error: `Must reach Level 100 (${XP_REQ.toLocaleString()} XP) to Ascend!` };
+            }
+
+            // 3. Prepare New Values
+            const newPrestigeLevel = (profile.prestige_level || 0) + 1;
+            const excessXP = Math.max(0, currentCycleXP - XP_REQ);
+            const oldOverflow = profile.xp_overflow || 0;
+            const headStartXP = excessXP + oldOverflow;
+
+            // Recalculate level
+            const { currentLevel, progress } = getLevelProgress(headStartXP);
+
+            // 4. ATOMIC UPDATE (RLS must allow this)
+            const { error: updateError } = await supabase
+                .from('profiles')
+                .update({
+                    prestige_level: newPrestigeLevel,
+                    cycle_xp: headStartXP,
+                    level: currentLevel,
+                    current_xp: progress,
+                    xp_overflow: 0
+                })
+                .eq('id', user.id);
+
+            if (updateError) throw updateError;
+
+            // Success! Update local state
+            setUser({
+                ...user,
+                prestige_level: newPrestigeLevel,
+                level: currentLevel,
+                current_xp: 0, // Visual reset (will animate up)
+                cycle_xp: headStartXP,
+                xp_overflow: 0
+            });
+
+            return {
+                success: true,
+                newLevel: currentLevel,
+                newPrestigeLevel: newPrestigeLevel,
+                headStartXP: headStartXP
+            };
+
+        } catch (e) {
+            console.error(e);
+            return { error: e.message };
         }
     };
 
@@ -173,20 +228,26 @@ export default function ProfilePage() {
                     {user.prestige_level > 0 && (
                         <div style={{
                             position: 'absolute',
-                            bottom: '-8px',
-                            right: '-8px',
-                            background: 'transparent',
+                            bottom: '-5px',
+                            right: '-5px',
+                            width: '40px',
+                            height: '40px',
+                            zIndex: 10,
+                            background: '#000',
+                            borderRadius: '50%',
+                            padding: '4px',
+                            border: '2px solid #fff', // White border like PB
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            zIndex: 10
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
                         }}>
                             <img
                                 src={`/assets/prestige/Prestige_${String(user.prestige_level).padStart(2, '0')}.png`}
                                 style={{
-                                    width: '48px',
-                                    height: '48px',
-                                    filter: 'drop-shadow(0 0 5px rgba(0,0,0,0.8))'
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'contain'
                                 }}
                                 onError={(e) => e.currentTarget.style.display = 'none'}
                             />
@@ -199,9 +260,10 @@ export default function ProfilePage() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '8px' }}>
                         <div style={{
                             fontSize: '0.8rem',
-                            color: 'var(--primary)',
+                            color: '#000', // Dark text for readability on dim background
                             background: 'var(--primary-dim)',
                             padding: '4px 12px',
+                            fontWeight: 'bold',
                             borderRadius: '100px',
                             display: 'inline-block'
                         }}>
@@ -236,11 +298,19 @@ export default function ProfilePage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>{t('Level')}</span>
-                            <span style={{ fontSize: '2rem', lineHeight: '1', fontWeight: '900', color: '#fff' }}>{user.level || 1}</span>
+                            <span style={{ fontSize: '2rem', lineHeight: '1', fontWeight: '900', color: levelData.isMaxLevel ? '#FFD700' : '#fff' }}>
+                                {levelData.isMaxLevel ? 'MAX' : (user.level || 1)}
+                            </span>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '700' }}>
-                                {Math.floor(user.current_xp || 0)} <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>/ {totalNeeded} XP</span>
+                            <span style={{ fontSize: '0.8rem', color: levelData.isMaxLevel ? '#FFD700' : 'var(--primary)', fontWeight: '700' }}>
+                                {levelData.isMaxLevel ? (
+                                    'MAX LEVEL'
+                                ) : (
+                                    <>
+                                        {Math.floor(levelData.progress || 0)} <span style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>/ {totalNeeded} XP</span>
+                                    </>
+                                )}
                             </span>
                         </div>
                     </div>
@@ -257,55 +327,176 @@ export default function ProfilePage() {
                     }}>
                         {/* Progress Fill */}
                         <div style={{
-                            width: `${Math.min((user.current_xp / totalNeeded) * 100, 100)}%`,
+                            width: `${levelData.isMaxLevel ? 100 : Math.min((user.current_xp / totalNeeded) * 100, 100)}%`,
                             height: '100%',
-                            background: 'linear-gradient(90deg, var(--primary-dim), var(--primary))',
+                            background: levelData.isMaxLevel
+                                ? 'linear-gradient(90deg, #FFD700, #FFA500)'
+                                : 'linear-gradient(90deg, var(--primary-dim), var(--primary))',
                             transition: 'width 0.5s ease',
                             borderRadius: '100px',
-                            boxShadow: '0 0 10px var(--primary-glow)'
+                            boxShadow: levelData.isMaxLevel
+                                ? '0 0 15px rgba(255, 215, 0, 0.6)'
+                                : '0 0 10px var(--primary-glow)'
                         }} />
                     </div>
+
+                    {/* Overflow Display */}
+                    {/* Endless Mode: Stored Energy (Overflow) */}
+                    {/* Head Start Display (For Level 100+) - HIDDEN AT MAX PRESTIGE */}
+                    {effectiveCycleXP > XP_TO_LEVEL_100 && !isMaxPrestige && (
+                        <div style={{
+                            marginTop: '12px',
+                            padding: '12px',
+                            background: 'rgba(255, 215, 0, 0.05)',
+                            border: '1px solid rgba(255, 215, 0, 0.3)',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            position: 'relative',
+                            overflow: 'hidden'
+                        }}>
+                            {/* Glowing Background Effect */}
+                            <div style={{
+                                position: 'absolute',
+                                top: 0, left: 0, right: 0, bottom: 0,
+                                background: 'radial-gradient(circle, rgba(255,215,0,0.1) 0%, rgba(0,0,0,0) 70%)',
+                                animation: 'pulse-glow 3s infinite ease-in-out'
+                            }} />
+
+                            <span style={{ fontSize: '0.7rem', color: '#FFD700', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold', zIndex: 1 }}>
+                                {t('Next Prestige Head Start')}
+                            </span>
+                            <div style={{
+                                fontSize: '1.2rem',
+                                color: '#FFD700',
+                                fontWeight: '900',
+                                textShadow: '0 0 10px rgba(255, 215, 0, 0.5)',
+                                zIndex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}>
+                                ⚡ +{Math.max(0, Math.floor(effectiveCycleXP - XP_TO_LEVEL_100) + Number(user.xp_overflow || 0)).toLocaleString()} XP
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', marginTop: '4px', zIndex: 1 }}>
+                                {t('Banked for your next journey')}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
+                {/* Prestige Button - Always Visible/Clickable now */}
+
+
+                {/* DEV TOOLS - ONLY VISIBLE TO OWNER */}
                 {/* DEV TOOLS - ONLY VISIBLE TO OWNER */}
                 {(user.is_super_admin || user.email === 'janschad04@gmail.com') && (
                     <div style={{ padding: '20px', borderTop: '1px solid #333' }}>
-                        <h4 style={{ color: '#666', fontSize: '0.8rem', marginBottom: '10px' }}>DEVELOPER TOOLS</h4>
+                        <h4 style={{ color: '#666', fontSize: '0.8rem', marginBottom: '10px' }}>DEVELOPER TOOLS (OPTIMIZED)</h4>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                             <button
                                 onClick={async () => {
-                                    console.log("Setting Level 50 for user:", user.id);
-                                    const { error } = await supabase.from('profiles').update({ level: 50, current_xp: 50000, lifetime_xp: 50000 }).eq('id', user.id);
+                                    const targetXP = XP_TO_LEVEL_100;
+                                    const levelData = getLevelProgress(targetXP);
+
+                                    // 1. Optimistic Update
+                                    setUser({
+                                        ...user,
+                                        level: 100,
+                                        current_xp: levelData.progress,
+                                        lifetime_xp: targetXP,
+                                        cycle_xp: targetXP,
+                                        xp_overflow: 0
+                                    });
+
+                                    // 2. Background Sync
+                                    const { error } = await supabase.from('profiles').update({
+                                        level: 100,
+                                        current_xp: levelData.progress,
+                                        lifetime_xp: targetXP,
+                                        cycle_xp: targetXP,
+                                        xp_overflow: 0
+                                    }).eq('id', user.id);
+
                                     if (error) {
-                                        console.error("Error setting level:", error);
-                                        alert("Error: " + JSON.stringify(error));
+                                        console.error("Dev Tool Error:", error);
+                                        alert("Sync failed");
                                     } else {
-                                        alert('Set to Level 50! Refreshing...');
-                                        window.location.reload();
+                                        router.refresh(); // Soft refresh
                                     }
                                 }}
                                 style={{ padding: '8px', background: '#333', border: 'none', color: '#fff', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }}
                             >
-                                Set Lvl 50
+                                Set Lvl 100
                             </button>
                             <button
                                 onClick={async () => {
-                                    console.log("Resetting user:", user.id);
+                                    const targetXP = XP_TO_LEVEL_100 + 55000; // ~Level 105
+                                    const levelData = getLevelProgress(targetXP);
+
+                                    setUser({
+                                        ...user,
+                                        level: 105,
+                                        current_xp: levelData.progress,
+                                        lifetime_xp: targetXP,
+                                        cycle_xp: targetXP,
+                                        xp_overflow: 0
+                                    });
+
+                                    const { error } = await supabase.from('profiles').update({
+                                        level: 105,
+                                        current_xp: levelData.progress,
+                                        lifetime_xp: targetXP,
+                                        cycle_xp: targetXP,
+                                        xp_overflow: 0
+                                    }).eq('id', user.id);
+
+                                    if (!error) router.refresh();
+                                }}
+                                style={{ padding: '8px', background: '#333', border: 'none', color: '#fff', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }}
+                            >
+                                Set Lvl 105
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+                                    if (error) alert("Error: " + error.message);
+                                    else alert("DB STATE:\n" + JSON.stringify({
+                                        lvl: data.level,
+                                        cyc: data.cycle_xp,
+                                        life: data.lifetime_xp,
+                                        over: data.xp_overflow,
+                                        pres: data.prestige_level
+                                    }, null, 2));
+                                }}
+                                style={{ padding: '8px', background: '#440000', border: '1px solid red', color: '#fff', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }}
+                            >
+                                🔍 CHECK DB
+                            </button>
+                            <button
+                                onClick={async () => {
                                     // Reset LIFETIME too
+                                    setUser({
+                                        ...user,
+                                        level: 1,
+                                        current_xp: 0,
+                                        lifetime_xp: 0,
+                                        cycle_xp: 0,
+                                        prestige_level: 0,
+                                        xp_overflow: 0
+                                    });
+
                                     const { error } = await supabase.from('profiles').update({
                                         level: 1,
                                         current_xp: 0,
                                         lifetime_xp: 0,
-                                        prestige_level: 0
+                                        cycle_xp: 0,
+                                        prestige_level: 0,
+                                        xp_overflow: 0
                                     }).eq('id', user.id);
 
-                                    if (error) {
-                                        console.error("Error resetting:", error);
-                                        alert("Error: " + JSON.stringify(error));
-                                    } else {
-                                        alert('Reset complete! Refreshing...');
-                                        window.location.reload();
-                                    }
+                                    if (!error) router.refresh();
                                 }}
                                 style={{ padding: '8px', background: '#333', border: 'none', color: '#fff', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }}
                             >
@@ -313,30 +504,31 @@ export default function ProfilePage() {
                             </button>
                             <button
                                 onClick={async () => {
-                                    console.log("Adding XP for user:", user.id);
-                                    // Add 500 XP to LIFETIME (Source of Truth)
-                                    const oldLifetime = user.lifetime_xp || 0;
+                                    const oldCycle = Number(user.cycle_xp || 0);
+                                    const oldLifetime = Number(user.lifetime_xp || 0);
                                     const newLifetime = oldLifetime + 500;
+                                    const newCycle = oldCycle + 500;
 
-                                    const levelData = getLevelProgress(newLifetime);
+                                    const levelData = getLevelProgress(newCycle); // Use Cycle XP for level!
                                     const newLevel = levelData.currentLevel;
-                                    const newCurrentXP = levelData.progress; // The bar progress
+                                    const newCurrentXP = levelData.progress;
 
-                                    console.log(`XP Update: ${oldLifetime} -> ${newLifetime} | Level: ${user.level} -> ${newLevel}`);
+                                    setUser({
+                                        ...user,
+                                        lifetime_xp: newLifetime,
+                                        current_xp: newCurrentXP,
+                                        level: newLevel,
+                                        cycle_xp: newCycle
+                                    });
 
                                     const { error } = await supabase.from('profiles').update({
                                         lifetime_xp: newLifetime,
                                         current_xp: newCurrentXP,
-                                        level: newLevel
+                                        level: newLevel,
+                                        cycle_xp: newCycle
                                     }).eq('id', user.id);
 
-                                    if (error) {
-                                        console.error("Error adding XP:", error);
-                                        alert("Error: " + JSON.stringify(error));
-                                    } else {
-                                        alert(`+500 XP Added! (Total: ${newLifetime}, Lvl ${newLevel}) Refreshing...`);
-                                        window.location.reload();
-                                    }
+                                    if (!error) router.refresh();
                                 }}
                                 style={{ padding: '8px', background: '#333', border: 'none', color: '#fff', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer' }}
                             >
@@ -344,32 +536,60 @@ export default function ProfilePage() {
                             </button>
                             <button
                                 onClick={async () => {
-                                    console.log("Syncing Level for user:", user.id);
-                                    // Use LIFETIME XP
-                                    const totalXP = user.lifetime_xp || 0;
-                                    const levelData = getLevelProgress(totalXP);
+                                    const oldCycle = Number(user.cycle_xp || 0);
+                                    const oldLifetime = Number(user.lifetime_xp || 0);
+                                    const newLifetime = oldLifetime + 50000;
+                                    const newCycle = oldCycle + 50000;
+
+                                    const levelData = getLevelProgress(newCycle);
+                                    const newLevel = levelData.currentLevel;
+                                    const newCurrentXP = levelData.progress;
+
+                                    setUser({
+                                        ...user,
+                                        lifetime_xp: newLifetime,
+                                        current_xp: newCurrentXP,
+                                        level: newLevel,
+                                        cycle_xp: newCycle
+                                    });
+
+                                    const { error } = await supabase.from('profiles').update({
+                                        lifetime_xp: newLifetime,
+                                        current_xp: newCurrentXP,
+                                        level: newLevel,
+                                        cycle_xp: newCycle
+                                    }).eq('id', user.id);
+
+                                    if (!error) router.refresh();
+                                }}
+                                style={{ padding: '8px', background: '#222', border: '1px solid #444', color: '#4caf50', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                                +50k XP
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    // SYNC LEVEL: Uses Cycle XP as truth
+                                    const xpTruth = Number(user.cycle_xp || 0);
+                                    // Fallback only if Rank 0 and cycle is 0
+                                    // const xpTruth = (user.prestige_level > 0 || user.cycle_xp) ? user.cycle_xp : user.lifetime_xp; 
+
+                                    const levelData = getLevelProgress(xpTruth);
                                     const correctLevel = levelData.currentLevel;
                                     const correctCurrentXP = levelData.progress;
 
-                                    if (user.level === correctLevel) {
-                                        // Even if level is correct, check if current_xp (bar) matches
-                                        if (user.current_xp === correctCurrentXP) {
-                                            alert(`Level & XP already correct (Lvl ${correctLevel}).`);
-                                            return;
-                                        }
-                                    }
+                                    if (user.level !== correctLevel || user.current_xp !== correctCurrentXP) {
+                                        setUser({
+                                            ...user,
+                                            level: correctLevel,
+                                            current_xp: correctCurrentXP
+                                        });
 
-                                    const { error } = await supabase.from('profiles').update({
-                                        level: correctLevel,
-                                        current_xp: correctCurrentXP
-                                    }).eq('id', user.id);
+                                        await supabase.from('profiles').update({
+                                            level: correctLevel,
+                                            current_xp: correctCurrentXP
+                                        }).eq('id', user.id);
 
-                                    if (error) {
-                                        console.error("Error syncing level:", error);
-                                        alert("Error: " + JSON.stringify(error));
-                                    } else {
-                                        alert(`Synced! Lifetime: ${totalXP} -> Lvl ${correctLevel}. Refreshing...`);
-                                        window.location.reload();
+                                        router.refresh();
                                     }
                                 }}
                                 style={{ padding: '8px', background: '#333', border: 'none', color: '#fff', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', gridColumn: 'span 2' }}
@@ -380,99 +600,143 @@ export default function ProfilePage() {
                     </div>
                 )}
 
-                {/* Prestige Badge & Button */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '16px' }}>
-                    {/* Badge */}
-                    {(user.prestige_level > 0) && (
-                        <div style={{ marginBottom: '8px' }}>
-                            <img
-                                src={`/assets/prestige/Prestige_${String(user.prestige_level).padStart(2, '0')}.png`}
-                                alt={`Prestige ${user.prestige_level}`}
-                                style={{ width: '64px', height: '64px', filter: 'drop-shadow(0 0 10px rgba(255,0,0,0.5))' }}
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.style.display = 'none'; // Hide if missing
-                                }}
-                            />
-                            <div style={{ fontSize: '0.8rem', color: 'var(--error)', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: 'bold' }}>
-                                Prestige {user.prestige_level}
-                            </div>
-                        </div>
-                    )
-                    }
+                {/* Prestige Status Card (Always Visible) */}
+                <div style={{
+                    marginBottom: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    background: 'var(--surface)',
+                    padding: '24px 32px',
+                    borderRadius: '24px',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                    width: '100%',
+                    maxWidth: '280px',
+                    position: 'relative',
+                    overflow: 'hidden'
+                }}>
+                    {/* Title */}
+                    <span style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '1px',
+                        marginBottom: '12px',
+                        fontWeight: 'bold'
+                    }}>
+                        {user.prestige_level > 0 ? t('Current Rank') : t('Next Rank')}
+                    </span>
 
-                    {/* Ascension Button */}
-                    {/* Prestige Button (Always Visible) */}
+                    {/* Icon Display */}
+                    <div style={{ position: 'relative', marginBottom: '16px' }}>
+                        <img
+                            src={`/assets/prestige/Prestige_${String(user.prestige_level || 1).padStart(2, '0')}.png`}
+                            alt={`Prestige ${user.prestige_level || 1}`}
+                            style={{
+                                width: '100px',
+                                height: '100px',
+                                filter: user.prestige_level > 0 ? 'drop-shadow(0 0 15px rgba(255,215,0,0.4))' : 'blur(4px) grayscale(1) opacity(0.5)',
+                                transition: 'all 0.3s ease'
+                            }}
+                            onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.style.display = 'none';
+                            }}
+                        />
+                        {/* Zero State Lock Overlay */}
+                        {user.prestige_level === 0 && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                fontSize: '2rem'
+                            }}>
+                                🔒
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Rank Name */}
+                    <div style={{
+                        fontSize: '1.4rem',
+                        color: user.prestige_level > 0 ? '#FFD700' : 'var(--text-dim)',
+                        fontFamily: 'var(--font-heading)',
+                        fontWeight: '900',
+                        marginBottom: '16px',
+                        textShadow: user.prestige_level > 0 ? '0 0 10px rgba(255,215,0,0.3)' : 'none'
+                    }}>
+                        Prestige {user.prestige_level || 1}
+                    </div>
+
+                    {/* Action Button */}
                     {!isMaxPrestige && (
                         <button
                             onClick={() => setShowPrestige(true)}
+                            disabled={user.prestige_level > 0 && !levelData.isPrestigeReady}
                             style={{
-                                background: prestigeStatus.eligible
-                                    ? 'linear-gradient(45deg, #ff0000, #ff4444)'
-                                    : 'transparent',
-                                color: prestigeStatus.eligible ? '#fff' : 'var(--text-dim)',
-                                border: prestigeStatus.eligible
+                                background: levelData.isPrestigeReady
+                                    ? 'linear-gradient(45deg, #FFD700, #FFA500)'
+                                    : 'rgba(255,255,255,0.05)',
+                                color: levelData.isPrestigeReady ? '#000' : 'var(--text-dim)',
+                                border: levelData.isPrestigeReady
                                     ? 'none'
-                                    : '1px solid var(--text-dim)',
-                                padding: '10px 20px',
+                                    : '1px solid var(--border)',
+                                padding: '12px 24px',
                                 borderRadius: '100px',
-                                fontWeight: '700',
-                                fontSize: '0.8rem',
-                                boxShadow: prestigeStatus.eligible
-                                    ? '0 0 20px rgba(255, 0, 0, 0.6)'
+                                fontWeight: '800',
+                                fontSize: '0.85rem',
+                                boxShadow: levelData.isPrestigeReady
+                                    ? '0 4px 15px rgba(255, 215, 0, 0.4)'
                                     : 'none',
-                                cursor: 'pointer',
+                                cursor: levelData.isPrestigeReady || user.prestige_level === 0 ? 'pointer' : 'default', // Allow clicking even if locked to see modal? User implied button text changes.
                                 textTransform: 'uppercase',
                                 letterSpacing: '1px',
-                                animation: prestigeStatus.eligible ? 'pulse 2s infinite' : 'none',
-                                transition: 'all 0.3s ease',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px'
+                                width: '100%',
+                                position: 'relative',
                             }}
                         >
-                            {prestigeStatus.eligible ? '🔥 ' + t('ENTER PRESTIGE') : `🔒 ${t('Prestige Rank')} ${user.prestige_level + 1}`}
+                            {levelData.isPrestigeReady
+                                ? '🔥 ' + t('ENTER PRESTIGE')
+                                : (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                        <span>🔒</span>
+                                        <span>{t('Prestige Rank')} {user.prestige_level + 1}</span>
+                                    </div>
+                                )
+                            }
                         </button>
                     )}
 
-                    {
-                        isMaxPrestige && (user.level === 50) && (
-                            <div style={{
-                                background: 'linear-gradient(45deg, #FFD700, #FFA500)',
-                                color: '#000',
-                                padding: '8px 16px',
-                                borderRadius: '100px',
-                                fontWeight: 'bold',
-                                boxShadow: '0 0 15px rgba(255, 215, 0, 0.5)'
-                            }}>
-                                {t('MAX RANK ACHIEVED')}
-                            </div>
-                        )
-                    }
+                    {isMaxPrestige && (
+                        <div style={{
+                            background: 'linear-gradient(45deg, #FFD700, #FFA500)',
+                            color: '#000',
+                            padding: '8px 16px',
+                            borderRadius: '100px',
+                            fontWeight: 'bold',
+                            boxShadow: '0 0 15px rgba(255, 215, 0, 0.5)',
+                            marginTop: '8px'
+                        }}>
+                            {t('MAX RANK ACHIEVED')}
+                        </div>
+                    )}
                 </div>
 
 
-                <div style={{
-                    marginTop: '8px',
-                    display: 'inline-block',
-                    padding: '4px 12px',
-                    borderRadius: '100px',
-                    background: 'var(--surface-highlight)',
-                    border: '1px solid var(--border)',
-                    fontSize: '0.8rem',
-                    color: 'var(--text-dim)',
-                    marginBottom: '16px'
-                }}>
-                    🎯 {t('Focus')}: <span style={{ color: 'var(--foreground)', fontWeight: 'bold' }}>{user.goal || 'Muscle'}</span>
-                </div>
+
 
                 {user.bio && <p style={{ fontSize: '0.9rem', maxWidth: '300px', textAlign: 'center', color: 'var(--text-muted)' }}>{user.bio}</p>}
 
                 <PrestigeModal
                     isOpen={showPrestige}
                     onClose={() => setShowPrestige(false)}
-                    pendingLevel={user.level}
-                    onConfirm={handlePrestigeConfirm}
+                    currentPrestige={user.prestige_level}
+                    onConfirm={handlePrestigeConfirm} // Always allow attempt. Server validates.
+                    onComplete={() => {
+                        window.location.reload(); // Hard reload to ensure clean state after prestige
+                    }}
                 />
 
                 <div style={{ marginTop: '16px', display: 'flex', gap: '24px' }}>
@@ -527,33 +791,42 @@ export default function ProfilePage() {
                 </button>
             </div>
 
-            {activeTab === 'overview' ? (
-                <>
-                    <section style={{ marginBottom: '32px' }}>
-                        <WorkoutHeatmap history={history} />
-                    </section>
+            {
+                activeTab === 'overview' ? (
+                    <>
 
-                    <section style={{ marginBottom: '32px' }}>
-                        <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{t('Personal Bests')}</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                            {personalBests.map((pb) => (
-                                <div key={pb.name} style={{
-                                    background: 'var(--surface)',
-                                    padding: '16px',
-                                    borderRadius: 'var(--radius-md)',
-                                    border: '1px solid var(--border)'
-                                }}>
-                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>{pb.name}</div>
-                                    <div style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--primary)' }}>{pb.weight}</div>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>{pb.date}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                </>
-            ) : (
-                <StatsTab />
-            )}
+
+                        <section style={{ marginBottom: '32px' }}>
+                            <WorkoutHeatmap history={history} />
+                        </section>
+
+                        <section style={{ marginBottom: '32px' }}>
+                            <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>{t('Personal Bests')}</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                {personalBests.map((pb) => (
+                                    <div key={pb.name} style={{
+                                        background: 'var(--surface)',
+                                        padding: '16px',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: '1px solid var(--border)'
+                                    }}>
+                                        <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '4px' }}>{pb.name}</div>
+                                        <div style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--primary)' }}>{pb.weight}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>{pb.date}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    </>
+                ) : (
+                    <>
+                        <section style={{ marginBottom: '32px' }}>
+                            <AchievementsGallery userId={user.id} />
+                        </section>
+                        <StatsTab />
+                    </>
+                )
+            }
 
             <section>
                 {/* Settings & Notifications Grid */}
