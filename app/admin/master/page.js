@@ -82,8 +82,10 @@ export default function MasterAdminPage() {
             console.log("fetchGyms RPC Data:", data);
 
             if (data) {
-                setGyms(data.data || []);
-                setTotalCount(data.total || 0);
+                // RPC returns a TABLE, so data is an array: [{ data: ..., total: ... }]
+                const result = Array.isArray(data) ? data[0] : data;
+                setGyms(result?.data || []);
+                setTotalCount(result?.total || 0);
             }
         } catch (err) {
             console.error("Fetch Gyms Error:", err.message);
