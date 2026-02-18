@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function CreateMissionPage() {
+function CreateMissionContent() {
     const { user } = useStore();
     const [supabase] = useState(() => createClient());
     const router = useRouter();
@@ -324,5 +324,13 @@ export default function CreateMissionPage() {
                 `}</style>
             </div>
         </div>
+    );
+}
+
+export default function CreateMissionPage() {
+    return (
+        <Suspense fallback={<div style={{ padding: '50px', textAlign: 'center', color: '#fff' }}>Loading...</div>}>
+            <CreateMissionContent />
+        </Suspense>
     );
 }
