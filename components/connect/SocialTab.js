@@ -103,9 +103,9 @@ export default function SocialTab() {
         {
             ...user,
             id: user.id,
-            name: user.name,
-            handle: user.handle,
-            avatar: user.avatar,
+            name: user.name || user.username || 'Athlete',
+            handle: user.username || 'athlete',
+            avatar: user.avatar_url,
             stats: {
                 Volume: weeklyVolume,
                 Workouts: weeklyWorkouts,

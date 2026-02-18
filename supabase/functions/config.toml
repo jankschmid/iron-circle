@@ -1,0 +1,4 @@
+project_id = "your-project-id"
+
+[functions.janitor]
+verify_jwt = false # Allow cron to call it without user token, but usually valid service key/internal call needed.

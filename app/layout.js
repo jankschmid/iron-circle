@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/ToastProvider';
 import UpdateChecker from '@/components/UpdateChecker';
 import HardwareBackButton from '@/components/HardwareBackButton';
 import { TranslationProvider } from '@/context/TranslationContext';
+import GlobalErrorBoundary from '@/components/GlobalErrorBoundary';
 
 export const metadata = {
     title: 'IronCircle',
@@ -27,9 +28,11 @@ export default function RootLayout({ children }) {
                     <ToastProvider>
                         <StoreProvider>
                             <TranslationProvider>
-                                <UpdateChecker />
-                                <HardwareBackButton />
-                                {children}
+                                <GlobalErrorBoundary>
+                                    <UpdateChecker />
+                                    <HardwareBackButton />
+                                    {children}
+                                </GlobalErrorBoundary>
                             </TranslationProvider>
                         </StoreProvider>
                     </ToastProvider>

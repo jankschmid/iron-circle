@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { useStore } from '@/lib/store'
 import { useTranslation } from '@/context/TranslationContext'
 import LanguageSelector from '@/components/ui/LanguageSelector'
 
@@ -14,8 +15,16 @@ export default function LoginPage() {
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
     const router = useRouter()
-    // Fix: Singleton client
     const [supabase] = useState(() => createClient())
+    // Access global store to check if already logged in
+    const { user } = useStore ? useStore() : { user: null }; // Safe access if store not ready
+
+    // Redirect if already logged in
+    useEffect(() => {
+        if (user) {
+            router.replace('/');
+        }
+    }, [user, router]);
 
     const handleLogin = async (e) => {
         e.preventDefault()
@@ -44,7 +53,7 @@ export default function LoginPage() {
             }
 
             // Success
-            router.refresh()
+            // router.refresh() // Removed to prevent race conditions
             const params = new URLSearchParams(window.location.search);
             const next = params.get('next');
             router.push(next ? decodeURIComponent(next) : '/');

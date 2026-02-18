@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Confetti from 'react-confetti';
+// import Confetti from 'react-confetti'; // Lazy load this
+import dynamic from 'next/dynamic';
 import { useTranslation } from '@/context/TranslationContext';
+
+const Confetti = dynamic(() => import('react-confetti'), { ssr: false });
 
 export default function WorkoutSummary({ data, onContinue }) {
     const { t } = useTranslation();

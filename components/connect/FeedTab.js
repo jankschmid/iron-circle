@@ -2,126 +2,171 @@
 
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { createClient } from '@/lib/supabase';
+import { useSocialStore } from '@/hooks/useSocialStore';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { useTranslation } from '@/context/TranslationContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function FeedTab() {
-    const { user, friends, exercises } = useStore();
+    const { user } = useStore();
+    const { fetchFeed, interactWithEvent } = useSocialStore(user); // Initialize hook
     const { t } = useTranslation();
     const [feed, setFeed] = useState([]);
     const [loading, setLoading] = useState(true);
-    const supabase = createClient();
 
-    const fetchFeed = async () => {
-        if (!user || !friends) return;
-
+    const loadFeed = async () => {
         setLoading(true);
-        try {
-            const friendIds = friends.map(f => f.id);
-            // Include self in feed? Maybe. Let's include self for now.
-            const allIds = [user.id, ...friendIds];
-
-            // If no friends and self (just 1), check if we have workouts
-            if (allIds.length === 0) { // Should check user existence first which we did
-                setFeed([]);
-                setLoading(false);
-                return;
-            }
-
-            const { data, error } = await supabase
-                .from('workouts')
-                .select(`
-                    *,
-                    profile:user_id (name, username, avatar_url, level, xp, prestige_level),
-                    likes:workout_likes (user_id),
-                    logs:workout_logs (exercise_id, sets)
-                `)
-                .in('user_id', allIds)
-                .not('end_time', 'is', null) // Only finished workouts
-                .eq('visibility', 'public') // Respect visibility
-                .order('end_time', { ascending: false })
-                .limit(20);
-
-            if (error) throw error;
-
-            // Format data
-            const formatted = data.map(w => ({
-                ...w,
-                user: w.profile, // Flatten profile
-                likeCount: w.likes ? w.likes.length : 0,
-                isLiked: w.likes ? w.likes.some(l => l.user_id === user.id) : false,
-                // Summarize workout
-                summary: summarizeWorkout(w.logs, exercises)
-            }));
-
-            setFeed(formatted);
-        } catch (err) {
-            console.error("Feed fetch error:", err);
-        } finally {
-            setLoading(false);
-        }
+        const data = await fetchFeed(); // Uses RPC get_squad_feed
+        setFeed(data || []);
+        setLoading(false);
     };
 
     useEffect(() => {
-        if (user) fetchFeed();
-    }, [user, friends]);
+        if (user) loadFeed();
+    }, [user]);
 
-    const handleLike = async (workoutId, isLiked) => {
+    const handleFistbump = async (eventId, hasFistbumped) => {
         // Optimistic Update
-        setFeed(prev => prev.map(w => {
-            if (w.id === workoutId) {
+        setFeed(prev => prev.map(event => {
+            if (event.event_id === eventId) {
                 return {
-                    ...w,
-                    isLiked: !isLiked,
-                    likeCount: isLiked ? w.likeCount - 1 : w.likeCount + 1
+                    ...event,
+                    has_fistbumped: !hasFistbumped,
+                    fistbump_count: hasFistbumped ? Number(event.fistbump_count) - 1 : Number(event.fistbump_count) + 1
                 };
             }
-            return w;
+            return event;
         }));
 
         try {
-            if (isLiked) {
-                await supabase.from('workout_likes').delete().match({ workout_id: workoutId, user_id: user.id });
+            if (!hasFistbumped) {
+                await interactWithEvent(eventId, 'fistbump');
             } else {
-                await supabase.from('workout_likes').insert({ workout_id: workoutId, user_id: user.id });
+                // We didn't impl delete interaction in store yet, but usually fistbumps are toggleable.
+                // For now, let's assume one-way or we need to add delete logic if we want to un-fistbump.
+                // The DB migration "Users can delete own interactions" allows it.
             }
         } catch (err) {
-            console.error("Like error:", err);
-            // Revert?
+            console.error("Fistbump error:", err);
         }
     };
 
-    const summarizeWorkout = (logs, exerciseList) => {
-        if (!logs || logs.length === 0) return t("No exercises recorded.");
+    const EventCard = ({ event }) => {
+        const isPrestige = event.type === 'rank_up';
+        const isPR = event.type === 'pr';
 
-        // Count total sets and PRs (if we had PR data attached)
-        const exerciseNames = logs.map(l => {
-            const ex = exerciseList.find(e => e.id === l.exercise_id);
-            return ex ? ex.name : t('Unknown Exercise');
-        });
+        let borderColor = 'var(--border)';
+        if (isPrestige) borderColor = '#FFD700'; // Gold
+        if (isPR) borderColor = 'var(--primary)'; // Neon/Iron
 
-        // Unique names
-        const unique = [...new Set(exerciseNames)];
-        if (unique.length > 3) {
-            return `${unique.slice(0, 3).join(', ')} + ${unique.length - 3} ${t('more')}`;
-        }
-        return unique.join(', ');
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                    background: 'var(--surface)',
+                    borderRadius: 'var(--radius-md)',
+                    border: `1px solid ${borderColor}`,
+                    overflow: 'hidden',
+                    boxShadow: isPrestige ? '0 0 15px rgba(255, 215, 0, 0.15)' : 'none',
+                    marginBottom: '16px'
+                }}
+            >
+                {/* Header */}
+                <div style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border-light)' }}>
+                    <div style={{ position: 'relative' }}>
+                        <img
+                            src={event.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${event.user_id}`}
+                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }}
+                        />
+                    </div>
+                    <div>
+                        <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {event.username || t('Unknown')}
+                            {isPrestige && <span style={{ fontSize: '0.8rem', color: '#FFD700' }}>👑 ASCENDED</span>}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {formatDistanceToNow(new Date(event.created_at))} {t('ago')}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div style={{ padding: '16px' }}>
+                    {event.type === 'workout' && (
+                        <>
+                            <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{event.data.name || t('Workout')}</h3>
+                            <div style={{ display: 'flex', gap: '16px', fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                                <div>⏱️ {Math.round(event.data.duration / 60)} min</div>
+                                <div>⚖️ {(event.data.volume / 1000).toFixed(1)}k kg</div>
+                                <div style={{ color: 'var(--success)' }}>+{event.data.earnedXP} XP</div>
+                            </div>
+                        </>
+                    )}
+
+                    {event.type === 'pr' && (
+                        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                            <div style={{ fontSize: '2rem' }}>🏆</div>
+                            <h3 style={{ fontSize: '1.2rem', color: 'var(--primary)', fontWeight: '900' }}>NEW RECORD</h3>
+                            <div style={{ fontSize: '1.1rem', marginTop: '4px' }}>{event.data.exercise}</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{event.data.weight} kg</div>
+                        </div>
+                    )}
+
+                    {event.type === 'rank_up' && (
+                        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                            <div style={{ fontSize: '2.5rem' }}>🏅</div>
+                            <h3 style={{ fontSize: '1.4rem', color: '#FFD700', fontWeight: '900', textTransform: 'uppercase' }}>Rank {event.data.newRank}</h3>
+                            <p style={{ color: 'var(--text-muted)' }}>"The legend grows..."</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Actions */}
+                <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: '16px', background: 'rgba(0,0,0,0.2)' }}>
+                    <button
+                        onClick={() => handleFistbump(event.event_id, event.has_fistbumped)}
+                        disabled={event.has_fistbumped}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: event.has_fistbumped ? 'var(--primary)' : 'var(--text-muted)',
+                            cursor: event.has_fistbumped ? 'default' : 'pointer',
+                            fontSize: '0.9rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontWeight: 'bold',
+                            opacity: event.has_fistbumped ? 1 : 0.7
+                        }}
+                    >
+                        {event.has_fistbumped ? '👊 BROFIST' : '👊 RESPECT'}
+                        <span style={{ background: 'var(--surface-highlight)', padding: '2px 6px', borderRadius: '100px', fontSize: '0.75rem' }}>
+                            {event.fistbump_count || 0}
+                        </span>
+                    </button>
+                    {/* Comments feature can be added later */}
+                </div>
+            </motion.div>
+        );
     };
 
-    if (!user) return <div className="p-4">{t('Loading...')}</div>;
+    if (loading) return <div className="p-4 text-center text-muted">{t('Loading Activity Log...')}</div>;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Find Friends CTA if empty */}
-            {loading ? (
-                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>{t('Loading updates...')}</div>
-            ) : feed.length === 0 ? (
+            {/* Feed Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px' }}>
+                <h2 style={{ fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--text-muted)' }}>ACTIVITY LOG</h2>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>FRIENDS ONLY</div>
+            </div>
+
+            {feed.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🌍</div>
-                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{t('Your Feed is Empty')}</p>
-                    <p style={{ marginBottom: '16px' }}>{t('Add friends to see their workouts here!')}</p>
+                    <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🕸️</div>
+                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{t('Silence on the wire')}</p>
+                    <p style={{ marginBottom: '16px' }}>{t('No active signals from your team.')}</p>
                     <Link href="/social/add" style={{
                         background: 'var(--primary)',
                         color: 'black',
@@ -135,80 +180,7 @@ export default function FeedTab() {
                     </Link>
                 </div>
             ) : (
-                feed.map(post => (
-                    <div key={post.id} style={{
-                        background: 'var(--surface)',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border)',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Header */}
-                        <div style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border-light)' }}>
-                            <div style={{ position: 'relative' }}>
-                                <img
-                                    src={post.user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user_id}`}
-                                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }}
-                                />
-                                {post.user?.prestige_level > 0 && (
-                                    <img
-                                        src={`/assets/prestige/Prestige_${String(post.user.prestige_level).padStart(2, '0')}.png`}
-                                        style={{
-                                            position: 'absolute',
-                                            bottom: -4,
-                                            right: -4,
-                                            width: '20px',
-                                            height: '20px',
-                                            filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.5))'
-                                        }}
-                                        onError={(e) => e.currentTarget.style.display = 'none'}
-                                    />
-                                )}
-                            </div>
-                            <div>
-                                <div style={{ fontWeight: 'bold' }}>{post.user?.name || t('Unknown')}
-                                    {post.user?.level && <span style={{ fontSize: '0.7rem', background: 'var(--surface-highlight)', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px', color: 'var(--primary)' }}>{t('Lvl')} {post.user.level}</span>}
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    {formatDistanceToNow(new Date(post.end_time))} {t('ago')}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Content */}
-                        <div style={{ padding: '16px' }}>
-                            <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{post.name || t('Workout')}</h3>
-                            <p style={{ fontSize: '0.9rem', color: 'var(--text-dim)', marginBottom: '12px' }}>
-                                {post.summary}
-                            </p>
-
-                            <div style={{ display: 'flex', gap: '16px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                <div>⏱️ {Math.round(post.duration / 60)} min</div>
-                                <div>⚖️ {(post.volume / 1000).toFixed(1)}k kg</div>
-                                {/* XP Badge? */}
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border-light)', display: 'flex', gap: '16px' }}>
-                            <button
-                                onClick={() => handleLike(post.id, post.isLiked)}
-                                style={{
-                                    background: 'transparent',
-                                    border: 'none',
-                                    color: post.isLiked ? 'var(--primary)' : 'var(--text-muted)',
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontWeight: '600'
-                                }}
-                            >
-                                {post.isLiked ? '❤️' : '🤍'} {post.likeCount || 0} {t('Push')}
-                            </button>
-                        </div>
-                    </div>
-                ))
+                feed.map(event => <EventCard key={event.event_id} event={event} />)
             )}
         </div>
     );

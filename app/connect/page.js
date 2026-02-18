@@ -6,16 +6,17 @@ import BottomNav from '@/components/BottomNav';
 import SocialTab from '@/components/connect/SocialTab';
 import ChatTab from '@/components/connect/ChatTab';
 import FeedTab from '@/components/connect/FeedTab';
+import GroupsTab from '@/components/connect/GroupsTab';
 import { useTranslation } from '@/context/TranslationContext';
 
 function ConnectPageContent() {
     const { t } = useTranslation();
     const searchParams = useSearchParams();
-    const [activeTab, setActiveTab] = useState('feed'); // 'feed' | 'circle' | 'chat'
+    const [activeTab, setActiveTab] = useState('feed'); // 'feed' | 'circle' | 'groups' | 'chat'
 
     useEffect(() => {
         const tab = searchParams.get('tab');
-        if (tab === 'chat' || tab === 'circle') {
+        if (tab && ['feed', 'circle', 'groups', 'chat'].includes(tab)) {
             setActiveTab(tab);
         }
     }, [searchParams]);
@@ -34,10 +35,8 @@ function ConnectPageContent() {
                     <h1 className="text-gradient" style={{ margin: 0 }}>{t('Connect')}</h1>
                 </div>
 
-
-
                 {/* Main Tabs */}
-                <div style={{ display: 'flex', background: 'var(--surface)', padding: '4px', borderRadius: '100px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', background: 'var(--surface)', padding: '4px', borderRadius: '100px', border: '1px solid var(--border)', overflowX: 'auto' }}>
                     <button
                         onClick={() => setActiveTab('feed')}
                         style={{
@@ -49,6 +48,7 @@ function ConnectPageContent() {
                             border: 'none',
                             fontWeight: 'bold',
                             cursor: 'pointer',
+                            whiteSpace: 'nowrap',
                             transition: 'all 0.2s ease'
                         }}
                     >
@@ -65,10 +65,28 @@ function ConnectPageContent() {
                             border: 'none',
                             fontWeight: 'bold',
                             cursor: 'pointer',
+                            whiteSpace: 'nowrap',
                             transition: 'all 0.2s ease'
                         }}
                     >
                         {t('Circle')}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('groups')}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            background: activeTab === 'groups' ? 'var(--primary)' : 'transparent',
+                            color: activeTab === 'groups' ? '#000' : 'var(--text-muted)',
+                            borderRadius: '100px',
+                            border: 'none',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        {t('Groups')}
                     </button>
                     <button
                         onClick={() => setActiveTab('chat')}
@@ -81,24 +99,25 @@ function ConnectPageContent() {
                             border: 'none',
                             fontWeight: 'bold',
                             cursor: 'pointer',
+                            whiteSpace: 'nowrap',
                             transition: 'all 0.2s ease'
                         }}
                     >
                         {t('Chat')}
                     </button>
                 </div>
-            </header >
+            </header>
 
             {/* Content */}
-            < div style={{ paddingTop: '20px' }
-            }>
+            <div style={{ paddingTop: '20px' }}>
                 {activeTab === 'feed' && <FeedTab />}
                 {activeTab === 'circle' && <SocialTab />}
+                {activeTab === 'groups' && <GroupsTab />}
                 {activeTab === 'chat' && <ChatTab />}
-            </div >
+            </div>
 
             <BottomNav />
-        </div >
+        </div>
     );
 }
 

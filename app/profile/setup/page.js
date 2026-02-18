@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
 import { useToast } from '@/components/ToastProvider';
 import AvatarEditor from '@/components/AvatarEditor';
+import { TRAINING_GOALS, TRAINING_GOAL_LABELS } from '@/lib/constants';
 
 export default function OnboardingWizard() {
     const { user, updateUserProfile, saveUserGym } = useStore();
@@ -26,7 +27,7 @@ export default function OnboardingWizard() {
         gender: '',
         height: '',
         weight: '',
-        goal: 'Muscle', // Default
+        goal: TRAINING_GOALS.HYPERTROPHY, // Default
         gymMode: 'search', // 'search', 'create', 'code'
         gymSearch: '',
         gymCode: '',
@@ -379,10 +380,11 @@ export default function OnboardingWizard() {
                                 onChange={(e) => updateField('goal', e.target.value)}
                                 style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white' }}
                             >
-                                <option value="Muscle">Build Muscle</option>
-                                <option value="Strength">Gain Strength</option>
-                                <option value="Endurance">Endurance</option>
-                                <option value="Weight Loss">Weight Loss</option>
+                                {Object.values(TRAINING_GOALS).map(goal => (
+                                    <option key={goal} value={goal}>
+                                        {TRAINING_GOAL_LABELS[goal]}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 

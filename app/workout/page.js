@@ -6,12 +6,16 @@ import StreakGuard from '@/components/StreakGuard';
 import WorkoutActive from '@/components/WorkoutActive';
 import WorkoutSummary from '@/components/WorkoutSummary';
 import BottomNav from '@/components/BottomNav';
-import StatsView from '@/components/StatsView';
 import PlanManager from '@/components/PlanManager';
 import TemplateSelector from '@/components/TemplateSelector';
 import QuickLogModal from '@/components/QuickLogModal';
 import { AnimatePresence } from 'framer-motion';
 import { useTranslation } from '@/context/TranslationContext';
+import dynamic from 'next/dynamic';
+
+const StatsView = dynamic(() => import('@/components/StatsView'), {
+    loading: () => <div className="p-4 text-center text-muted">Loading Stats...</div>
+});
 
 export default function WorkoutPage() {
     const { t } = useTranslation();

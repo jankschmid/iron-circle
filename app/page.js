@@ -15,27 +15,33 @@ import { useTranslation } from '@/context/TranslationContext';
 
 export default function Home() {
     const { t } = useTranslation();
-    const { user, activeWorkout, getWeeklyStats } = useStore();
+    const { user, isLoading, activeWorkout, getWeeklyStats } = useStore();
     const router = useRouter();
     const supabase = createClient();
     const [isLongLoading, setIsLongLoading] = useState(false);
 
     useEffect(() => {
+        if (!isLoading && !user) {
+            router.replace('/login');
+        }
+    }, [user, isLoading, router]);
+
+    useEffect(() => {
         // Fail-safe: If user is not loaded in 5s, show the retry/reset options unconditionally.
         const timer = setTimeout(() => {
-            if (!user) {
+            if (!user && isLoading) {
                 setIsLongLoading(true);
             }
         }, 5000);
         return () => clearTimeout(timer);
-    }, [user]);
+    }, [user, isLoading]);
 
     // 3. Onboarding Redirect Check
     useEffect(() => {
         if (user && (!user.gymId || !user.height)) {
             router.push('/profile/setup');
         }
-    }, [user, router]);
+    }, [user, router]); // Keep router in deps
 
     const handleLogout = async () => {
         try {

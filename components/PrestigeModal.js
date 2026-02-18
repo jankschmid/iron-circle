@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import confetti from 'canvas-confetti';
+
 import { useTranslation } from '@/context/TranslationContext'; // Assuming this exists based on context
+
+import { getPrestigeTitle, PRESTIGE_DESCRIPTIONS } from '@/lib/gamification';
 
 export default function PrestigeModal({ isOpen, onClose, currentPrestige, onConfirm, onComplete }) {
     const { t } = useTranslation();
@@ -55,7 +57,8 @@ export default function PrestigeModal({ isOpen, onClose, currentPrestige, onConf
         startAnimation(result.headStartXP, result.newLevel);
     };
 
-    const triggerConfetti = () => {
+    const triggerConfetti = async () => {
+        const confetti = (await import('canvas-confetti')).default;
         const duration = 3000;
         const end = Date.now() + duration;
 
@@ -298,8 +301,13 @@ export default function PrestigeModal({ isOpen, onClose, currentPrestige, onConf
                                     />
                                 </div>
                                 <span style={{ fontSize: '0.75rem', color: isNext ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 'bold' }}>
-                                    {isUnlocked ? 'UNLOCKED' : (isNext ? 'NEXT' : `RANK ${rank}`)}
+                                    {getPrestigeTitle(rank)}
                                 </span>
+                                {isNext && (
+                                    <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)', marginTop: '2px', maxWidth: '80px', lineHeight: '1.2' }}>
+                                        {PRESTIGE_DESCRIPTIONS[rank]}
+                                    </span>
+                                )}
                             </div>
                         );
                     })}
@@ -308,9 +316,14 @@ export default function PrestigeModal({ isOpen, onClose, currentPrestige, onConf
                 {/* Ascension Logic */}
                 {onConfirm ? (
                     <div style={{ background: 'rgba(255,0,0,0.1)', padding: '24px', borderRadius: '16px', border: '1px solid var(--primary)' }}>
-                        <h3 style={{ color: '#fff', marginBottom: '8px', textTransform: 'uppercase' }}>{t('Ready to Ascend?')}</h3>
+                        <h3 style={{ color: '#fff', marginBottom: '8px', textTransform: 'uppercase' }}>
+                            {t('Ready to Ascend?')} <span style={{ color: 'var(--primary)' }}>{getPrestigeTitle(nextPrestige)}</span>
+                        </h3>
                         <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '16px' }}>
                             <strong>Requirement:</strong> Level 100 ({XP_REQ.toLocaleString()} XP). {t('Reset Level 50 -> 1. Keep Lifetime XP. Earn Rank')} {nextPrestige}.
+                        </p>
+                        <p style={{ color: '#fff', fontSize: '1rem', fontStyle: 'italic', marginBottom: '24px' }}>
+                            "{PRESTIGE_DESCRIPTIONS[nextPrestige]}"
                         </p>
                         <button
                             onClick={handleAscend}

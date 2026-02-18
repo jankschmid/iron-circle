@@ -32,6 +32,8 @@ export default function StatsView() {
         let total = 0;
 
         history.forEach(session => {
+            if (!session.logs || !Array.isArray(session.logs)) return;
+
             session.logs.forEach(log => {
                 const ex = exercises.find(e => e.id === log.exerciseId);
                 const muscle = ex ? ex.muscle : 'Other';

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
+import { TRAINING_GOALS, TRAINING_GOAL_LABELS } from '@/lib/constants';
 import GoalWizard from '@/components/GoalWizard';
 
 export default function PreferencesSettingsPage() {
@@ -179,8 +180,9 @@ export default function PreferencesSettingsPage() {
                             Affects your XP gains! (e.g. Endurance = more XP for cardio).
                         </div>
 
+
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {['Muscle', 'Strength', 'Endurance', 'Weight Loss'].map(g => (
+                            {Object.values(TRAINING_GOALS).map(g => (
                                 <button
                                     key={g}
                                     onClick={async () => {
@@ -207,7 +209,7 @@ export default function PreferencesSettingsPage() {
                                         transition: 'all 0.2s'
                                     }}
                                 >
-                                    {g}
+                                    {g === TRAINING_GOALS.HYPERTROPHY ? 'Hypertrophy' : g}
                                 </button>
                             ))}
                         </div>

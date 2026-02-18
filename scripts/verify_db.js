@@ -1,55 +1,30 @@
 
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '.env.local' });
+const dotenv = require('dotenv');
+const fs = require('fs');
+const path = require('path');
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY // Use service role for admin access 
-);
+// Load env
+const envLocal = fs.readFileSync(path.resolve('.env.local'), 'utf8');
+const env = dotenv.parse(envLocal);
+
+const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 async function verify() {
-    console.log("Verifying Database State...");
+    console.log('Verifying community_goal_templates table...');
 
-    // 1. Check profiles columns
-    const { data: profile, error: pError } = await supabase
-        .from('profiles')
-        .select('xp, level')
-        .limit(1);
+    // Test 1: Query table
+    const { data, error } = await supabase.from('community_goal_templates').select('*').limit(1);
 
-    if (pError) {
-        if (pError.message.includes('does not exist')) {
-            console.log("❌ 'xp' or 'level' columns MISSING in 'profiles'.");
-        } else {
-            console.log("⚠️ Error checking profiles:", pError.message);
+    if (error) {
+        console.error('❌ Error querying table:', error);
+
+        if (error.code === 'PGRST205') { // specific cache/missing table error
+            console.error('-> Table does not exist in schema cache.');
         }
     } else {
-        console.log("✅ 'xp' and 'level' columns EXIST in 'profiles'.");
-    }
-
-    // 2. Check workout_likes table
-    const { data: likes, error: lError } = await supabase
-        .from('workout_likes')
-        .select('*')
-        .limit(1);
-
-    if (lError) {
-        console.log("❌ 'workout_likes' table MISSING or inaccessible.");
-    } else {
-        console.log("✅ 'workout_likes' table EXISTS.");
-    }
-
-    // 3. Check RPC function
-    const { data: rpcData, error: rpcError } = await supabase.rpc('get_gym_leaderboard', { p_gym_id: '00000000-0000-0000-0000-000000000000', p_metric: 'volume' });
-
-    if (rpcError) {
-        if (rpcError.message.includes('function get_gym_leaderboard') && rpcError.message.includes('does not exist')) {
-            console.log("❌ 'get_gym_leaderboard' RPC MISSING.");
-        } else {
-            // It might error due to invalid UUID, but if function exists it throws a different error usually or returns empty
-            console.log("✅ 'get_gym_leaderboard' RPC ALMOST CERTAINLY EXISTS (Error was not 'does not exist'):", rpcError.message);
-        }
-    } else {
-        console.log("✅ 'get_gym_leaderboard' RPC EXISTS and works.");
+        console.log('✅ Table exists and is accessible!');
+        console.log('Row count:', data.length);
     }
 }
 

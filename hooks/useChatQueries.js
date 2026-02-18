@@ -44,6 +44,7 @@ export function useConversations(userId) {
                 let displayName = convo.name;
                 let avatar = null;
                 let otherUserId = null;
+                let profile = null;
 
                 // If private, find the other person
                 if (convo.type === 'private') {
@@ -56,11 +57,13 @@ export function useConversations(userId) {
 
                     if (other) {
                         otherUserId = other.user_id;
-                        const { data: profile } = await supabase
+                        const { data: p } = await supabase
                             .from('profiles')
                             .select('name, avatar_url, prestige_level')
                             .eq('id', other.user_id)
                             .maybeSingle();
+
+                        profile = p;
 
                         if (profile) {
                             displayName = profile.name;

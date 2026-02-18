@@ -2,114 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
-// import { syncOperations, claimReward } from '@/app/actions/gamification'; // DISABLED FOR STATIC EXPORT
 import { motion, AnimatePresence } from 'framer-motion';
-import { Dumbbell, Footprints, Flame, CalendarCheck, Timer, Trophy, RotateCcw } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { Dumbbell, Footprints, Flame, CalendarCheck, Timer, Trophy, RotateCcw, RefreshCw } from 'lucide-react';
 import { useTranslation } from '@/context/TranslationContext';
-
-// --- CLIENT SIDE GAMIFICATION LOGIC ---
-async function clientSyncOperations(supabase, userId) {
-    try {
-        const today = new Date();
-        const expiresAt = new Date(today.setHours(23, 59, 59, 999)).toISOString();
-
-        // 1. Check existing active operations
-        const { data: activeOps, error: fetchError } = await supabase
-            .from("user_operations")
-            .select("*, template:operations_templates(*)")
-            .eq("user_id", userId)
-            .gt("expires_at", new Date().toISOString());
-
-        if (fetchError) throw fetchError;
-
-        const hasDaily = activeOps.some(op => op.template && op.template.type === "daily");
-        if (hasDaily) return; // Already good
-
-        // 2. Generate new Daily Operations
-        const { data: templates } = await supabase
-            .from("operations_templates")
-            .select("*")
-            .eq("type", "daily");
-
-        if (!templates || templates.length === 0) return;
-
-        // Select 3 random
-        const selected = templates.sort(() => 0.5 - Math.random()).slice(0, 3);
-
-        const newOps = selected.map(template => ({
-            user_id: userId,
-            template_id: template.id,
-            expires_at: expiresAt,
-            current_progress: 0,
-            is_completed: false
-        }));
-
-        await supabase.from("user_operations").insert(newOps);
-    } catch (e) {
-        console.error("Sync Ops Error:", e);
-    }
-}
-
-async function clientClaimReward(supabase, opId, userId) {
-    try {
-        // 1. Fetch Op
-        const { data: op } = await supabase
-            .from("user_operations")
-            .select("*, template:operations_templates(*)")
-            .eq("id", opId)
-            .single();
-
-        if (!op || op.is_completed) return { error: "Invalid claim" };
-
-        if (op.current_progress < op.template.target_value) {
-            return { error: "Mission not complete" };
-        }
-
-        const reward = op.template.xp_reward;
-
-        // 2. Update Profile (Read-Modify-Write)
-        const { data: profile } = await supabase
-            .from("profiles")
-            .select("current_xp, lifetime_xp, level, cycle_xp")
-            .eq("id", userId)
-            .single();
-
-        // XP Logic
-        const currentLifetime = Number(profile.lifetime_xp || 0);
-        const currentCycle = Number(profile.cycle_xp || 0);
-
-        const newLifetime = currentLifetime + reward; // Score
-        const newCycle = currentCycle + reward;       // Level Progress
-
-        // Calculate Level from Cycle XP
-        // We can import the helper or just blindly update. Ideally replicate logic.
-        // For now, let's just push the XP. The Store/UI will handle level recalc on refetch?
-        // Actually, let's just update the values.
-
-        await supabase.from("profiles").update({
-            lifetime_xp: newLifetime,
-            cycle_xp: newCycle,
-            current_xp: (profile.current_xp || 0) + reward // Visual only
-        }).eq("id", userId);
-
-        // 3. Mark Complete
-        await supabase.from("user_operations").update({ is_completed: true }).eq("id", opId);
-
-        return { success: true };
-
-    } catch (e) {
-        console.error("Claim Error:", e);
-        return { error: e.message };
-    }
-}
-
 
 export default function OperationsDashboard({ userId }) {
     const { t } = useTranslation();
     const [operations, setOperations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [claiming, setClaiming] = useState(null);
+    const [rerolling, setRerolling] = useState(null);
     const [supabase] = useState(() => createClient());
 
     const [rerolls, setRerolls] = useState(0);
@@ -117,16 +19,14 @@ export default function OperationsDashboard({ userId }) {
     useEffect(() => {
         if (!userId) return;
 
-        // 1. Sync daily operations on mount
         const init = async () => {
-            await clientSyncOperations(supabase, userId); // Client-side logic
+            // Use Server-Side Logic (RPC) for assignment
+            const { error } = await supabase.rpc('assign_daily_operations');
+            if (error) console.error("Assignment Error:", error);
             fetchOperations();
         };
 
         const fetchOperations = async () => {
-            // ... existing fetch logic ...
-            // COPY PASTING REST OF FUNCTION BODY TO PRESERVE IT
-            // Fetch Ops
             const { data } = await supabase
                 .from('user_operations')
                 .select('*, template:operations_templates(*)')
@@ -162,12 +62,14 @@ export default function OperationsDashboard({ userId }) {
         setClaiming(op.id);
         if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
 
-        const result = await clientClaimReward(supabase, op.id, userId);
+        // Call RPC
+        const { data, error } = await supabase.rpc('claim_operation_reward', { p_op_id: op.id });
 
-        if (result.error) {
-            alert(result.error);
+        if (error || !data.success) {
+            alert(error?.message || data?.message || "Claim failed");
         } else {
-            // Trigger confetti
+            // Trigger confetti (Lazy Load)
+            const confetti = (await import('canvas-confetti')).default;
             confetti({
                 particleCount: 150,
                 spread: 70,
@@ -177,6 +79,21 @@ export default function OperationsDashboard({ userId }) {
             });
         }
         setClaiming(null);
+    };
+
+    const handleReroll = async (op) => {
+        if (rerolls <= 0) return;
+        setRerolling(op.id);
+
+        const { data, error } = await supabase.rpc('reroll_operation', { p_op_id: op.id });
+
+        if (error || !data.success) {
+            alert(error?.message || data?.message || "Reroll failed");
+        } else {
+            // Success handled by realtime subscription refreshing the list
+            if (navigator.vibrate) navigator.vibrate(50);
+        }
+        setRerolling(null);
     };
 
     // Helper for icons
@@ -197,8 +114,9 @@ export default function OperationsDashboard({ userId }) {
         </div>
     );
 
-    const dailies = operations.filter(op => op.template.type === 'daily');
-    const weeklies = operations.filter(op => op.template.type === 'weekly');
+    const isActive = (op) => new Date(op.expires_at) > new Date();
+    const dailies = operations.filter(op => op.template.type === 'daily' && isActive(op));
+    const weeklies = operations.filter(op => op.template.type === 'weekly' && isActive(op));
 
     return (
         <div style={{ width: '100%' }}>
@@ -218,8 +136,8 @@ export default function OperationsDashboard({ userId }) {
                 </h3>
 
                 {rerolls > 0 && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>
-                        Turnovers: {rerolls}
+                    <div style={{ fontSize: '0.8rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <RefreshCw size={14} /> {rerolls} Turnovers
                     </div>
                 )}
             </div>
@@ -232,7 +150,10 @@ export default function OperationsDashboard({ userId }) {
                             key={op.id}
                             op={op}
                             onClaim={handleClaim}
+                            onReroll={handleReroll}
                             isClaiming={claiming === op.id}
+                            isRerolling={rerolling === op.id}
+                            canReroll={rerolls > 0}
                             getIcon={getIcon}
                         />
                     ))}
@@ -264,6 +185,8 @@ export default function OperationsDashboard({ userId }) {
                                 key={op.id}
                                 op={op}
                                 onClaim={handleClaim}
+                                // No rerolls for weeklies? Or maybe yes? Let's disable for now as per "Turnovers" context usually implies dailies.
+                                onReroll={null}
                                 isClaiming={claiming === op.id}
                                 getIcon={getIcon}
                             />
@@ -275,7 +198,7 @@ export default function OperationsDashboard({ userId }) {
     );
 }
 
-function OperationCard({ op, onClaim, isClaiming, getIcon }) {
+function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canReroll, getIcon }) {
     const { template, current_progress, is_completed } = op;
     const progressPercent = Math.min(100, Math.floor((current_progress / template.target_value) * 100));
     const isReadyToClaim = !is_completed && current_progress >= template.target_value;
@@ -319,8 +242,31 @@ function OperationCard({ op, onClaim, isClaiming, getIcon }) {
                         </div>
                     </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                     <div style={{ color: 'var(--brand-yellow)', fontWeight: 'bold', fontSize: '0.9rem' }}>+{template.xp_reward} XP</div>
+
+                    {/* Reroll Button (Only if not completed and Reroll logical) */}
+                    {onReroll && !is_completed && !isReadyToClaim && (
+                        <button
+                            onClick={() => onReroll(op)}
+                            disabled={!canReroll || isRerolling}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: canReroll ? 'var(--text-muted)' : 'var(--text-dim)',
+                                cursor: canReroll ? 'pointer' : 'not-allowed',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.7rem'
+                            }}
+                            title="Turnover Mission"
+                        >
+                            <RefreshCw size={12} className={isRerolling ? "animate-spin" : ""} />
+                            {canReroll ? 'Flip' : ''}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -377,6 +323,13 @@ function OperationCard({ op, onClaim, isClaiming, getIcon }) {
                     0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
                     70% { box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
                     100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+                }
+                .animate-spin {
+                    animation: spin 1s linear infinite;
+                }
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
                 }
             `}</style>
         </motion.div>

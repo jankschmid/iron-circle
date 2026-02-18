@@ -42,12 +42,7 @@ export default function ChatTab() {
     }, [searchParams]);
 
     // Filtering logic
-    const filteredConversations = conversations.filter(c => {
-        if (activeTab === 'messages') return c.type === 'private';
-        if (activeTab === 'groups') return c.type === 'group';
-        if (activeTab === 'communities') return c.type === 'community' || c.type === 'gym';
-        return true;
-    });
+    const filteredConversations = conversations.filter(c => c.type === 'private');
 
     const handleConfirm = () => {
         if (confirmDialog?.onConfirm) confirmDialog.onConfirm();
@@ -94,45 +89,15 @@ export default function ChatTab() {
             <div style={{
                 marginBottom: '16px',
                 position: 'sticky', top: 0, zIndex: 10,
-                // background: 'var(--background)', // removed background to blend with parent
             }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    {/* Replaced H1 with simple label or remove if parent has header */}
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>{t('Conversations')}</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>{t('Direct Messages')}</div>
 
-                    {/* Add Action Button */}
-                    {activeTab === 'communities' ? (
-                        <button
-                            onClick={() => setShowCommunitiesModal(true)}
-                            style={{ background: 'var(--primary)', color: '#000', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
+                    <Link href={'/social/chat/new'} style={{ textDecoration: 'none' }}>
+                        <div style={{ background: 'var(--surface-highlight)', color: 'var(--foreground)', border: '1px solid var(--border)', width: '32px', height: '32px', borderRadius: '50%', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             +
-                        </button>
-                    ) : (
-                        <Link href={activeTab === 'groups' ? '/social/chat/new/group' : '/social/chat/new'} style={{ textDecoration: 'none' }}>
-                            <div style={{ background: 'var(--primary)', color: '#000', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                +
-                            </div>
-                        </Link>
-                    )}
-                </div>
-
-                {/* Tabs */}
-                <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '12px' }}>
-                    {['messages', 'groups', 'communities'].map(tab => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            style={{
-                                flex: 1, padding: '8px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '500',
-                                background: activeTab === tab ? 'var(--primary)' : 'transparent',
-                                color: activeTab === tab ? '#000' : '#888',
-                                transition: 'all 0.2s ease', border: 'none', cursor: 'pointer'
-                            }}
-                        >
-                            {t(tab.charAt(0).toUpperCase() + tab.slice(1))}
-                        </button>
-                    ))}
+                        </div>
+                    </Link>
                 </div>
             </div>
 

@@ -294,6 +294,20 @@ export default function MasterAdminPage() {
                         >
                             🌍 Languages & Translations
                         </button>
+                        <button
+                            onClick={() => router.push('/admin/missions')}
+                            style={{
+                                background: '#FFC800',
+                                border: '1px solid #FFC800',
+                                color: '#000',
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            🚀 Mission Control
+                        </button>
                         <div style={{ color: '#666' }}>Logged as: {user.email || user.name}</div>
                     </div>
                 </header>

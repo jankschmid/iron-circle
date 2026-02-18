@@ -216,7 +216,7 @@ export default function ProfilePage() {
             <div style={{ padding: '24px 0 32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{ position: 'relative', marginBottom: '16px' }}>
                     <img
-                        src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id || 'guest'}`}
+                        src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id || 'guest'}`}
                         style={{
                             width: '96px',
                             height: '96px',
@@ -254,8 +254,8 @@ export default function ProfilePage() {
                         </div>
                     )}
                 </div>
-                <h1 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{user.name}</h1>
-                <p style={{ color: 'var(--text-muted)' }}>{user.handle || '@athlete'}</p>
+                <h1 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{user.name || user.username || 'Athlete'}</h1>
+                <p style={{ color: 'var(--text-muted)' }}>@{user.username || 'athlete'}</p>
                 {userGym && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '8px' }}>
                         <div style={{

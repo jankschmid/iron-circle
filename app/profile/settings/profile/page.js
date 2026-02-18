@@ -8,13 +8,14 @@ import { useTranslation } from '@/context/TranslationContext';
 
 export default function ProfileStatsPage() {
     const { t } = useTranslation();
-    const { user, updateUserProfile } = useStore();
+    const { user, updateProfileData } = useStore();
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const [showAvatarEditor, setShowAvatarEditor] = useState(false);
 
     // Local State
     const [formData, setFormData] = useState({
+        username: '',
         name: '',
         height: '',
         weight: '',
@@ -24,7 +25,8 @@ export default function ProfileStatsPage() {
     useEffect(() => {
         if (user) {
             setFormData({
-                name: user.user_metadata?.name || user.name || '',
+                username: user.username || '',
+                name: user.name || user.user_metadata?.name || '',
                 height: user.height || '',
                 weight: user.weight || '',
                 gender: user.gender || 'prefer_not_to_say'
@@ -38,15 +40,12 @@ export default function ProfileStatsPage() {
         setIsLoading(true);
         setMessage(null);
         try {
-            await updateUserProfile({
+            await updateProfileData({
+                username: formData.username,
                 name: formData.name,
                 height: parseFloat(formData.height) || null,
                 weight: parseFloat(formData.weight) || null,
-                gender: formData.gender,
-                user_metadata: {
-                    ...user.user_metadata,
-                    name: formData.name
-                }
+                gender: formData.gender
             });
             setMessage(t('Profile updated successfully!'));
         } catch (e) {
@@ -102,6 +101,20 @@ export default function ProfileStatsPage() {
                 </section>
 
                 <section style={{ marginBottom: '32px' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Username')}</label>
+                        <div style={{ position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}>@</span>
+                            <input
+                                type="text"
+                                value={formData.username}
+                                onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') })}
+                                style={{ ...inputStyle, paddingLeft: '32px' }}
+                                placeholder="username"
+                            />
+                        </div>
+                    </div>
+
                     <div style={{ marginBottom: '16px' }}>
                         <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Display Name')}</label>
                         <input
@@ -172,7 +185,7 @@ export default function ProfileStatsPage() {
                     <AvatarEditor
                         currentAvatar={user.avatar_url}
                         onSave={(newUrl) => {
-                            updateUserProfile({ avatar_url: newUrl });
+                            updateProfileData({ avatar_url: newUrl });
                             setShowAvatarEditor(false);
                         }}
                         onClose={() => setShowAvatarEditor(false)}
