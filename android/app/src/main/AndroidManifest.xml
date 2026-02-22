@@ -28,10 +28,9 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Foreground Service Registration -->
-        <receiver android:name="io.capawesome.capacitorjs.plugins.foregroundservice.NotificationActionBroadcastReceiver" />
+        <!-- Custom Foreground Service Registration -->
         <service 
-            android:name="io.capawesome.capacitorjs.plugins.foregroundservice.AndroidForegroundService" 
+            android:name=".IronCircleWorkoutService" 
             android:enabled="true" 
             android:exported="false" 
             android:foregroundServiceType="specialUse">
