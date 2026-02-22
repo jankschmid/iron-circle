@@ -142,6 +142,54 @@ export default function MasterAdminPage() {
         }
     };
 
+    // Analytics CSV Export Handlers
+    const downloadCSV = (data, filename) => {
+        if (!data || data.length === 0) {
+            alert("No data available to export.");
+            return;
+        }
+        const headers = Object.keys(data[0]);
+        const csvRows = [];
+        csvRows.push(headers.join(','));
+
+        for (const row of data) {
+            const values = headers.map(header => {
+                const val = row[header] === null || row[header] === undefined ? '' : row[header];
+                const escaped = ('' + val).replace(/"/g, '""');
+                return `"${escaped}"`;
+            });
+            csvRows.push(values.join(','));
+        }
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleExportActivity = async () => {
+        const { data, error } = await supabase.rpc('export_analytics_activity');
+        if (error) return alert("Export A Failed: " + error.message);
+        downloadCSV(data, `Export_A_Activity_${new Date().toISOString().split('T')[0]}.csv`);
+    };
+
+    const handleExportGamification = async () => {
+        const { data, error } = await supabase.rpc('export_analytics_gamification');
+        if (error) return alert("Export B Failed: " + error.message);
+        downloadCSV(data, `Export_B_Gamification_${new Date().toISOString().split('T')[0]}.csv`);
+    };
+
+    const handleExportSocial = async () => {
+        const { data, error } = await supabase.rpc('export_analytics_social');
+        if (error) return alert("Export C Failed: " + error.message);
+        downloadCSV(data, `Export_C_Social_${new Date().toISOString().split('T')[0]}.csv`);
+    };
+
     // Modal Handlers
     const openCreateModal = () => {
         setEditingGym(null);
@@ -321,6 +369,40 @@ export default function MasterAdminPage() {
                     <div style={{ background: '#222', padding: '24px', borderRadius: '16px' }}>
                         <div style={{ color: '#888', marginBottom: '8px' }}>Active Gyms</div>
                         <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>{stats?.active_gyms || 0}</div>
+                    </div>
+                </div>
+
+                {/* Analytics & Export (The Black Box) */}
+                <div style={{ marginBottom: '60px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '20px', color: '#fff' }}>Analytics & Export (The Black Box) 📉</h2>
+                    <div style={{ background: '#222', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '8px' }}>Download raw user progression and retention data as standard CSV to analyze in Excel or Google Sheets.</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                            <button
+                                onClick={handleExportActivity}
+                                style={{
+                                    background: '#333', color: '#fff', border: '1px solid #444', padding: '16px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', transition: 'background 0.2s'
+                                }}
+                            >
+                                <span>📥 Export A: Activity (Retention)</span>
+                            </button>
+                            <button
+                                onClick={handleExportGamification}
+                                style={{
+                                    background: '#333', color: '#fff', border: '1px solid #444', padding: '16px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', transition: 'background 0.2s'
+                                }}
+                            >
+                                <span>📥 Export B: Gamification (Hook)</span>
+                            </button>
+                            <button
+                                onClick={handleExportSocial}
+                                style={{
+                                    background: '#333', color: '#fff', border: '1px solid #444', padding: '16px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', transition: 'background 0.2s'
+                                }}
+                            >
+                                <span>📥 Export C: Social (Virality)</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 

@@ -4,12 +4,14 @@ import { useStore } from '@/lib/store';
 import BottomNav from '@/components/BottomNav';
 
 export default function ProgressPage() {
-    const { user, getWeeklyStats, history, exercises } = useStore();
+    const { user, getWeeklyStats, getMonthlyStats, history, exercises } = useStore();
     const { volumeByDay, totalWorkouts, totalVolume } = getWeeklyStats();
+    const { weeklyVolume: weeklyVolumeMonth } = getMonthlyStats();
 
     // Chart Data
     const weeklyVolume = volumeByDay;
     const maxVolume = Math.max(...weeklyVolume) || 1;
+    const maxVolumeMonth = Math.max(...weeklyVolumeMonth) || 1;
 
     // Calculate Streak (Simplified: consecutive weeks with at least 1 workout, or days)
     // For now, let's just do total workouts as a proxy or simple day check
@@ -142,8 +144,8 @@ export default function ProgressPage() {
                     justifyContent: 'space-between',
                     gap: '24px'
                 }}>
-                    {/* Mock Data for 4 Weeks - In real app, aggregate history by week */}
-                    {[1, 0.8, 1.1, 1.2].map((factor, i) => (
+                    {/* Real Data for 4 Weeks */}
+                    {weeklyVolumeMonth && weeklyVolumeMonth.map((vol, i) => (
                         <div key={i} style={{
                             width: '100%',
                             display: 'flex',
@@ -155,7 +157,8 @@ export default function ProgressPage() {
                         }}>
                             <div style={{
                                 width: '100%',
-                                height: `${Math.min(100, factor * 60)}%`, // Mock scale
+                                height: `${maxVolumeMonth > 0 ? (vol / maxVolumeMonth) * 100 : 0}%`,
+                                minHeight: vol > 0 ? '4px' : '0',
                                 background: i === 3 ? 'var(--primary)' : 'var(--surface-highlight)',
                                 borderRadius: '8px',
                                 transition: 'height 0.5s ease',

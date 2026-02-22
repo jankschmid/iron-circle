@@ -21,8 +21,12 @@ export default function OperationsDashboard({ userId }) {
 
         const init = async () => {
             // Use Server-Side Logic (RPC) for assignment
-            const { error } = await supabase.rpc('assign_daily_operations');
-            if (error) console.error("Assignment Error:", error);
+            const { data, error } = await supabase.rpc('assign_daily_operations');
+            if (error) {
+                console.error("Assignment Error Details:", error.message || error.details || error);
+            } else if (data && !data.success) {
+                console.warn("Assignment Not Successful:", data.message);
+            }
             fetchOperations();
         };
 
@@ -244,29 +248,6 @@ function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canRero
                 </div>
                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                     <div style={{ color: 'var(--brand-yellow)', fontWeight: 'bold', fontSize: '0.9rem' }}>+{template.xp_reward} XP</div>
-
-                    {/* Reroll Button (Only if not completed and Reroll logical) */}
-                    {onReroll && !is_completed && !isReadyToClaim && (
-                        <button
-                            onClick={() => onReroll(op)}
-                            disabled={!canReroll || isRerolling}
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: canReroll ? 'var(--text-muted)' : 'var(--text-dim)',
-                                cursor: canReroll ? 'pointer' : 'not-allowed',
-                                padding: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.7rem'
-                            }}
-                            title="Turnover Mission"
-                        >
-                            <RefreshCw size={12} className={isRerolling ? "animate-spin" : ""} />
-                            {canReroll ? 'Flip' : ''}
-                        </button>
-                    )}
                 </div>
             </div>
 
@@ -314,6 +295,29 @@ function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canRero
                         }}
                     >
                         {isClaiming ? 'CLAIMING...' : 'CLAIM REWARD'}
+                    </button>
+                ) : onReroll ? (
+                    <button
+                        onClick={() => onReroll(op)}
+                        disabled={!canReroll || isRerolling}
+                        style={{
+                            background: canReroll ? 'var(--surface-highlight)' : 'transparent',
+                            border: canReroll ? '1px solid var(--border)' : '1px solid transparent',
+                            color: canReroll ? 'var(--text-muted)' : 'var(--text-dim)',
+                            padding: '6px 16px',
+                            borderRadius: '100px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            cursor: canReroll ? 'pointer' : 'not-allowed',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
+                            transition: 'all 0.2s'
+                        }}
+                        title="Turnover Mission"
+                    >
+                        <RefreshCw size={14} className={isRerolling ? "animate-spin" : ""} />
+                        <span>{isRerolling ? 'Flipping...' : 'Flip Mission'}</span>
                     </button>
                 ) : null}
             </div>

@@ -1559,69 +1559,70 @@ function TrackerContent() {
                     )}
                 </div>
 
-                {/* Actions - Only show manual controls if auto-tracking is disabled or session is manual */}
-                {(!user.auto_tracking_enabled || workoutSession?.type === 'manual') && (
-                    <>
+                {/* Actions - Show manual controls always to allow override */}
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <button
+                        onClick={() => workoutSession ? stopTracking() : startTracking(user.gymId)}
+                        disabled={!workoutSession && (!user.gyms || user.gyms.length === 0 || !user.gymId)}
+                        style={{
+                            padding: '18px 48px',
+                            fontSize: '1.1rem',
+                            fontWeight: '800',
+                            borderRadius: '100px',
+                            border: 'none',
+                            background: workoutSession ? 'transparent' : ((!user.gyms || user.gyms.length === 0) ? 'var(--surface-highlight)' : 'var(--brand-yellow)'),
+                            color: workoutSession ? 'var(--error)' : ((!user.gyms || user.gyms.length === 0) ? 'var(--text-dim)' : '#000'),
+                            border: workoutSession ? '2px solid var(--error)' : 'none',
+                            cursor: (workoutSession || (user.gyms && user.gyms.length > 0 && user.gymId)) ? 'pointer' : 'not-allowed',
+                            opacity: (workoutSession || (user.gyms && user.gyms.length > 0 && user.gymId)) ? 1 : 0.5,
+                            width: '100%',
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px',
+                            boxShadow: workoutSession ? 'none' : '0 4px 20px rgba(250, 255, 0, 0.3)',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        {workoutSession ? t('Stop Workout') : ((!user.gyms || user.gyms.length === 0) ? t('Add a Gym First') : t('Start Tracking manually'))}
+                    </button>
+
+                    {/* Invite Friends Button - Only show when session is active */}
+                    {workoutSession && (
                         <button
-                            onClick={() => workoutSession ? stopTracking() : startTracking(user.gymId)}
-                            disabled={!workoutSession && (!user.gyms || user.gyms.length === 0 || !user.gymId)}
+                            onClick={() => setShowInviteModal(true)}
                             style={{
-                                padding: '18px 48px',
-                                fontSize: '1.1rem',
-                                fontWeight: '800',
+                                padding: '12px 24px',
+                                fontSize: '0.9rem',
+                                fontWeight: '600',
                                 borderRadius: '100px',
-                                border: 'none',
-                                background: workoutSession ? 'transparent' : ((!user.gyms || user.gyms.length === 0) ? 'var(--surface-highlight)' : 'var(--brand-yellow)'),
-                                color: workoutSession ? 'var(--error)' : ((!user.gyms || user.gyms.length === 0) ? 'var(--text-dim)' : '#000'),
-                                border: workoutSession ? '2px solid var(--error)' : 'none',
-                                cursor: (workoutSession || (user.gyms && user.gyms.length > 0 && user.gymId)) ? 'pointer' : 'not-allowed',
-                                opacity: (workoutSession || (user.gyms && user.gyms.length > 0 && user.gymId)) ? 1 : 0.5,
+                                border: '1px solid var(--primary)',
+                                background: 'transparent',
+                                color: 'var(--primary)',
+                                cursor: 'pointer',
                                 width: '100%',
-                                textTransform: 'uppercase',
-                                letterSpacing: '1px',
-                                boxShadow: workoutSession ? 'none' : '0 4px 20px rgba(250, 255, 0, 0.3)',
+                                marginTop: '12px',
                                 transition: 'all 0.2s ease'
                             }}
                         >
-                            {workoutSession ? t('Stop Workout') : ((!user.gyms || user.gyms.length === 0) ? t('Add a Gym First') : t('Start Tracking'))}
+                            👥 Invite Friends
                         </button>
+                    )}
 
-                        {/* Invite Friends Button - Only show when session is active */}
-                        {workoutSession && (
-                            <button
-                                onClick={() => setShowInviteModal(true)}
-                                style={{
-                                    padding: '12px 24px',
-                                    fontSize: '0.9rem',
-                                    fontWeight: '600',
-                                    borderRadius: '100px',
-                                    border: '1px solid var(--primary)',
-                                    background: 'transparent',
-                                    color: 'var(--primary)',
-                                    cursor: 'pointer',
-                                    width: '100%',
-                                    marginTop: '12px',
-                                    transition: 'all 0.2s ease'
-                                }}
-                            >
-                                👥 Invite Friends
-                            </button>
-                        )}
+                    {!user.gymId && (
+                        <button
+                            onClick={() => setShowManage(true)}
+                            style={{ color: 'var(--brand-yellow)', fontSize: '0.9rem', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', marginTop: '8px' }}
+                        >
+                            {t('Set Home Gym Required')}
+                        </button>
+                    )}
 
-                        {!user.gymId && (
-                            <button onClick={() => setShowManage(true)} style={{ color: 'var(--brand-yellow)', fontSize: '0.9rem', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', marginTop: '8px' }}>
-                                Set Home Gym Required
-                            </button>
-                        )}
-                    </>
-                )}
-
-                {/* Auto-tracking info message */}
-                {user.auto_tracking_enabled && workoutSession?.type === 'auto' && (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic', marginTop: '16px' }}>
-                        Session will automatically stop when you leave the gym
-                    </div>
-                )}
+                    {/* Auto-tracking info message */}
+                    {user.auto_tracking_enabled && workoutSession?.type === 'auto' && (
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic', marginTop: '16px' }}>
+                            {t('Session will automatically stop when you leave the gym')}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* History Section */}

@@ -714,23 +714,16 @@ export function useWorkoutStore(user) {
             const workoutToDelete = history.find(w => w.id === id);
             setHistory(prev => prev.filter(w => w.id !== id));
 
-            // Delete from Database
-            await supabase.from('workouts').delete().eq('id', id);
+            // Delete from Database & Deduct XP safely via RPC
+            const { error, data } = await supabase.rpc('delete_workout_data', { p_workout_id: id });
 
-            // Deduct XP and Stats
-            if (workoutToDelete) {
-                // Calculate how much XP this workout gave
-                const xpResult = calculateSessionXP({
-                    duration: workoutToDelete.duration || 0,
-                    volume: workoutToDelete.volume || 0,
-                    prs: 0, streak: 1, distance: 0
-                }, { volume: 1 });
-
-                if (xpResult.total > 0) {
-                    // Subtract XP (calling the increment RPC with a negative number)
-                    const { error } = await supabase.rpc('increment_user_xp', { amount: -xpResult.total });
-                    if (error) console.error("XP Deduction error", error);
-                }
+            if (error) {
+                console.error("Error wiping workout data", error);
+                // Revert optimistic delete if it fails
+                fetchHistory();
+            } else if (data && !data.success) {
+                console.error("Wipe failed:", data.message);
+                fetchHistory();
             }
         },
         updateWorkoutHistory: async (id, data) => { }, // Stub

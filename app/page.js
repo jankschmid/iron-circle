@@ -148,11 +148,14 @@ export default function Home() {
         <div className="container" style={{ paddingBottom: '100px' }}>
             <header style={{ padding: '24px 0 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <h1 className="text-gradient" style={{ fontSize: '1.8rem' }}>IronCircle</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                        <img src="/assets/logo/Iron-Circle_Logo_Two_Color.svg" alt="Logo" style={{ width: '32px', height: '32px' }} />
+                        <h1 className="text-gradient" style={{ fontSize: '1.8rem', margin: 0 }}>IronCircle</h1>
+                    </div>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t('Welcome back')}, {user.name ? user.name.split(' ')[0] : t('Athlete')}</p>
                     <button onClick={handleLogout} style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '4px', textDecoration: 'underline' }}>{t('Logout')}</button>
                 </div>
-                <img src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id || 'guest'}`} style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid var(--border)' }} />
+                <img src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id || 'guest'}`} style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid var(--border)' }} />
             </header>
 
             {/* 3. Onboarding vs Dashboard */}

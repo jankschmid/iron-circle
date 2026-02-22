@@ -120,6 +120,18 @@ function EditRoutineContent() {
         }
     };
 
+    const moveExercise = (index, direction) => {
+        setSelectedExercises(prev => {
+            const newArray = [...prev];
+            if (direction === 'up' && index > 0) {
+                [newArray[index - 1], newArray[index]] = [newArray[index], newArray[index - 1]];
+            } else if (direction === 'down' && index < newArray.length - 1) {
+                [newArray[index + 1], newArray[index]] = [newArray[index], newArray[index + 1]];
+            }
+            return newArray;
+        });
+    };
+
     const addSet = (exId) => {
         setSelectedExercises(prev => prev.map(ex => {
             if (ex.id !== exId) return ex;
@@ -375,8 +387,14 @@ function EditRoutineContent() {
                                     borderRadius: 'var(--radius-sm)',
                                     border: '1px solid var(--border)'
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                        <span style={{ fontWeight: '600', fontSize: '1.1rem' }}>{ex.name}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <button onClick={() => moveExercise(i, 'up')} disabled={i === 0} style={{ background: 'var(--surface-highlight)', border: 'none', borderRadius: '4px', padding: '4px', cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
+                                                <button onClick={() => moveExercise(i, 'down')} disabled={i === selectedExercises.length - 1} style={{ background: 'var(--surface-highlight)', border: 'none', borderRadius: '4px', padding: '4px', cursor: i === selectedExercises.length - 1 ? 'default' : 'pointer', opacity: i === selectedExercises.length - 1 ? 0.3 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
+                                            </div>
+                                            <span style={{ fontWeight: '600', fontSize: '1.1rem' }}>{ex.name}</span>
+                                        </div>
                                         <button
                                             onClick={() => toggleExercise(ex)}
                                             style={{ color: 'var(--warning)', background: 'none', border: 'none', fontSize: '0.9rem' }}
@@ -399,7 +417,7 @@ function EditRoutineContent() {
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     <input
                                                         type="number"
-                                                        value={set.reps}
+                                                        value={set.reps === undefined ? '' : set.reps}
                                                         onChange={(e) => updateSetReps(ex.id, setIdx, e.target.value)}
                                                         style={{
                                                             width: '60px',
@@ -455,6 +473,21 @@ function EditRoutineContent() {
                         </div>
                     )}
 
+                    <button
+                        onClick={() => setIsSelecting(true)}
+                        style={{
+                            width: '100%',
+                            padding: '16px',
+                            background: 'transparent',
+                            border: '1px dashed var(--primary-dim)',
+                            color: 'var(--primary)',
+                            borderRadius: 'var(--radius-md)',
+                            marginBottom: '16px'
+                        }}
+                    >
+                        {selectedExercises.length > 0 ? `+ ${t('Add More Exercises')}` : `+ ${t('Add Exercises')}`}
+                    </button>
+
                     <div style={{ display: 'grid', gap: '16px' }}>
                         <button
                             onClick={handleSave}
@@ -474,21 +507,6 @@ function EditRoutineContent() {
                         </button>
                     </div>
                 </div>
-
-                <button
-                    onClick={() => setIsSelecting(true)}
-                    style={{
-                        width: '100%',
-                        padding: '16px',
-                        background: 'transparent',
-                        border: '1px dashed var(--primary-dim)',
-                        color: 'var(--primary)',
-                        borderRadius: 'var(--radius-md)',
-                        marginBottom: '16px'
-                    }}
-                >
-                    {selectedExercises.length > 0 ? `+ ${t('Add More Exercises')}` : `+ ${t('Add Exercises')}`}
-                </button>
             </section>
 
             {/* DELETE CONFIRMATION MODAL */}

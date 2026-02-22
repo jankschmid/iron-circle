@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "537101136778",
+    "project_id": "ironcircleapp",
+    "storage_bucket": "ironcircleapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:537101136778:android:9517bf98065ae70b1c0e73",
+        "android_client_info": {
+          "package_name": "com.ironcircle.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrCGvrsK_XoBJnYTo9023W3o1e1voxbEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

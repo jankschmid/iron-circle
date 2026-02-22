@@ -60,7 +60,7 @@ export default function SignupPage() {
                         <h1 style={{ color: '#ffffff', fontSize: '24px', marginBottom: '8px', fontWeight: '700' }}>{t('Iron Circle')}</h1>
                         <p style={{ color: '#a0a0a0', fontSize: '14px', marginBottom: '32px' }}>{t('Verify your account to join the leaderboard.')}</p>
 
-                        <div style={{ width: '80px', height: '80px', background: '#2a2a2a', borderRadius: '50%', margin: '0 auto 24px auto', lineHeight: '80px', fontSize: '32px' }}>💪</div>
+                        <img src="/assets/logo/Iron-Circle_Logo_Two_Color.svg" alt="Iron Circle Logo" style={{ width: '80px', height: '80px', margin: '0 auto 24px auto', display: 'block' }} />
 
                         <h2 style={{ color: '#ffffff', fontSize: '18px', marginBottom: '16px', fontWeight: '600' }}>{t('Welcome to the Circle!')}</h2>
                         <p style={{ color: '#e0e0e0', fontSize: '15px', lineHeight: '1.5', marginBottom: '32px' }}>
@@ -80,7 +80,7 @@ export default function SignupPage() {
                 ) : (
                     <>
                         <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-                            <div style={{ width: '64px', height: '64px', background: '#2a2a2a', borderRadius: '50%', margin: '0 auto', lineHeight: '64px', fontSize: '28px' }}>💪</div>
+                            <img src="/assets/logo/Iron-Circle_Logo_Two_Color.svg" alt="Iron Circle Logo" style={{ width: '64px', height: '64px', margin: '0 auto', display: 'block' }} />
                         </div>
                         <h1 className="text-gradient" style={{ fontSize: '2rem', marginBottom: '8px', textAlign: 'center' }}>{t('Join the Circle')}</h1>
                         <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '32px' }}>{t('Start your journey today.')}</p>

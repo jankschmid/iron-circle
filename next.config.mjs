@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: false, // Fix double-mount AbortErrors in local dev
-    // output: 'export', // Uncomment for Capacitor Android build
+    output: 'export', // Required for Capacitor Android build
     images: {
         unoptimized: true
     },

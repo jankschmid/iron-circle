@@ -75,7 +75,7 @@ export default function LoginPage() {
 
             <div style={{ width: '100%', maxWidth: '400px', background: 'var(--surface)', padding: '32px', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)' }}>
                 <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-                    <div style={{ width: '64px', height: '64px', background: '#2a2a2a', borderRadius: '50%', margin: '0 auto', lineHeight: '64px', fontSize: '28px' }}>💪</div>
+                    <img src="/assets/logo/Iron-Circle_Logo_Two_Color.svg" alt="Iron Circle Logo" style={{ width: '64px', height: '64px', margin: '0 auto', display: 'block' }} />
                 </div>
                 <h1 className="text-gradient" style={{ fontSize: '2rem', marginBottom: '8px', textAlign: 'center' }}>{t('Welcome Back')}</h1>
                 <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '32px' }}>{t('Enter the Iron Circle.')}</p>
