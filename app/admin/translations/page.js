@@ -93,11 +93,73 @@ export default function TranslationsAdminPage() {
     };
 
     const handleAutoTranslate = async () => {
-        // TEMPORARY FIX FOR ANDROID STATIC EXPORT:
-        // API Routes cannot be used with output: 'export'.
-        // We need to move this logic to Supabase Edge Functions.
-        alert("Auto-translation is temporarily disabled for the Android Build (Static Export compatibility). Please use the Vercel dashboard version for admin tasks or wait for the Supabase Edge Function update.");
-        return;
+        if (!selectedLang) {
+            setMessage({ type: 'error', text: 'Select a target language first.' });
+            return;
+        }
+
+        const missingKeys = keys.filter(k => !k.translations?.[selectedLang]);
+        if (missingKeys.length === 0) {
+            setMessage({ type: 'success', text: `All keys are already translated to ${selectedLang.toUpperCase()}!` });
+            return;
+        }
+
+        setAutoTranslating(true);
+        setMessage({ type: 'info', text: `Translating ${missingKeys.length} keys to ${selectedLang.toUpperCase()}...` });
+
+        try {
+            // Chunking to avoid massive payloads
+            const chunkSize = 50;
+            let totalTranslated = 0;
+
+            for (let i = 0; i < missingKeys.length; i += chunkSize) {
+                const chunk = missingKeys.slice(i, i + chunkSize);
+                const textsToTranslate = chunk.map(k => k.key); // Using English key as the source text
+
+                const { data, error } = await supabase.functions.invoke('translate', {
+                    body: { texts: textsToTranslate, targetLang: selectedLang }
+                });
+
+                if (error) throw new Error(error.message);
+                if (data.error) throw new Error(data.error);
+
+                const translations = data.translations;
+
+                // Update DB and UI
+                for (let j = 0; j < chunk.length; j++) {
+                    const keyRow = chunk[j];
+                    const translatedText = translations[j];
+
+                    const updatedTranslations = { ...keyRow.translations, [selectedLang]: translatedText };
+                    const updatedFlags = { ...keyRow.flags, [selectedLang]: 'auto' };
+
+                    // Fire and forget updates for speed, could be optimized to a bulk RPC update later
+                    await supabase
+                        .from('app_translations')
+                        .update({ translations: updatedTranslations, flags: updatedFlags })
+                        .eq('id', keyRow.id);
+
+                    // Optimistic UI update
+                    setKeys(prev => prev.map(k => {
+                        if (k.id === keyRow.id) {
+                            return { ...k, translations: updatedTranslations, flags: updatedFlags };
+                        }
+                        return k;
+                    }));
+                }
+
+                totalTranslated += chunk.length;
+                setMessage({ type: 'info', text: `Translated ${totalTranslated} / ${missingKeys.length}...` });
+            }
+
+            setMessage({ type: 'success', text: `Successfully auto-translated ${missingKeys.length} keys to ${selectedLang.toUpperCase()}!` });
+
+        } catch (err) {
+            console.error("Translation error:", err);
+            setMessage({ type: 'error', text: `Translation failed: ${err.message}` });
+        } finally {
+            setAutoTranslating(false);
+        }
     };
 
     const handleAddLanguage = async () => {
