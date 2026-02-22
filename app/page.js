@@ -36,12 +36,12 @@ export default function Home() {
         return () => clearTimeout(timer);
     }, [user, isLoading]);
 
-    // 3. Onboarding Redirect Check
+    // 3. Onboarding Redirect Check — use setup_completed flag to avoid infinite loop
     useEffect(() => {
-        if (user && (!user.gymId || !user.height)) {
+        if (user && !user.setup_completed) {
             router.push('/profile/setup');
         }
-    }, [user, router]); // Keep router in deps
+    }, [user, router]);
 
     const handleLogout = async () => {
         try {

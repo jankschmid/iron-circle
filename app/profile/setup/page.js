@@ -8,49 +8,84 @@ import { useToast } from '@/components/ToastProvider';
 import AvatarEditor from '@/components/AvatarEditor';
 import { TRAINING_GOALS, TRAINING_GOAL_LABELS } from '@/lib/constants';
 
+// ── Grace Period calculation (mirrors the SQL RPC logic) ──────────────────────
+function calcGracePeriod(yearlyGoal) {
+    const w = Math.max(Number(yearlyGoal) / 52, 1);
+    const hours = (7 / w) * 24 + 24;
+    const days = (hours / 24).toFixed(1);
+    return { hours: Math.round(hours), days };
+}
+
+// ── Training style options ────────────────────────────────────────────────────
+const TRAINING_STYLES = [
+    { id: 'Bodybuilding', emoji: '🏋️', label: 'Bodybuilding' },
+    { id: 'Powerlifting', emoji: '💪', label: 'Powerlifting' },
+    { id: 'Calisthenics', emoji: '🤸', label: 'Calisthenics' },
+    { id: 'Crossfit', emoji: '⚡', label: 'CrossFit' },
+    { id: 'Endurance', emoji: '🏃', label: 'Endurance' },
+    { id: 'General Fitness', emoji: '🎯', label: 'General Fitness' },
+];
+
+// ── Target rep ranges (Smart Suggestions) ────────────────────────────────────
+const REP_RANGES = [
+    { min: 1, max: 5, label: '1–5  (Strength / Max Effort)' },
+    { min: 3, max: 6, label: '3–6  (Powerbuilding)' },
+    { min: 6, max: 8, label: '6–8  (Hypertrophy – Heavy)' },
+    { min: 8, max: 12, label: '8–12 (Hypertrophy – Classic)' },
+    { min: 12, max: 15, label: '12–15 (Hypertrophy – Light)' },
+    { min: 15, max: 20, label: '15–20 (Muscular Endurance)' },
+];
+
+const TOTAL_STEPS = 5;
+
 export default function OnboardingWizard() {
     const { user, updateUserProfile, saveUserGym } = useStore();
     const router = useRouter();
     const supabase = createClient();
-    const { success, error: toastError } = useToast();
+    const { success: toastSuccess, error: toastError } = useToast();
 
-    // WIZARD STATE
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [showAvatarEditor, setShowAvatarEditor] = useState(false);
+    const [gymResults, setGymResults] = useState([]);
 
-    // DATA STATE
     const [formData, setFormData] = useState({
+        // Step 1
         username: '',
         name: '',
-        avatar: '',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
+        // Step 2
         gender: '',
         height: '',
         weight: '',
-        goal: TRAINING_GOALS.HYPERTROPHY, // Default
-        gymMode: 'search', // 'search', 'create', 'code'
+        goal: TRAINING_GOALS.HYPERTROPHY,
+        // Step 3 (NEW)
+        trainingStyle: '',
+        repRangeMin: 8,
+        repRangeMax: 12,
+        yearlyGoal: 104,          // Default: 2x/week
+        // Step 4 – Gym
+        gymMode: 'search',
         gymSearch: '',
         gymCode: '',
-        selectedGymId: null
+        selectedGymId: null,
+        selectedGymName: '',
+        selectedGymVerified: false,
+        checkedPrivacy: false,
+        autoTrackGym: true,        // moved here from privacy
+        // Step 5 – Privacy
+        profileVisibility: 'public',  // pre-selected as public
+        ghostMode: false,
     });
 
-    // AVATAR PRESETS
-    const DEFAULT_AVATARS = [
-        'Felix', 'Aneka', 'Zoe', 'Jack', 'Milo', 'Bella',
-        'Leo', 'Lilly', 'Max', 'Sam', 'Nala', 'Kai'
-    ];
-
-    const [avatarOptions, setAvatarOptions] = useState(DEFAULT_AVATARS.map(seed => `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`));
-
-    const shuffleAvatars = () => {
-        const randomSeeds = Array.from({ length: 12 }, () => Math.random().toString(36).substring(7));
-        setAvatarOptions(randomSeeds.map(seed => `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`));
-    };
+    const DEFAULT_AVATARS = ['Felix', 'Aneka', 'Zoe', 'Jack', 'Milo', 'Bella', 'Leo', 'Lilly', 'Max', 'Sam', 'Nala', 'Kai'];
+    const [avatarOptions, setAvatarOptions] = useState(DEFAULT_AVATARS.map(s => `https://api.dicebear.com/7.x/avataaars/svg?seed=${s}`));
+    const shuffleAvatars = () => setAvatarOptions(Array.from({ length: 12 }, () => `https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random().toString(36).slice(7)}`));
 
     useEffect(() => {
         if (user) {
-            setFormData(prev => ({
-                ...prev,
+            setFormData(p => ({
+                ...p,
                 username: user.handle?.replace('@', '') || '',
                 name: user.name || '',
                 avatar: user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'
@@ -58,551 +93,448 @@ export default function OnboardingWizard() {
         }
     }, [user]);
 
-    // HANDLERS
-    const updateField = (key, val) => setFormData(prev => ({ ...prev, [key]: val }));
+    // If already set up, bounce to home
+    useEffect(() => {
+        if (user?.setup_completed) router.replace('/');
+    }, [user?.setup_completed]);
 
-    const nextStep = () => setStep(prev => prev + 1);
-    const prevStep = () => setStep(prev => prev - 1);
+    const updateField = (k, v) => setFormData(p => ({ ...p, [k]: v }));
+    const nextStep = () => setStep(p => p + 1);
+    const prevStep = () => setStep(p => Math.max(1, p - 1));
 
-    // STEP 1: IDENTITY
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        localStorage.clear();
+        window.location.href = '/login';
+    };
+
+    // ── VALIDATIONS ────────────────────────────────────────────────────────────
     const validateStep1 = async () => {
-        if (!formData.username || formData.username.length < 3) return toastError("Username too short");
-
-        // Strict Validation: Alphanumeric Only
-        const usernameRegex = /^[a-zA-Z0-9]+$/;
-        if (!usernameRegex.test(formData.username)) {
-            return toastError("Username can only contain letters and numbers (no spaces or symbols).");
-        }
-
+        if (!formData.username || formData.username.length < 3) return toastError("Username too short (min 3 chars)");
+        if (!/^[a-zA-Z0-9]+$/.test(formData.username)) return toastError("Letters and numbers only — no spaces or symbols");
         setLoading(true);
         try {
-            // Check availability
             if (user && formData.username !== user.handle?.replace('@', '')) {
-                const { data: existing, error } = await supabase.from('profiles').select('id').eq('username', formData.username).maybeSingle();
-                if (error) throw error;
-
-                if (existing && existing.id !== user.id) {
-                    toastError("Username taken");
-                    return; // Stop here, finally will run
-                }
+                const { data: existing } = await supabase.from('profiles').select('id').eq('username', formData.username).maybeSingle();
+                if (existing && existing.id !== user.id) return toastError("Username already taken");
             }
             nextStep();
-        } catch (err) {
-            console.error(err);
-            toastError("Error checking username");
-        } finally {
-            setLoading(false);
-        }
+        } catch (e) { toastError("Error checking username"); }
+        finally { setLoading(false); }
     };
 
-    // STEP 2: BODY STATS
     const validateStep2 = () => {
         if (!formData.gender) return toastError("Please select a gender");
-        if (!formData.weight) return toastError("Please enter weight");
-        if (!formData.height) return toastError("Please enter height");
+        if (!formData.weight) return toastError("Please enter your weight");
+        if (!formData.height) return toastError("Please enter your height");
         nextStep();
     };
 
-    // STEP 3: GYM & FINISH
-    const handleSkip = () => {
-        // Clear gym selection to prevent accidental join/create
-        setFormData(prev => ({
-            ...prev,
-            gymMode: 'search',
-            selectedGymId: null,
-            gymCode: '',
-            gymSearch: ''
-        }));
+    const validateStep3 = () => {
+        if (!formData.trainingStyle) return toastError("Please pick a training style");
         nextStep();
     };
 
+    const validateStep4 = () => {
+        if (formData.gymMode === 'search' && formData.selectedGymVerified && !formData.checkedPrivacy)
+            return toastError("Please accept the Verified Gym privacy notice.");
+        nextStep();
+    };
+
+    // ── GYM SEARCH ─────────────────────────────────────────────────────────────
+    useEffect(() => {
+        if (step !== 4) return;
+        if (formData.gymMode === 'search' && formData.gymSearch.length > 2) {
+            const t = setTimeout(async () => {
+                const { data } = await supabase.from('gyms').select('id, name, address, is_verified').ilike('name', `%${formData.gymSearch}%`).limit(5);
+                setGymResults(data || []);
+            }, 500);
+            return () => clearTimeout(t);
+        } else { setGymResults([]); }
+    }, [formData.gymSearch, formData.gymMode, step]);
+
+    // ── FINISH ──────────────────────────────────────────────────────────────────
     const handleFinish = async () => {
         setLoading(true);
+        try {
+            let cleanUsername = formData.username.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15) || ('u' + Date.now().toString().slice(-8));
+            if (cleanUsername.length < 3) cleanUsername += Math.floor(Math.random() * 10);
 
-        const operationsPromise = async () => {
-            // 1. Update Profile (Identity + Stats + Privacy)
-            console.log("Finalizing: 1. Upserting Profile...");
-
-            // Sanitize username to satisfy 'username_alphanumeric' constraint
-            // (In case user got past validation with dirty state)
-            let cleanUsername = formData.username.replace(/[^a-zA-Z0-9]/g, '');
-
-            if (!cleanUsername) {
-                // Fallback: 'u' + last 8 digits of timestamp (Total ~9 chars)
-                cleanUsername = 'u' + Date.now().toString().slice(-8);
-            }
-
-            // TRUNCATE: Max 15 chars (DB Constraint)
-            cleanUsername = cleanUsername.slice(0, 15);
-
-            if (cleanUsername.length < 3) {
-                // Pad with random numbers if too short after cleaning (e.g. "Al" -> "Al7")
-                cleanUsername += Math.floor(Math.random() * 10).toString();
-            }
-
-            const { error: pError } = await supabase.from('profiles').upsert({
+            // 1. Upsert profile with ALL collected data + setup_completed = true
+            const { error: pErr } = await supabase.from('profiles').upsert({
                 id: user.id,
                 username: cleanUsername,
                 name: formData.name,
                 avatar_url: formData.avatar,
                 gender: formData.gender,
-                height: parseFloat(formData.height),
-                weight: parseFloat(formData.weight),
-                bio: '', // Bio is optional, goal is separate now
+                height: parseFloat(formData.height) || null,
+                weight: parseFloat(formData.weight) || null,
                 goal: formData.goal,
+                // New fields
+                training_style: formData.trainingStyle,
+                rep_range_min: formData.repRangeMin,
+                rep_range_max: formData.repRangeMax,
+                yearly_workout_goal: Number(formData.yearlyGoal) || 104,
+                // Privacy
                 privacy_settings: {
                     profile_visibility: formData.profileVisibility,
                     live_status: !formData.ghostMode,
-                    gym_monitor_streaming: !formData.ghostMode
+                    gym_monitor_streaming: !formData.ghostMode,
+                    auto_track_gym: formData.autoTrackGym
                 },
+                // ▶ THE FIX: mark setup as done so routing guard never re-triggers
+                setup_completed: true,
                 updated_at: new Date()
             });
-
-            if (pError) throw pError;
+            if (pErr) throw pErr;
 
             // 2. Handle Gym
-            console.log("Finalizing: 2. Handling Gym...");
-            if (formData.gymMode === 'code') {
-                // Join with Code
-                // IDEMPOTENCY: If already joined, treating as success
-                const { data: res, error: rpcError } = await supabase.rpc('join_gym_with_code', { p_code: formData.gymCode });
-
-                if (rpcError) {
-                    // Check for conflict/duplicate (already joined)
-                    if (rpcError.code === '23505' || rpcError.code === 'P0001' || rpcError.message?.includes('already')) {
-                        console.warn("Gym join conflict (already member?) - proceeding anyway");
-                        success(`Joined Gym!`);
-                    } else {
-                        throw rpcError;
-                    }
-                } else {
-                    if (!res.success) throw new Error(res.message);
-                    success(`Joined ${res.gym_name} as ${res.role}!`);
-                }
-            }
-            else if (formData.gymMode === 'create') {
-                // Create New Gym
-                const gymName = formData.gymSearch;
-                await saveUserGym(gymName, 0, 0, 'My Gym', null, 'wizard');
-            }
-            else if (formData.gymMode === 'search' && formData.selectedGymId) {
-                // Join existing
-                const { error: gymError } = await supabase.from('user_gyms').insert({
-                    user_id: user.id,
-                    gym_id: formData.selectedGymId,
-                    label: formData.selectedGymName || 'Main Gym', // Use actual name
-                    is_default: true,
-                    role: 'member'
+            if (formData.gymMode === 'code' && formData.gymCode) {
+                const { data: res, error: rpcErr } = await supabase.rpc('join_gym_with_code', { p_code: formData.gymCode });
+                if (rpcErr && !rpcErr.message?.includes('already')) throw rpcErr;
+                if (res?.success) toastSuccess(`Joined ${res.gym_name}!`);
+            } else if (formData.gymMode === 'create' && formData.gymSearch) {
+                await saveUserGym(formData.gymSearch, 0, 0, 'My Gym', null, 'wizard');
+            } else if (formData.gymMode === 'search' && formData.selectedGymId) {
+                const { error: gymErr } = await supabase.from('user_gyms').insert({
+                    user_id: user.id, gym_id: formData.selectedGymId,
+                    label: formData.selectedGymName || 'Main Gym', is_default: true, role: 'member'
                 });
-                if (gymError && gymError.code !== '23505') throw gymError;
+                if (gymErr && gymErr.code !== '23505') throw gymErr; // ignore duplicate
             }
 
-            // Sync Store
-            console.log("Finalizing: 3. Syncing Store...");
+            // 3. Sync local store
             updateUserProfile({
-                handle: '@' + formData.username,
+                handle: '@' + cleanUsername,
                 name: formData.name,
                 avatar: formData.avatar,
                 level: user.level,
-                height: parseFloat(formData.height), // Critical for Onboarding Check
-                weight: parseFloat(formData.weight)
+                height: parseFloat(formData.height),
+                weight: parseFloat(formData.weight),
+                setup_completed: true
             });
-        };
 
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Finalizing timeout")), 15000)
-        );
-
-        try {
-            await Promise.race([operationsPromise(), timeoutPromise]);
-            // Success redirect
+            toastSuccess("Welcome to IronCircle! 🔥");
             window.location.href = '/';
 
         } catch (err) {
-            console.error("Finalizing Error Details:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
-            if (err.message === "Finalizing timeout") {
-                console.warn("Finalizing timed out - forcing redirect");
-                success("Setup completed (background sync in progress)");
-                window.location.href = '/';
-            } else {
-                toastError("Error: " + err.message);
-                setLoading(false); // Only stop loading on real error, otherwise we redirect
-            }
+            console.error("Setup error:", err);
+            toastError("Error: " + err.message);
+            setLoading(false);
         }
     };
 
-    // SEARCH GYMS
-    const [gymResults, setGymResults] = useState([]);
-    useEffect(() => {
-        if (formData.gymMode === 'search' && formData.gymSearch.length > 2) {
-            const timer = setTimeout(async () => {
-                const { data } = await supabase.from('gyms').select('id, name, address').ilike('name', `%${formData.gymSearch}%`).limit(5);
-                setGymResults(data || []);
-            }, 500);
-            return () => clearTimeout(timer);
-        } else {
-            setGymResults([]);
-        }
-    }, [formData.gymSearch, formData.gymMode]);
+    // ── GRACE PERIOD PREVIEW ────────────────────────────────────────────────────
+    const { hours: graceHours, days: graceDays } = calcGracePeriod(formData.yearlyGoal);
 
+    // ── SHARED STYLES ──────────────────────────────────────────────────────────
+    const inputStyle = { width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white', boxSizing: 'border-box' };
+    const btnPrimary = { flex: 1, padding: '16px', background: 'var(--primary)', border: 'none', borderRadius: '100px', fontWeight: 'bold', color: 'black', fontSize: '1.1rem', cursor: 'pointer' };
+    const btnGhost = { padding: '16px 20px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '100px', fontWeight: 'bold', color: 'var(--text-muted)', cursor: 'pointer' };
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-            <div style={{ width: '100%', maxWidth: '500px', background: 'var(--surface)', padding: '32px', borderRadius: '24px', border: '1px solid var(--border)' }}>
-                {/* Progress Bar */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} style={{ flex: 1, height: '4px', background: i <= step ? 'var(--primary)' : 'var(--border)', borderRadius: '2px', transition: '0.3s' }} />
+        <div style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
+
+            {/* ── PERSISTENT HEADER ───────────────────────────────────────── */}
+            <div style={{ width: '100%', maxWidth: '500px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', marginBottom: '8px' }}>
+                <button
+                    onClick={step === 1 ? undefined : prevStep}
+                    disabled={step === 1}
+                    style={{ background: 'transparent', border: 'none', color: step === 1 ? 'transparent' : 'var(--text-muted)', cursor: step === 1 ? 'default' : 'pointer', fontSize: '1rem', padding: '8px', borderRadius: '8px' }}
+                >
+                    ← Back
+                </button>
+
+                {/* Step indicators */}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                    {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+                        <div key={i} style={{ width: i + 1 === step ? 24 : 8, height: 8, borderRadius: '100px', background: i + 1 <= step ? 'var(--primary)' : 'var(--border)', transition: 'all 0.3s' }} />
                     ))}
                 </div>
 
-                {/* STEP 1: IDENTITY */}
+                <button
+                    onClick={handleLogout}
+                    style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem', padding: '6px 12px', borderRadius: '8px' }}
+                >
+                    Logout
+                </button>
+            </div>
+
+            {/* ── WIZARD CARD ─────────────────────────────────────────────── */}
+            <div style={{ width: '100%', maxWidth: '500px', background: 'var(--surface)', padding: '32px', borderRadius: '24px', border: '1px solid var(--border)' }}>
+
+                {/* ═══ STEP 1: IDENTITY ════════════════════════════════════ */}
                 {step === 1 && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                        <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Who are you?</h1>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Choose your identity in the IronCircle.</p>
+                        <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Who are you?</h1>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '28px' }}>Choose your identity in IronCircle.</p>
 
-                        <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-                            {formData.avatar ? (
-                                <img src={formData.avatar} style={{ width: '100px', height: '100px', borderRadius: '50%', marginBottom: '16px', border: '3px solid var(--primary)' }} />
-                            ) : (
-                                <div style={{ width: '100px', height: '100px', borderRadius: '50%', marginBottom: '16px', border: '3px dashed var(--border)', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-                                    ?
-                                </div>
-                            )}
-
-                            {/* Avatar Grid */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', marginBottom: '8px' }}>
-                                <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Pick one or...</span>
+                        {/* Avatar picker */}
+                        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                            <img src={formData.avatar} style={{ width: '90px', height: '90px', borderRadius: '50%', border: '3px solid var(--primary)', marginBottom: '12px' }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Pick an avatar</span>
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button onClick={() => setShowAvatarEditor(true)} style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '100px', background: 'var(--surface-highlight)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--primary)' }}>
-                                        ✏️ Customize
-                                    </button>
-                                    <button onClick={shuffleAvatars} style={{ fontSize: '0.8rem', padding: '6px 12px', borderRadius: '100px', background: 'var(--surface-highlight)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--primary)' }}>
-                                        🎲 Shuffle
-                                    </button>
+                                    <button onClick={() => setShowAvatarEditor(true)} style={{ fontSize: '0.8rem', padding: '5px 10px', borderRadius: '100px', background: 'var(--surface-highlight)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--primary)' }}>✏️ Customize</button>
+                                    <button onClick={shuffleAvatars} style={{ fontSize: '0.8rem', padding: '5px 10px', borderRadius: '100px', background: 'var(--surface-highlight)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--primary)' }}>🎲 Shuffle</button>
                                 </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px' }}>
                                 {avatarOptions.map((url, i) => (
-                                    <img
-                                        key={i}
-                                        src={url}
-                                        onClick={() => updateField('avatar', url)}
-                                        style={{
-                                            width: '100%', aspectRatio: '1/1', borderRadius: '50%', cursor: 'pointer',
-                                            border: formData.avatar === url ? '2px solid var(--primary)' : '2px solid transparent',
-                                            opacity: formData.avatar === url ? 1 : 0.6
-                                        }}
+                                    <img key={i} src={url} onClick={() => updateField('avatar', url)}
+                                        style={{ width: '100%', aspectRatio: '1/1', borderRadius: '50%', cursor: 'pointer', border: formData.avatar === url ? '2px solid var(--primary)' : '2px solid transparent', opacity: formData.avatar === url ? 1 : 0.6 }}
                                     />
                                 ))}
                             </div>
-
-                            {/* EDITOR MODAL */}
-                            {showAvatarEditor && (
-                                <AvatarEditor
-                                    initialUrl={formData.avatar}
-                                    onSave={(url) => {
-                                        updateField('avatar', url);
-                                        setShowAvatarEditor(false);
-                                    }}
-                                    onCancel={() => setShowAvatarEditor(false)}
-                                />
-                            )}
+                            {showAvatarEditor && <AvatarEditor initialUrl={formData.avatar} onSave={url => { updateField('avatar', url); setShowAvatarEditor(false); }} onCancel={() => setShowAvatarEditor(false)} />}
                         </div>
 
-                        <div style={{ marginBottom: '24px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Username</label>
-                            <input
-                                type="text"
-                                value={formData.username}
-                                onChange={(e) => updateField('username', e.target.value.trim())}
-                                placeholder="ironwolf"
-                                style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white' }}
-                            />
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Username</label>
+                            <input type="text" value={formData.username} onChange={e => updateField('username', e.target.value.trim())} placeholder="ironwolf" style={inputStyle} />
+                        </div>
+                        <div style={{ marginBottom: '28px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Display Name</label>
+                            <input type="text" value={formData.name} onChange={e => updateField('name', e.target.value)} placeholder="John Doe" style={inputStyle} />
                         </div>
 
-                        <div style={{ marginBottom: '32px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Display Name</label>
-                            <input
-                                type="text"
-                                value={formData.name}
-                                onChange={(e) => updateField('name', e.target.value)}
-                                placeholder="John Doe"
-                                style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white' }}
-                            />
-                        </div>
-
-                        <button onClick={validateStep1} disabled={loading} className="w-full btn-primary" style={{ padding: '16px', width: '100%', background: 'var(--primary)', border: 'none', borderRadius: '100px', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', color: 'black' }}>
-                            {loading ? 'Checking...' : 'Next: Body Stats →'}
-                        </button>
+                        <button onClick={validateStep1} disabled={loading} style={btnPrimary}>{loading ? 'Checking...' : 'Next: Body Stats →'}</button>
                     </div>
                 )}
 
-                {/* STEP 2: BODY STATS */}
+                {/* ═══ STEP 2: BODY STATS ══════════════════════════════════ */}
                 {step === 2 && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                        <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Your Stats</h1>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Help us calibrate the algorithm.</p>
+                        <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Your Stats</h1>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '28px' }}>Helps calibrate your smart suggestions.</p>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+                        {/* Gender */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
                             {['Male', 'Female', 'Divers', 'n/a'].map(g => (
-                                <button
-                                    key={g}
-                                    onClick={() => updateField('gender', g)}
-                                    style={{
-                                        padding: '16px', borderRadius: '12px', border: '1px solid var(--border)',
-                                        background: formData.gender === g ? 'var(--primary)' : 'var(--background)',
-                                        color: formData.gender === g ? 'black' : 'white',
-                                        fontWeight: 'bold', cursor: 'pointer'
-                                    }}
-                                >
+                                <button key={g} onClick={() => updateField('gender', g)}
+                                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: formData.gender === g ? 'var(--primary)' : 'var(--background)', color: formData.gender === g ? 'black' : 'white', fontWeight: 'bold', cursor: 'pointer' }}>
                                     {g === 'n/a' ? 'Prefer not to say' : g}
                                 </button>
                             ))}
                         </div>
 
-                        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
                             <div style={{ flex: 1 }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Height (cm)</label>
-                                <input type="number" value={formData.height} onChange={(e) => updateField('height', e.target.value)} placeholder="180" style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white' }} />
+                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Height (cm)</label>
+                                <input type="number" value={formData.height} onChange={e => updateField('height', e.target.value)} placeholder="180" style={inputStyle} />
                             </div>
                             <div style={{ flex: 1 }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Weight (kg)</label>
-                                <input type="number" value={formData.weight} onChange={(e) => updateField('weight', e.target.value)} placeholder="80" style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white' }} />
+                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Weight (kg)</label>
+                                <input type="number" value={formData.weight} onChange={e => updateField('weight', e.target.value)} placeholder="80" style={inputStyle} />
                             </div>
                         </div>
 
-                        <div style={{ marginBottom: '32px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Main Goal</label>
-                            <select
-                                value={formData.goal}
-                                onChange={(e) => updateField('goal', e.target.value)}
-                                style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white' }}
-                            >
-                                {Object.values(TRAINING_GOALS).map(goal => (
-                                    <option key={goal} value={goal}>
-                                        {TRAINING_GOAL_LABELS[goal]}
-                                    </option>
-                                ))}
+                        <div style={{ marginBottom: '28px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Main Goal</label>
+                            <select value={formData.goal} onChange={e => updateField('goal', e.target.value)} style={inputStyle}>
+                                {Object.values(TRAINING_GOALS).map(g => <option key={g} value={g}>{TRAINING_GOAL_LABELS[g]}</option>)}
                             </select>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '16px' }}>
-                            <button onClick={prevStep} style={{ padding: '16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '100px', fontWeight: 'bold', color: 'var(--text-muted)', cursor: 'pointer' }}>Back</button>
-                            <button onClick={validateStep2} style={{ flex: 1, padding: '16px', background: 'var(--primary)', border: 'none', borderRadius: '100px', fontWeight: 'bold', color: 'black', fontSize: '1.1rem', cursor: 'pointer' }}>Next: Gym →</button>
-                        </div>
+                        <button onClick={validateStep2} style={btnPrimary}>Next: Training Style →</button>
                     </div>
                 )}
 
-                {/* STEP 3: GYM ACCESS */}
+                {/* ═══ STEP 3: TRAINING PREFERENCES (NEW) ══════════════════ */}
                 {step === 3 && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                        <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Find your Gym</h1>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Join a community or start your own.</p>
+                        <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Training Setup</h1>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '28px' }}>Powers your Smart Suggestions & Streak grace period.</p>
 
-                        {/* Tabs */}
-                        <div style={{ display: 'flex', background: 'var(--background)', padding: '4px', borderRadius: '100px', marginBottom: '24px' }}>
-                            <button onClick={() => updateField('gymMode', 'search')} style={{ flex: 1, padding: '10px', borderRadius: '100px', background: formData.gymMode === 'search' ? 'var(--surface)' : 'transparent', color: formData.gymMode === 'search' ? 'white' : 'var(--text-muted)', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Search</button>
-                            <button onClick={() => updateField('gymMode', 'create')} style={{ flex: 1, padding: '10px', borderRadius: '100px', background: formData.gymMode === 'create' ? 'var(--surface)' : 'transparent', color: formData.gymMode === 'create' ? 'white' : 'var(--text-muted)', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Create</button>
-                            <button onClick={() => updateField('gymMode', 'code')} style={{ flex: 1, padding: '10px', borderRadius: '100px', background: formData.gymMode === 'code' ? 'var(--surface)' : 'transparent', color: formData.gymMode === 'code' ? 'white' : 'var(--text-muted)', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Staff Code</button>
+                        {/* Training Style chips */}
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Training Style</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                                {TRAINING_STYLES.map(s => (
+                                    <button key={s.id} onClick={() => updateField('trainingStyle', s.id)}
+                                        style={{ padding: '14px', borderRadius: '12px', border: `1px solid ${formData.trainingStyle === s.id ? 'var(--primary)' : 'var(--border)'}`, background: formData.trainingStyle === s.id ? 'rgba(var(--primary-rgb, 50,255,126), 0.12)' : 'var(--background)', color: formData.trainingStyle === s.id ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ fontSize: '1.3rem' }}>{s.emoji}</span> {s.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
-                        {/* Search Mode */}
+                        {/* Rep Range */}
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Smart Suggestions Target Range</label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {REP_RANGES.map(r => (
+                                    <button key={`${r.min}-${r.max}`} onClick={() => { updateField('repRangeMin', r.min); updateField('repRangeMax', r.max); }}
+                                        style={{ padding: '12px 16px', borderRadius: '10px', border: `1px solid ${formData.repRangeMin === r.min && formData.repRangeMax === r.max ? 'var(--primary)' : 'var(--border)'}`, background: formData.repRangeMin === r.min && formData.repRangeMax === r.max ? 'rgba(var(--primary-rgb, 50,255,126), 0.1)' : 'var(--background)', color: formData.repRangeMin === r.min && formData.repRangeMax === r.max ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', fontSize: '0.9rem' }}>
+                                        {r.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Annual Workout Goal + Live Grace Period */}
+                        <div style={{ marginBottom: '28px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                Annual Workout Goal — <strong style={{ color: 'white' }}>{formData.yearlyGoal}</strong> workouts/year ({Math.round(formData.yearlyGoal / 52 * 10) / 10}×/week)
+                            </label>
+                            <input
+                                type="range" min={26} max={365} step={1}
+                                value={formData.yearlyGoal}
+                                onChange={e => updateField('yearlyGoal', Number(e.target.value))}
+                                style={{ width: '100%', accentColor: 'var(--primary)', margin: '8px 0' }}
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '12px' }}>
+                                <span>26/year (×0.5/wk)</span><span>365/year (daily)</span>
+                            </div>
+
+                            {/* Live Grace Period Preview */}
+                            <div style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '12px', padding: '14px' }}>
+                                <div style={{ fontWeight: 'bold', color: '#fbbf24', marginBottom: '4px' }}>
+                                    🔥 Streak Grace Period: {graceDays} days ({graceHours}h)
+                                </div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                    Based on your goal, your streak is safe for up to <strong style={{ color: 'white' }}>{graceDays} days</strong> of rest. Miss it and the streak resets. Rest days are fully covered — no stress!
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onClick={validateStep3} style={btnPrimary}>Next: Gym →</button>
+                    </div>
+                )}
+
+                {/* ═══ STEP 4: GYM + AUTO-TRACK ════════════════════════════ */}
+                {step === 4 && (
+                    <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                        <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Find your Gym</h1>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '28px' }}>Join a community or start your own.</p>
+
+                        {/* Tabs */}
+                        <div style={{ display: 'flex', background: 'var(--background)', padding: '4px', borderRadius: '100px', marginBottom: '20px' }}>
+                            {['search', 'create', 'code'].map(m => (
+                                <button key={m} onClick={() => updateField('gymMode', m)}
+                                    style={{ flex: 1, padding: '10px', borderRadius: '100px', background: formData.gymMode === m ? 'var(--surface)' : 'transparent', color: formData.gymMode === m ? 'white' : 'var(--text-muted)', border: 'none', fontWeight: 'bold', cursor: 'pointer', textTransform: 'capitalize' }}>
+                                    {m === 'code' ? 'Staff Code' : m.charAt(0).toUpperCase() + m.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+
                         {formData.gymMode === 'search' && (
                             <div>
-                                <input
-                                    type="text"
-                                    placeholder="🔍 Search by Name or City..."
-                                    value={formData.gymSearch}
-                                    onChange={(e) => updateField('gymSearch', e.target.value)}
-                                    autoFocus
-                                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white', marginBottom: '16px' }}
-                                />
+                                <input type="text" placeholder="🔍 Search by Name or City..." value={formData.gymSearch} onChange={e => updateField('gymSearch', e.target.value)} autoFocus style={{ ...inputStyle, marginBottom: '12px' }} />
                                 <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                                     {gymResults.map(g => (
-                                        <div
-                                            key={g.id}
-                                            onClick={() => setFormData(prev => ({
-                                                ...prev,
-                                                selectedGymId: g.id,
-                                                selectedGymVerified: g.is_verified,
-                                                selectedGymName: g.name // Store name for label
-                                            }))}
-                                            style={{
-                                                padding: '12px', borderBottom: '1px solid var(--border)', cursor: 'pointer',
-                                                background: formData.selectedGymId === g.id ? 'var(--primary-dim)' : 'transparent',
-                                                border: formData.selectedGymId === g.id ? '1px solid var(--primary)' : '1px solid transparent',
-                                                borderRadius: '8px',
-                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                            }}
-                                        >
+                                        <div key={g.id} onClick={() => setFormData(p => ({ ...p, selectedGymId: g.id, selectedGymName: g.name, selectedGymVerified: g.is_verified }))}
+                                            style={{ padding: '12px', borderRadius: '8px', cursor: 'pointer', marginBottom: '6px', background: formData.selectedGymId === g.id ? 'rgba(var(--primary-rgb, 50,255,126), 0.1)' : 'var(--background)', border: `1px solid ${formData.selectedGymId === g.id ? 'var(--primary)' : 'var(--border)'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <div>
-                                                <div style={{ fontWeight: 'bold', color: formData.selectedGymId === g.id ? 'var(--primary)' : 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    {g.name}
-                                                    {g.is_verified && <span title="Verified Partner" style={{ fontSize: '0.8rem' }}>✅</span>}
-                                                </div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{g.address || 'No address provided'}</div>
+                                                <div style={{ fontWeight: 'bold', color: formData.selectedGymId === g.id ? 'var(--primary)' : 'inherit' }}>{g.name} {g.is_verified && '✅'}</div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{g.address || 'No address'}</div>
                                             </div>
                                             {g.is_verified && <span style={{ fontSize: '0.7rem', background: '#FFC800', color: '#000', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>PARTNER</span>}
                                         </div>
                                     ))}
-                                    {gymResults.length === 0 && formData.gymSearch.length > 2 && (
-                                        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '12px' }}>No gyms found matching "{formData.gymSearch}".</div>
-                                    )}
-                                    {gymResults.length === 0 && formData.gymSearch.length <= 2 && (
-                                        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '12px', fontSize: '0.9rem' }}>Type at least 3 characters to search.</div>
-                                    )}
+                                    {gymResults.length === 0 && formData.gymSearch.length > 2 && <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '12px' }}>No gyms found.</p>}
+                                    {gymResults.length === 0 && formData.gymSearch.length <= 2 && <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '12px', fontSize: '0.9rem' }}>Type at least 3 characters to search.</p>}
                                 </div>
+                                {formData.selectedGymVerified && (
+                                    <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(255,200,0,0.1)', border: '1px solid #FFC800', borderRadius: '12px' }}>
+                                        <p style={{ color: '#FFC800', fontWeight: 'bold', marginBottom: '6px' }}>⚠️ Verified Partner Gym</p>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Your workout data may be visible to Gym Staff and on TV screens.</p>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={formData.checkedPrivacy} onChange={e => updateField('checkedPrivacy', e.target.checked)} style={{ width: '18px', height: '18px' }} />
+                                            <span style={{ fontSize: '0.9rem' }}>I understand and accept.</span>
+                                        </label>
+                                    </div>
+                                )}
                             </div>
                         )}
 
-                        {/* Verified Warning */}
-                        {formData.gymMode === 'search' && formData.selectedGymVerified && (
-                            <div className="animate-in fade-in zoom-in duration-300" style={{ marginTop: '16px', padding: '16px', background: 'rgba(255, 200, 0, 0.1)', border: '1px solid #FFC800', borderRadius: '12px' }}>
-                                <h3 style={{ color: '#FFC800', fontSize: '1rem', marginBottom: '8px' }}>⚠️ Privacy Notice</h3>
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                                    You are joining a <b>Verified Partner Gym</b>. Your workout activity (Name, Exercise, Weight) will be visible to Gym Staff and on Gym TV screens for coaching and safety.
-                                </p>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.checkedPrivacy}
-                                        onChange={(e) => updateField('checkedPrivacy', e.target.checked)}
-                                        style={{ width: '18px', height: '18px' }}
-                                    />
-                                    <span style={{ fontSize: '0.9rem' }}>I understand and accept.</span>
-                                </label>
-                            </div>
-                        )}
-
-                        {/* Create Mode */}
                         {formData.gymMode === 'create' && (
                             <div>
-                                <input
-                                    type="text"
-                                    placeholder="Enter Your New Gym Name"
-                                    value={formData.gymSearch} // Reuse
-                                    onChange={(e) => updateField('gymSearch', e.target.value)}
-                                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: 'white', marginBottom: '16px' }}
-                                />
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                                    You will be the Owner and Admin of this gym. Location will be set to your current device location later.
-                                </p>
+                                <input type="text" placeholder="Enter Your New Gym Name" value={formData.gymSearch} onChange={e => updateField('gymSearch', e.target.value)} style={{ ...inputStyle, marginBottom: '8px' }} />
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>You'll be the Owner and Admin of this gym.</p>
                             </div>
                         )}
 
-                        {/* Code Mode */}
                         {formData.gymMode === 'code' && (
                             <div>
-                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Enter Access Code</label>
-                                <input
-                                    type="text"
-                                    placeholder="TR-XXXXXX or AD-XXXXXX"
-                                    value={formData.gymCode}
-                                    onChange={(e) => updateField('gymCode', e.target.value.toUpperCase())}
-                                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--primary)', borderRadius: '12px', color: 'white', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '2px' }}
-                                />
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '8px', textAlign: 'center' }}>
-                                    Ask your gym owner for the code.
-                                </p>
+                                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Enter Access Code</label>
+                                <input type="text" placeholder="TR-XXXXXX or AD-XXXXXX" value={formData.gymCode} onChange={e => updateField('gymCode', e.target.value.toUpperCase())} style={{ ...inputStyle, fontSize: '1.2rem', textAlign: 'center', letterSpacing: '2px', border: '1px solid var(--primary)' }} />
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'center' }}>Ask your gym owner for the code.</p>
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
-                            <button onClick={prevStep} style={{ padding: '16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '100px', fontWeight: 'bold', color: 'var(--text-muted)', cursor: 'pointer' }}>Back</button>
+                        {/* Auto-Track Gym toggle — moved here from Privacy */}
+                        <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface-highlight)', borderRadius: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontWeight: 'bold' }}>📡 Auto-Track Gym Visits</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>Automatically logs when you arrive at your gym.</div>
+                                </div>
+                                <label style={{ position: 'relative', display: 'inline-block', width: '50px', height: '28px', flexShrink: 0 }}>
+                                    <input type="checkbox" checked={formData.autoTrackGym} onChange={e => updateField('autoTrackGym', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+                                    <span style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, background: formData.autoTrackGym ? 'var(--primary)' : 'var(--border)', borderRadius: '34px', transition: '0.3s' }}>
+                                        <span style={{ position: 'absolute', height: '20px', width: '20px', left: formData.autoTrackGym ? '26px' : '4px', bottom: '4px', background: 'white', borderRadius: '50%', transition: '0.3s' }} />
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
 
-                            <button onClick={handleSkip} style={{ padding: '16px', background: 'transparent', border: 'none', fontWeight: 'normal', color: 'var(--text-dim)', cursor: 'pointer', fontSize: '0.9rem' }}>Skip</button>
-
-                            <button
-                                onClick={() => {
-                                    if (formData.gymMode === 'search' && formData.selectedGymVerified && !formData.checkedPrivacy) {
-                                        return toastError("Please accept the privacy notice.");
-                                    }
-                                    if (formData.gymMode === 'search' && !formData.selectedGymId) return;
-
-                                    nextStep();
-                                }}
-                                disabled={loading || (formData.gymMode === 'search' && !formData.selectedGymId)}
-                                style={{ flex: 1, padding: '16px', background: 'var(--primary)', border: 'none', borderRadius: '100px', fontWeight: 'bold', color: 'black', fontSize: '1.1rem', cursor: 'pointer', opacity: loading || (formData.gymMode === 'search' && !formData.selectedGymId) ? 0.5 : 1 }}
-                            >
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                            <button onClick={() => { updateField('selectedGymId', null); nextStep(); }} style={{ ...btnGhost, fontSize: '0.9rem', color: 'var(--text-dim)' }}>Skip</button>
+                            <button onClick={validateStep4} disabled={formData.gymMode === 'search' && formData.selectedGymVerified && !formData.checkedPrivacy}
+                                style={{ ...btnPrimary, opacity: formData.gymMode === 'search' && formData.selectedGymVerified && !formData.checkedPrivacy ? 0.5 : 1 }}>
                                 Next: Privacy →
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* STEP 4: PRIVACY */}
-                {step === 4 && (
+                {/* ═══ STEP 5: PRIVACY ═════════════════════════════════════ */}
+                {step === 5 && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                        <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Privacy & Data</h1>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>You are in control. Change these anytime.</p>
+                        <h1 style={{ fontSize: '2rem', marginBottom: '4px' }}>Privacy & Sharing</h1>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '28px' }}>You're in control. Change anytime in Settings.</p>
 
                         {/* Ghost Mode */}
-                        <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--surface-highlight)', borderRadius: '16px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>👻 Ghost Mode</span>
-                                <label className="switch">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.ghostMode}
-                                        onChange={(e) => updateField('ghostMode', e.target.checked)}
-                                    />
-                                    <span className="slider round"></span>
+                        <div style={{ marginBottom: '20px', padding: '16px', background: 'var(--surface-highlight)', borderRadius: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontWeight: 'bold' }}>👻 Ghost Mode</div>
+                                    <div style={{ fontSize: '0.8rem', color: formData.ghostMode ? 'var(--warning)' : 'var(--text-muted)', marginTop: '2px' }}>
+                                        {formData.ghostMode ? 'ON — Hidden from live feeds & gym screens.' : 'OFF — Friends can see when you\'re working out.'}
+                                    </div>
+                                </div>
+                                <label style={{ position: 'relative', display: 'inline-block', width: '50px', height: '28px', flexShrink: 0 }}>
+                                    <input type="checkbox" checked={formData.ghostMode} onChange={e => updateField('ghostMode', e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+                                    <span style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, background: formData.ghostMode ? 'var(--warning)' : 'var(--border)', borderRadius: '34px', transition: '0.3s' }}>
+                                        <span style={{ position: 'absolute', height: '20px', width: '20px', left: formData.ghostMode ? '26px' : '4px', bottom: '4px', background: 'white', borderRadius: '50%', transition: '0.3s' }} />
+                                    </span>
                                 </label>
                             </div>
-                            <p style={{ fontSize: '0.9rem', color: formData.ghostMode ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                                {formData.ghostMode
-                                    ? "ON: You are hidden from live feeds and gym screens."
-                                    : "OFF: Friends can see when you are working out."}
-                            </p>
-                            {formData.ghostMode && (
-                                <div style={{ fontSize: '0.8rem', color: 'var(--warning)', marginTop: '8px' }}>
-                                    Note: You will not appear on Gym TV Leaderboards while Ghost Mode is active.
-                                </div>
-                            )}
                         </div>
 
-                        {/* Profile Visibility */}
-                        <div style={{ marginBottom: '24px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)' }}>Profile Visibility</label>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                {['public', 'friends', 'private'].map(v => (
-                                    <button
-                                        key={v}
-                                        onClick={() => updateField('profileVisibility', v)}
-                                        style={{
-                                            flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border)',
-                                            background: formData.profileVisibility === v ? 'var(--primary)' : 'transparent',
-                                            color: formData.profileVisibility === v ? 'black' : 'var(--text-muted)',
-                                            fontWeight: 'bold', textTransform: 'capitalize'
-                                        }}
-                                    >
-                                        {v}
+                        {/* Profile Visibility — Public pre-selected, improved labels */}
+                        <div style={{ marginBottom: '28px' }}>
+                            <label style={{ display: 'block', marginBottom: '10px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Profile Visibility</label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {[
+                                    { value: 'public', label: 'Public (Recommended)', sub: 'Let your friends and the community hype you up! 🔥' },
+                                    { value: 'friends', label: 'Friends Only', sub: 'Only people you follow can see your profile & workouts.' },
+                                    { value: 'private', label: 'Private', sub: 'Only you can see your data. No social features.' },
+                                ].map(opt => (
+                                    <button key={opt.value} onClick={() => updateField('profileVisibility', opt.value)}
+                                        style={{ padding: '14px 16px', borderRadius: '12px', border: `1px solid ${formData.profileVisibility === opt.value ? 'var(--primary)' : 'var(--border)'}`, background: formData.profileVisibility === opt.value ? 'rgba(var(--primary-rgb, 50,255,126), 0.1)' : 'var(--background)', cursor: 'pointer', textAlign: 'left' }}>
+                                        <div style={{ fontWeight: 'bold', color: formData.profileVisibility === opt.value ? 'var(--primary)' : 'white' }}>{opt.label}</div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>{opt.sub}</div>
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '16px', marginTop: '32px' }}>
-                            <button onClick={prevStep} style={{ padding: '16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '100px', fontWeight: 'bold', color: 'var(--text-muted)', cursor: 'pointer' }}>Back</button>
-                            <button
-                                onClick={handleFinish}
-                                disabled={loading}
-                                style={{ flex: 1, padding: '16px', background: 'var(--primary)', border: 'none', borderRadius: '100px', fontWeight: 'bold', color: 'black', fontSize: '1.1rem', cursor: 'pointer', opacity: loading ? 0.7 : 1 }}
-                            >
-                                {loading ? 'Finalizing...' : 'Finish Setup'}
-                            </button>
-                        </div>
-
-                        <style jsx>{`
-                            .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
-                            .switch input { opacity: 0; width: 0; height: 0; }
-                            .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border); transition: .4s; border-radius: 34px; }
-                            .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
-                            input:checked + .slider { background-color: var(--primary); }
-                            input:checked + .slider:before { transform: translateX(22px); }
-                        `}</style>
+                        <button onClick={handleFinish} disabled={loading}
+                            style={{ ...btnPrimary, opacity: loading ? 0.7 : 1, width: '100%' }}>
+                            {loading ? '⏳ Setting up your account...' : '🚀 Enter IronCircle'}
+                        </button>
                     </div>
                 )}
             </div>
