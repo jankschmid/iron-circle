@@ -3,9 +3,23 @@
 import { useState, useEffect } from 'react';
 
 export default function ExerciseLogger({ exerciseId, setId, previousData, onLog, initialData, type = 'Strength', suggestion = null }) {
-    // Initialize state from existing data - treat 0 as empty to show placeholder
-    const [weight, setWeight] = useState((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '');
-    const [reps, setReps] = useState((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '');
+    // Initialize state from existing data. If 0, fallback to previousData or keep empty.
+    const getInitialWeight = () => {
+        if (initialData?.weight && initialData.weight !== 0) return initialData.weight;
+        // If no smart push, default to last weight
+        if (previousData?.lastWeight && (!suggestion || !suggestion.isPush)) return previousData.lastWeight;
+        return '';
+    };
+
+    const getInitialReps = () => {
+        if (initialData?.reps && initialData.reps !== 0) return initialData.reps;
+        // If no smart push, default to last reps
+        if (previousData?.lastReps && (!suggestion || !suggestion.isPush)) return previousData.lastReps;
+        return '';
+    };
+
+    const [weight, setWeight] = useState(getInitialWeight());
+    const [reps, setReps] = useState(getInitialReps());
     // For Cardio: Weight = Distance (m/km) or Ignored, Reps = Time (seconds/minutes)
     // Let's standardize: Reps field stores DURATION (seconds) for Cardio/Stretch. Weight stores Distance (optional) or is hidden.
 
@@ -88,20 +102,20 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
     const handleLog = () => {
         if ((!weight && weight !== 0) && (!reps && reps !== 0)) return;
 
+        const newLoggedState = !isLogged;
         const logData = {
             weight: parseFloat(weight) || 0,
             reps: parseFloat(reps) || 0,
             rpe: parseFloat(rpe) || 0,
-            completed: true
+            completed: newLoggedState
         };
 
         // Determine PR locally if we can, or rely on parent
-        // For now, just call onLog
         onLog(logData);
-        setIsLogged(true);
+        setIsLogged(newLoggedState);
 
         // Haptic
-        if (navigator.vibrate) navigator.vibrate(50);
+        if (navigator.vibrate) navigator.vibrate(newLoggedState ? 50 : 20);
     };
 
     return (
@@ -117,14 +131,25 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
             transition: 'opacity 0.3s'
         }}>
 
+            {/* Coach Suggestion Badge */}
+            {suggestion && suggestion.reason && !isLogged && (
+                <div
+                    onClick={applySuggestion}
+                    style={{ gridColumn: '1 / -1', cursor: 'pointer', textAlign: 'left', fontSize: '0.75rem', color: '#0ea5e9', marginBottom: '4px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
+                    <span style={{ fontSize: '0.85rem' }}>🤖</span> {suggestion.reason} <span style={{ textDecoration: 'underline', marginLeft: 'auto' }}>Tap to Apply</span>
+                </div>
+            )}
+
             {/* Input 1: Weight (Strength) OR Distance/Intensity (Cardio) */}
             <div style={{ position: 'relative' }}>
                 <input
                     type={isCardio ? "text" : "number"}
                     placeholder={
-                        suggestion
-                            ? `${suggestion.weight}kg`
-                            : (isCardio ? (isStretch ? 'Reps/Time' : 'Dist (km)') : (previousData ? previousData.lastWeight : '-'))
+                        suggestion && isPush && !weight
+                            ? "" // Hide native placeholder to let blue overlay show cleanly
+                            : suggestion
+                                ? `${suggestion.weight}kg`
+                                : (isCardio ? (isStretch ? 'Reps/Time' : 'Dist (km)') : (previousData ? previousData.lastWeight : '-'))
                     }
                     className={isPush && !weight ? "placeholder-blue" : ""}
                     value={isLogged ? ((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '') : weight}
@@ -174,7 +199,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
             <div style={{ position: 'relative' }}>
                 <input
                     type={isCardio ? "text" : "number"}
-                    placeholder={suggestion ? `${suggestion.reps}` : (isCardio ? 'Time (min)' : (previousData ? previousData.lastReps : '-'))}
+                    placeholder={suggestion && isPush && !reps ? "" : (suggestion ? `${suggestion.reps}` : (isCardio ? 'Time (min)' : (previousData ? previousData.lastReps : '-')))}
                     value={isLogged ? ((isCardio && durationStr) ? durationStr : ((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '')) : (isCardio ? durationStr : reps)}
                     onChange={(e) => isCardio ? handleDurationChange(e.target.value) : setReps(e.target.value)}
                     onBlur={handleBlur}
