@@ -242,10 +242,66 @@ export default function WorkoutSummary({ data, onContinue }) {
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '8px', textTransform: 'uppercase' }}>XP Breakdown</div>
                             {data.breakdown.map((item, idx) => (
                                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.9rem' }}>
-                                    <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
-                                    <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>+{item.value}</span>
+                                    <span style={{ color: item.isFrozen ? '#60a5fa' : 'var(--text-muted)' }}>{item.label}</span>
+                                    <span style={{ color: item.isFrozen ? '#60a5fa' : 'var(--success)', fontWeight: 'bold' }}>
+                                        {item.isFrozen ? '❄️ 0' : `+${item.value}`}
+                                    </span>
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {/* Streak Card */}
+                    {data.streak && (
+                        <div style={{
+                            marginBottom: '24px',
+                            background: data.streak.wasFrozen
+                                ? 'rgba(96,165,250,0.08)'
+                                : data.streak.count >= 5
+                                    ? 'rgba(251,191,36,0.08)'
+                                    : 'rgba(255,255,255,0.04)',
+                            border: `1px solid ${data.streak.wasFrozen ? '#60a5fa44' : data.streak.count >= 5 ? '#fbbf2444' : 'var(--border)'}`,
+                            borderRadius: '12px',
+                            padding: '16px',
+                            textAlign: 'left'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>
+                                    {data.streak.wasFrozen ? '❄️' : data.streak.count >= 20 ? '🔥' : data.streak.count >= 5 ? '🔥' : '💪'}
+                                    {' '}{data.streak.count}-Day Streak
+                                </div>
+                                <div style={{
+                                    background: data.streak.wasFrozen ? '#60a5fa22' : 'var(--surface-highlight)',
+                                    color: data.streak.wasFrozen ? '#60a5fa' : data.streak.multiplier >= 1.5 ? '#fbbf24' : 'var(--text-muted)',
+                                    padding: '4px 10px',
+                                    borderRadius: '100px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 'bold'
+                                }}>
+                                    {data.streak.wasFrozen ? '0x (Frozen)' : `${data.streak.multiplier}x`}
+                                </div>
+                            </div>
+
+                            {data.streak.wasFrozen && (
+                                <div style={{ fontSize: '0.82rem', color: '#60a5fa', marginBottom: '6px' }}>
+                                    ❄️ Streak was frozen — no XP multiplier this session. Streak protected!
+                                </div>
+                            )}
+                            {data.streak.streakBroken && !data.streak.wasFrozen && (
+                                <div style={{ fontSize: '0.82rem', color: 'var(--warning)', marginBottom: '6px' }}>
+                                    ⚠️ Previous streak ended. A new one begins today!
+                                </div>
+                            )}
+                            {data.streak.bonusXP > 0 && (
+                                <div style={{ fontSize: '0.85rem', color: '#fbbf24' }}>
+                                    +{data.streak.bonusXP} XP streak bonus
+                                </div>
+                            )}
+                            {data.streak.longest > 1 && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                                    Longest streak: {data.streak.longest} days
+                                </div>
+                            )}
                         </div>
                     )}
 

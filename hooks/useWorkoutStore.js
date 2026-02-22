@@ -471,7 +471,24 @@ export function useWorkoutStore(user) {
             console.warn('[IronCircle] PR evaluation exception (non-critical):', prErr.message);
         }
 
-        return { success: true, insertedId: inserted.id, newLevel, didLevelUp, brokenPRs };
+        // --- STREAK UPDATE (DB-side, dynamic grace period) ---
+        let streakData = { current_streak: 1, longest_streak: 1, multiplier: 1.0, was_frozen: false, grace_hours: 108 };
+        try {
+            const { data: sData, error: sErr } = await supabase.rpc(
+                'update_streak_on_workout',
+                { p_workout_id: inserted.id }
+            );
+            if (sErr) {
+                console.warn('[IronCircle] Streak update error (non-critical):', sErr.message);
+            } else if (sData) {
+                streakData = sData;
+                console.log(`[IronCircle] 🔥 Streak: ${sData.current_streak} | Multiplier: ${sData.multiplier}x | Frozen: ${sData.was_frozen}`);
+            }
+        } catch (sErr) {
+            console.warn('[IronCircle] Streak exception (non-critical):', sErr.message);
+        }
+
+        return { success: true, insertedId: inserted.id, newLevel, didLevelUp, brokenPRs, streakData };
     };
 
     const finishWorkout = async ({ visibility = 'public' } = {}) => {
@@ -553,12 +570,29 @@ export function useWorkoutStore(user) {
                 return { ...pr, exerciseName: exObj?.name || pr.exercise_id };
             });
 
-            // Merge server-side level/levelUp/PR data into the summary
+            // Apply streak XP multiplier (0 if frozen, 1.0–1.5 otherwise)
+            const streak = uploadResult.streakData || {};
+            const streakMultiplier = streak.was_frozen ? 0 : (streak.multiplier || 1.0);
+            const baseXP = summaryData.earnedXP;
+            const streakBonusXP = streakMultiplier > 1.0 ? Math.floor(baseXP * (streakMultiplier - 1)) : 0;
+            const totalXP = streak.was_frozen ? baseXP : baseXP + streakBonusXP;
+
             const finalSummary = {
                 ...summaryData,
+                earnedXP: totalXP,
+                newTotalXP: (user.current_xp || 0) + totalXP,
                 newLevel: uploadResult.newLevel || summaryData.newLevel,
                 didLevelUp: uploadResult.didLevelUp || false,
-                analysis: { volumeDelta: 0, newRecords: namedPRs }
+                analysis: { volumeDelta: 0, newRecords: namedPRs },
+                streak: {
+                    count: streak.current_streak || 1,
+                    longest: streak.longest_streak || 1,
+                    multiplier: streakMultiplier,
+                    wasFrozen: streak.was_frozen || false,
+                    streakBroken: streak.streak_broken || false,
+                    graceHours: streak.grace_hours || 108,
+                    bonusXP: streakBonusXP
+                }
             };
 
             setWorkoutSummary(finalSummary);
