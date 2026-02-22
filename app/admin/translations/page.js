@@ -36,15 +36,92 @@ export default function TranslationsAdminPage() {
                 .order('key');
 
             if (data) {
+                const extractMissionTranslations = (translations, field) => {
+                    const flat = {};
+                    if (translations) {
+                        for (const [lang, obj] of Object.entries(translations)) {
+                            if (obj[field]) flat[lang] = obj[field];
+                        }
+                    }
+                    return flat;
+                };
+
                 // De-dupe client side just in case
                 const unique = [];
                 const seen = new Set();
                 data.forEach(d => {
                     if (!seen.has(d.key)) {
                         seen.add(d.key);
-                        unique.push(d);
+                        unique.push({ ...d, isMission: false });
                     }
                 });
+
+                // Fetch Solo Missions
+                const { data: soloOps } = await supabase.from('operations_templates').select('*');
+                if (soloOps) {
+                    soloOps.forEach(op => {
+                        if (op.title) {
+                            unique.push({
+                                id: `mission:solo:title:${op.id}`,
+                                key: `[Mission] ${op.title} (Title)`,
+                                sourceText: op.title,
+                                translations: extractMissionTranslations(op.translations, 'title'),
+                                flags: { category: 'Missions (Solo)' },
+                                isMission: true,
+                                missionTable: 'operations_templates',
+                                missionField: 'title',
+                                missionId: op.id
+                            });
+                        }
+                        if (op.description) {
+                            unique.push({
+                                id: `mission:solo:desc:${op.id}`,
+                                key: `[Mission] ${op.title} (Description)`,
+                                sourceText: op.description,
+                                translations: extractMissionTranslations(op.translations, 'description'),
+                                flags: { category: 'Missions (Solo)' },
+                                isMission: true,
+                                missionTable: 'operations_templates',
+                                missionField: 'description',
+                                missionId: op.id
+                            });
+                        }
+                    });
+                }
+
+                // Fetch Group Missions
+                const { data: groupOps } = await supabase.from('community_goal_templates').select('*');
+                if (groupOps) {
+                    groupOps.forEach(op => {
+                        if (op.title) {
+                            unique.push({
+                                id: `mission:group:title:${op.id}`,
+                                key: `[Group] ${op.title} (Title)`,
+                                sourceText: op.title,
+                                translations: extractMissionTranslations(op.translations, 'title'),
+                                flags: { category: 'Missions (Group)' },
+                                isMission: true,
+                                missionTable: 'community_goal_templates',
+                                missionField: 'title',
+                                missionId: op.id
+                            });
+                        }
+                        if (op.description) {
+                            unique.push({
+                                id: `mission:group:desc:${op.id}`,
+                                key: `[Group] ${op.title} (Description)`,
+                                sourceText: op.description,
+                                translations: extractMissionTranslations(op.translations, 'description'),
+                                flags: { category: 'Missions (Group)' },
+                                isMission: true,
+                                missionTable: 'community_goal_templates',
+                                missionField: 'description',
+                                missionId: op.id
+                            });
+                        }
+                    });
+                }
+
                 setKeys(unique);
 
                 // Extract unique categories
@@ -84,12 +161,20 @@ export default function TranslationsAdminPage() {
         const keyRow = keys.find(k => k.id === id);
         if (!keyRow) return;
 
-        const updatedTranslations = { ...keyRow.translations, [lang]: value };
+        if (keyRow.isMission) {
+            const { data } = await supabase.from(keyRow.missionTable).select('translations').eq('id', keyRow.missionId).single();
+            const currentTranslations = data?.translations || {};
+            if (!currentTranslations[lang]) currentTranslations[lang] = {};
+            currentTranslations[lang][keyRow.missionField] = value;
 
-        await supabase
-            .from('app_translations')
-            .update({ translations: updatedTranslations })
-            .eq('id', id);
+            await supabase.from(keyRow.missionTable).update({ translations: currentTranslations }).eq('id', keyRow.missionId);
+        } else {
+            const updatedTranslations = { ...keyRow.translations, [lang]: value };
+            await supabase
+                .from('app_translations')
+                .update({ translations: updatedTranslations })
+                .eq('id', id);
+        }
     };
 
     const handleAutoTranslate = async () => {
@@ -114,7 +199,7 @@ export default function TranslationsAdminPage() {
 
             for (let i = 0; i < missingKeys.length; i += chunkSize) {
                 const chunk = missingKeys.slice(i, i + chunkSize);
-                const textsToTranslate = chunk.map(k => k.key); // Using English key as the source text
+                const textsToTranslate = chunk.map(k => k.sourceText || k.key); // Using English key (or explicit sourceText) as the source text
 
                 const { data, error } = await supabase.functions.invoke('translate', {
                     body: { texts: textsToTranslate, targetLang: selectedLang }
@@ -133,11 +218,20 @@ export default function TranslationsAdminPage() {
                     const updatedTranslations = { ...keyRow.translations, [selectedLang]: translatedText };
                     const updatedFlags = { ...keyRow.flags, [selectedLang]: 'auto' };
 
-                    // Fire and forget updates for speed, could be optimized to a bulk RPC update later
-                    await supabase
-                        .from('app_translations')
-                        .update({ translations: updatedTranslations, flags: updatedFlags })
-                        .eq('id', keyRow.id);
+                    if (keyRow.isMission) {
+                        const { data: mData } = await supabase.from(keyRow.missionTable).select('translations').eq('id', keyRow.missionId).single();
+                        const currentTranslations = mData?.translations || {};
+                        if (!currentTranslations[selectedLang]) currentTranslations[selectedLang] = {};
+                        currentTranslations[selectedLang][keyRow.missionField] = translatedText;
+
+                        await supabase.from(keyRow.missionTable).update({ translations: currentTranslations }).eq('id', keyRow.missionId);
+                    } else {
+                        // Fire and forget updates for speed, could be optimized to a bulk RPC update later
+                        await supabase
+                            .from('app_translations')
+                            .update({ translations: updatedTranslations, flags: updatedFlags })
+                            .eq('id', keyRow.id);
+                    }
 
                     // Optimistic UI update
                     setKeys(prev => prev.map(k => {

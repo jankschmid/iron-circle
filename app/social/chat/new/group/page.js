@@ -4,9 +4,11 @@ import { useStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function NewGroupPage() {
     const { user, friends, createGroupChat } = useStore();
+    const { t } = useTranslation();
     const router = useRouter();
     const [name, setName] = useState('');
     const [selectedFriends, setSelectedFriends] = useState([]);
@@ -29,7 +31,7 @@ export default function NewGroupPage() {
             router.push(`/social/chat/conversation?id=${newChatId}`);
         } catch (err) {
             console.error("Failed to create group:", err);
-            alert("Failed to create group.");
+            alert(t("Failed to create group."));
             setLoading(false);
         }
     };
@@ -40,19 +42,19 @@ export default function NewGroupPage() {
                 <Link href="/connect?tab=chat&subtab=groups" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
                     ←
                 </Link>
-                <h1 style={{ fontSize: '1.5rem' }}>New Group</h1>
+                <h1 style={{ fontSize: '1.5rem' }}>{t('New Group')}</h1>
             </header>
 
             <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
                 {/* Group Name */}
                 <div>
-                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Group Name</label>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>{t('Group Name')}</label>
                     <input
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g. Gym Bros"
+                        placeholder={t("e.g. Gym Bros")}
                         style={{
                             width: '100%',
                             padding: '16px',
@@ -68,11 +70,11 @@ export default function NewGroupPage() {
 
                 {/* Friend Selector */}
                 <div>
-                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Participants</label>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>{t('Participants')}</label>
 
                     {friends.length === 0 ? (
                         <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px', background: 'var(--surface)', borderRadius: '12px' }}>
-                            You need friends to add to a group.
+                            {t('You need friends to add to a group.')}
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -131,7 +133,7 @@ export default function NewGroupPage() {
                         opacity: (!name.trim() || selectedFriends.length === 0 || loading) ? 0.5 : 1
                     }}
                 >
-                    {loading ? 'Creating...' : 'Create Group'}
+                    {loading ? t('Creating...') : t('Create Group')}
                 </button>
 
             </div>

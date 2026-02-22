@@ -6,6 +6,7 @@ import UpdateChecker from '@/components/UpdateChecker';
 import HardwareBackButton from '@/components/HardwareBackButton';
 import { TranslationProvider } from '@/context/TranslationContext';
 import GlobalErrorBoundary from '@/components/GlobalErrorBoundary';
+import { GlobalTrackerProvider } from '@/components/GlobalTrackerProvider';
 
 export const metadata = {
     title: 'IronCircle',
@@ -31,7 +32,9 @@ export default function RootLayout({ children }) {
                                 <GlobalErrorBoundary>
                                     <UpdateChecker />
                                     <HardwareBackButton />
-                                    {children}
+                                    <GlobalTrackerProvider>
+                                        {children}
+                                    </GlobalTrackerProvider>
                                 </GlobalErrorBoundary>
                             </TranslationProvider>
                         </StoreProvider>

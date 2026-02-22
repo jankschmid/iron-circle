@@ -2,8 +2,11 @@
 
 import { useStore } from '@/lib/store';
 
+import { useTranslation } from '@/context/TranslationContext';
+
 export default function StatsView() {
     const { getWeeklyStats, history, exercises } = useStore();
+    const { t } = useTranslation();
     const { volumeByDay, totalWorkouts, totalVolume } = getWeeklyStats();
 
     // Chart Data
@@ -66,8 +69,10 @@ export default function StatsView() {
             'Abs': '#2ecc71',
             'Other': '#95a5a6'
         };
+        // Use the untranslated key for looking up colors
         return colors[muscle] || colors['Other'];
     };
+
 
     const bodyPartSplit = getMuscleSplit();
 
@@ -79,7 +84,7 @@ export default function StatsView() {
         <div style={{ paddingBottom: '20px' }}>
             {/* Weekly Volume Chart */}
             <section style={{ marginBottom: '32px' }}>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '12px' }}>Weekly Volume</h3>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: '12px' }}>{t('Weekly Volume')}</h3>
                 <div style={{
                     background: 'var(--surface)',
                     padding: '24px',
@@ -111,7 +116,7 @@ export default function StatsView() {
                                 transition: 'height 0.5s ease'
                             }} />
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                {['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}
+                                {t(['M', 'T', 'W', 'T', 'F', 'S', 'S'][i])}
                             </span>
                         </div>
                     ))}
@@ -120,27 +125,27 @@ export default function StatsView() {
 
             {/* Stats Grid */}
             <section style={{ marginBottom: '32px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <StatCard label="Total Workouts" value={totalWorkouts} icon="🏋️‍♂️" />
-                <StatCard label="Time Trained" value={Math.round(totalVolume / 6000)} icon="⏱️" suffix="h" />
-                <StatCard label="Total Volume" value={(totalVolume / 1000).toFixed(1)} icon="📊" suffix="k" />
-                <StatCard label="Streak" value={streak} icon="🔥" suffix="days" />
+                <StatCard label={t('Total Workouts')} value={totalWorkouts} icon="🏋️‍♂️" />
+                <StatCard label={t('Time Trained')} value={Math.round(totalVolume / 6000)} icon="⏱️" suffix="h" />
+                <StatCard label={t('Total Volume')} value={(totalVolume / 1000).toFixed(1)} icon="📊" suffix="k" />
+                <StatCard label={t('Streak')} value={streak} icon="🔥" suffix={t('days')} />
             </section>
 
             {/* Body Part Split */}
             <section>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '12px' }}>Muscle Split</h3>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: '12px' }}>{t('Muscle Split')}</h3>
                 <div style={{
                     background: 'var(--surface)',
                     padding: '24px',
                     borderRadius: 'var(--radius-lg)',
                     border: '1px solid var(--border)',
                 }}>
-                    {displaySplit.length === 0 && <div className="text-muted text-center">Start working out to see stats!</div>}
+                    {displaySplit.length === 0 && <div className="text-muted text-center">{t('Start working out to see stats!')}</div>}
 
                     {displaySplit.map((part) => (
                         <div key={part.name} style={{ marginBottom: '16px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
-                                <span>{part.name}</span>
+                                <span>{t(part.name)}</span>
                                 <span style={{ color: 'var(--text-muted)' }}>{part.value}%</span>
                             </div>
                             <div style={{

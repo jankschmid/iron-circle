@@ -19,7 +19,7 @@ function LiveStatusContent() {
         myActivity = {
             id: user.id,
             name: 'You',
-            avatar: user.avatar,
+            avatar: user?.avatar_url || user?.avatar || 'https://i.pravatar.cc/150',
             activity: {
                 tracker: workoutSession ? {
                     location: workoutSession.gyms?.name || t('Unknown Gym'),
@@ -140,11 +140,13 @@ function LiveStatusContent() {
                                 {tracker ? (
                                     <>
                                         <div style={{ fontSize: '0.85rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            📍 {tracker.location}
+                                            📍 {tracker.location || t('Unknown Location')}
                                         </div>
-                                        <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent)' }}>
-                                            {Math.floor((new Date() - new Date(tracker.startTime)) / 1000 / 60)}m
-                                        </div>
+                                        {tracker.startTime && (
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent)' }}>
+                                                {Math.floor((new Date() - new Date(tracker.startTime)) / 1000 / 60)}m
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>

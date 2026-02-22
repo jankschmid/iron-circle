@@ -6,7 +6,7 @@ import { useTranslation } from '@/context/TranslationContext'; // Assuming this 
 
 import { getPrestigeTitle, PRESTIGE_DESCRIPTIONS } from '@/lib/gamification';
 
-export default function PrestigeModal({ isOpen, onClose, currentPrestige, onConfirm, onComplete }) {
+export default function PrestigeModal({ isOpen, onClose, currentPrestige, currentXP = 0, onConfirm, onComplete, isReady }) {
     const { t } = useTranslation();
     const [isAscending, setIsAscending] = useState(false);
     const [reveal, setReveal] = useState(null); // { headStartXP, newLevel }
@@ -28,15 +28,13 @@ export default function PrestigeModal({ isOpen, onClose, currentPrestige, onConf
         }
     }, [isOpen]);
 
-    // Validation
-    const isReady = !!onConfirm;
+    // Validation handled by parent
 
     const handleAscend = async () => {
         // DEBUG: Verify click
         console.log("PrestigeModal: handleAscend CLICKED");
-        alert("DEBUG: Button Clicked! Starting Ascension...");
 
-        if (!onConfirm) return;
+        if (!onConfirm || !isReady) return;
         setIsAscending(true);
 
         // Execute Server Action
@@ -313,30 +311,52 @@ export default function PrestigeModal({ isOpen, onClose, currentPrestige, onConf
                     })}
                 </div>
 
-                {/* Ascension Logic */}
                 {onConfirm ? (
                     <div style={{ background: 'rgba(255,0,0,0.1)', padding: '24px', borderRadius: '16px', border: '1px solid var(--primary)' }}>
                         <h3 style={{ color: '#fff', marginBottom: '8px', textTransform: 'uppercase' }}>
                             {t('Ready to Ascend?')} <span style={{ color: 'var(--primary)' }}>{getPrestigeTitle(nextPrestige)}</span>
                         </h3>
-                        <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '16px' }}>
-                            <strong>Requirement:</strong> Level 100 ({XP_REQ.toLocaleString()} XP). {t('Reset Level 50 -> 1. Keep Lifetime XP. Earn Rank')} {nextPrestige}.
+                        {/* Always show what's required so they know why they can't click it yet */}
+                        <p style={{ color: isReady ? 'var(--success)' : 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '16px' }}>
+                            <strong>Requirement:</strong> Level 100.<br />
+                            {!isReady && <span style={{ color: '#ff4444' }}>Keep grinding! You haven't reached Level 100 yet.</span>}
                         </p>
+
+                        {/* Progress Bar */}
+                        <div style={{ marginBottom: '24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '6px', fontWeight: 'bold' }}>
+                                <span style={{ textTransform: 'uppercase' }}>{t('XP Progress')}</span>
+                                <span style={{ fontFamily: 'monospace' }}>{currentXP.toLocaleString()} / {XP_REQ.toLocaleString()}</span>
+                            </div>
+                            <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                <div style={{
+                                    width: `${Math.min((currentXP / XP_REQ) * 100, 100)}%`,
+                                    height: '100%',
+                                    background: isReady ? 'var(--success)' : 'var(--primary)',
+                                    boxShadow: isReady ? '0 0 10px var(--success)' : '0 0 10px var(--primary)',
+                                    transition: 'width 0.5s ease-out',
+                                    borderRadius: '4px'
+                                }} />
+                            </div>
+                        </div>
+
                         <p style={{ color: '#fff', fontSize: '1rem', fontStyle: 'italic', marginBottom: '24px' }}>
                             "{PRESTIGE_DESCRIPTIONS[nextPrestige]}"
                         </p>
                         <button
                             onClick={handleAscend}
                             style={{
-                                width: '100%', padding: '16px', background: 'var(--primary)', border: 'none',
-                                color: '#000', borderRadius: '100px', fontWeight: '900', fontSize: '1.1rem',
-                                cursor: isAscending ? 'not-allowed' : 'pointer',
-                                boxShadow: '0 0 30px var(--primary-glow)', textTransform: 'uppercase',
+                                width: '100%', padding: '16px', background: isReady ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+                                border: 'none',
+                                color: isReady ? '#000' : 'var(--text-muted)',
+                                borderRadius: '100px', fontWeight: '900', fontSize: '1.1rem',
+                                cursor: isAscending ? 'not-allowed' : (isReady ? 'pointer' : 'not-allowed'),
+                                boxShadow: isReady && !isAscending ? '0 0 30px var(--primary-glow)' : 'none', textTransform: 'uppercase',
                                 opacity: isAscending ? 0.7 : 1
                             }}
                             disabled={!isReady || isAscending}
                         >
-                            {isAscending ? t('ASCENDING...') : `${t('ASCEND TO RANK')} ${nextPrestige}`}
+                            {isAscending ? t('ASCENDING...') : (isReady ? `${t('ASCEND TO RANK')} ${nextPrestige}` : t('ASCENSION LOCKED'))}
                         </button>
                     </div>
                 ) : (

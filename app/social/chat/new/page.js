@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import CommunitiesModal from '@/components/CommunitiesModal';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function NewChatPage() {
     const { user, friends, fetchCommunities, joinCommunity } = useStore();
+    const { t } = useTranslation();
     const router = useRouter();
     const supabase = createClient();
     const [loading, setLoading] = useState(false);
@@ -75,7 +77,7 @@ export default function NewChatPage() {
 
         } catch (err) {
             console.error("Error starting chat:", err);
-            alert("Failed to start chat. See console.");
+            alert(t("Failed to start chat. See console."));
             setLoading(false);
         }
     };
@@ -86,7 +88,7 @@ export default function NewChatPage() {
                 <Link href="/connect?tab=chat" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
                     ←
                 </Link>
-                <h1 style={{ fontSize: '1.5rem' }}>New Message</h1>
+                <h1 style={{ fontSize: '1.5rem' }}>{t('New Message')}</h1>
             </header>
 
             <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -108,7 +110,7 @@ export default function NewChatPage() {
                         }}
                     >
                         <span style={{ fontSize: '1.5rem' }}>👥</span>
-                        <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>New Group</span>
+                        <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>{t('New Group')}</span>
                     </button>
                     <button
                         onClick={() => setShowCommunitiesModal(true)}
@@ -125,7 +127,7 @@ export default function NewChatPage() {
                         }}
                     >
                         <span style={{ fontSize: '1.5rem' }}>📢</span>
-                        <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>Find Community</span>
+                        <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>{t('Find Community')}</span>
                     </button>
                 </div>
 
@@ -148,12 +150,12 @@ export default function NewChatPage() {
                 )}
 
                 <div style={{ marginTop: '16px' }}>
-                    <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Suggested</h3>
+                    <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>{t('Suggested')}</h3>
 
                     {friends.length === 0 ? (
                         <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>
-                            You need friends to message!<br />
-                            <Link href="/social/add" style={{ color: 'var(--primary)', fontWeight: '600' }}>Find Friends +</Link>
+                            {t('You need friends to message!')}<br />
+                            <Link href="/social/add" style={{ color: 'var(--primary)', fontWeight: '600' }}>{t('Find Friends +')}</Link>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

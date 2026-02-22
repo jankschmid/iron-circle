@@ -674,7 +674,6 @@ export default function ProfilePage() {
                     {!isMaxPrestige && (
                         <button
                             onClick={() => setShowPrestige(true)}
-                            disabled={user.prestige_level > 0 && !levelData.isPrestigeReady}
                             style={{
                                 background: levelData.isPrestigeReady
                                     ? 'linear-gradient(45deg, #FFD700, #FFA500)'
@@ -690,7 +689,7 @@ export default function ProfilePage() {
                                 boxShadow: levelData.isPrestigeReady
                                     ? '0 4px 15px rgba(255, 215, 0, 0.4)'
                                     : 'none',
-                                cursor: levelData.isPrestigeReady || user.prestige_level === 0 ? 'pointer' : 'default', // Allow clicking even if locked to see modal? User implied button text changes.
+                                cursor: 'pointer',
                                 textTransform: 'uppercase',
                                 letterSpacing: '1px',
                                 width: '100%',
@@ -733,6 +732,8 @@ export default function ProfilePage() {
                     isOpen={showPrestige}
                     onClose={() => setShowPrestige(false)}
                     currentPrestige={user.prestige_level}
+                    currentXP={effectiveCycleXP}
+                    isReady={levelData.isPrestigeReady}
                     onConfirm={handlePrestigeConfirm} // Always allow attempt. Server validates.
                     onComplete={() => {
                         window.location.reload(); // Hard reload to ensure clean state after prestige

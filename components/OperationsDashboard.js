@@ -7,7 +7,7 @@ import { Dumbbell, Footprints, Flame, CalendarCheck, Timer, Trophy, RotateCcw, R
 import { useTranslation } from '@/context/TranslationContext';
 
 export default function OperationsDashboard({ userId }) {
-    const { t } = useTranslation();
+    const { t, language } = useTranslation();
     const [operations, setOperations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [claiming, setClaiming] = useState(null);
@@ -141,7 +141,7 @@ export default function OperationsDashboard({ userId }) {
 
                 {rerolls > 0 && (
                     <div style={{ fontSize: '0.8rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <RefreshCw size={14} /> {rerolls} Turnovers
+                        <RefreshCw size={14} /> {rerolls} {t('Turnovers')}
                     </div>
                 )}
             </div>
@@ -159,6 +159,8 @@ export default function OperationsDashboard({ userId }) {
                             isRerolling={rerolling === op.id}
                             canReroll={rerolls > 0}
                             getIcon={getIcon}
+                            language={language}
+                            t={t}
                         />
                     ))}
                 </AnimatePresence>
@@ -172,7 +174,7 @@ export default function OperationsDashboard({ userId }) {
                         border: '1px dashed var(--border)',
                         borderRadius: '8px'
                     }}>
-                        No active daily missions. Check back tomorrow.
+                        {t('No active daily missions. Check back tomorrow.')}
                     </div>
                 )}
             </div>
@@ -181,7 +183,7 @@ export default function OperationsDashboard({ userId }) {
             {weeklies.length > 0 && (
                 <>
                     <h4 style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '12px' }}>
-                        Weekly Directives
+                        {t('Weekly Directives')}
                     </h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         {weeklies.map(op => (
@@ -193,6 +195,8 @@ export default function OperationsDashboard({ userId }) {
                                 onReroll={null}
                                 isClaiming={claiming === op.id}
                                 getIcon={getIcon}
+                                language={language}
+                                t={t}
                             />
                         ))}
                     </div>
@@ -202,11 +206,14 @@ export default function OperationsDashboard({ userId }) {
     );
 }
 
-function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canReroll, getIcon }) {
+function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canReroll, getIcon, language, t }) {
     const { template, current_progress, is_completed } = op;
     const progressPercent = Math.min(100, Math.floor((current_progress / template.target_value) * 100));
     const isReadyToClaim = !is_completed && current_progress >= template.target_value;
     const icon = getIcon(template.target_metric, template.type);
+
+    const displayTitle = template.translations?.[language]?.title || template.title;
+    const displayDescription = template.translations?.[language]?.description || template.description;
 
     return (
         <motion.div
@@ -239,10 +246,10 @@ function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canRero
                     </div>
                     <div>
                         <div style={{ fontWeight: 'bold', fontSize: '1rem', color: is_completed ? 'var(--text-muted)' : 'var(--foreground)', textDecoration: is_completed ? 'line-through' : 'none' }}>
-                            {template.title}
+                            {displayTitle}
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            {template.description}
+                            {displayDescription}
                         </div>
                     </div>
                 </div>
@@ -276,7 +283,7 @@ function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canRero
 
                 {is_completed ? (
                     <div style={{ color: 'var(--success)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        ✓ COMPLETED
+                        ✓ {t('COMPLETED')}
                     </div>
                 ) : isReadyToClaim ? (
                     <button
@@ -294,7 +301,7 @@ function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canRero
                             animation: 'pulse 2s infinite'
                         }}
                     >
-                        {isClaiming ? 'CLAIMING...' : 'CLAIM REWARD'}
+                        {isClaiming ? t('CLAIMING...') : t('CLAIM REWARD')}
                     </button>
                 ) : onReroll ? (
                     <button
@@ -314,10 +321,10 @@ function OperationCard({ op, onClaim, onReroll, isClaiming, isRerolling, canRero
                             fontWeight: 'bold',
                             transition: 'all 0.2s'
                         }}
-                        title="Turnover Mission"
+                        title={t("Turnover Mission")}
                     >
                         <RefreshCw size={14} className={isRerolling ? "animate-spin" : ""} />
-                        <span>{isRerolling ? 'Flipping...' : 'Flip Mission'}</span>
+                        <span>{isRerolling ? t('Flipping...') : t('Flip Mission')}</span>
                     </button>
                 ) : null}
             </div>

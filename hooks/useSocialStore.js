@@ -30,17 +30,32 @@ export function useSocialStore(user, workoutSession) {
         const { data: profiles } = await supabase.from('profiles').select('id, name, username, avatar_url, xp, level').in('id', friendIds);
         if (!profiles) return;
 
-        // 3. Live Activity (Basic)
+        // 3. Live Activity (Tracker / Gym)
         const { data: activeSessions } = await supabase.from('workout_sessions')
             .select('user_id, start_time, gyms(name)').in('user_id', friendIds).eq('status', 'active');
 
+        // 4. Live Activity (Workouts)
+        const { data: activeWorkouts } = await supabase.from('workouts')
+            .select('user_id, start_time, name').in('user_id', friendIds).is('end_time', null);
+
         const liveMap = {};
-        activeSessions?.forEach(s => { liveMap[s.user_id] = { location: s.gyms?.name, startTime: s.start_time }; });
+
+        // Initialize map
+        friendIds.forEach(id => liveMap[id] = { tracker: null, workout: null });
+
+        activeSessions?.forEach(s => {
+            liveMap[s.user_id].tracker = { location: s.gyms?.name, startTime: s.start_time };
+        });
+
+        activeWorkouts?.forEach(w => {
+            liveMap[w.user_id].workout = { name: w.name, detail: w.name, status: 'Active', startTime: w.start_time };
+        });
 
         setFriends(profiles.map(p => ({
             id: p.id, name: p.name, handle: '@' + p.username,
             avatar: p.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`,
-            status: liveMap[p.id] ? 'active' : 'offline', activity: liveMap[p.id],
+            status: (liveMap[p.id].tracker || liveMap[p.id].workout) ? 'active' : 'offline',
+            activity: liveMap[p.id],
             level: p.level || 1, xp: p.xp || 0
         })));
     };
@@ -193,12 +208,20 @@ export function useSocialStore(user, workoutSession) {
     useEffect(() => {
         if (!user) return;
         fetchUnreadCount();
+
+        // Listen to all new messages (RLS protects unauthorized access) 
+        // because we don't have a direct 'receiver_id' on 'messages'.
         const channel = supabase.channel('social_updates')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` }, () => {
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+                // Ignore our own messages
+                if (payload.new.sender_id === user.id) return;
+
+                // We should only increment unread if this message is in our active chats
                 setUnreadCount(prev => prev + 1);
-                toast.success("New Message");
+                toast.success("New Message Received");
             })
             .subscribe();
+
         return () => { supabase.removeChannel(channel); };
     }, [user, pathname]);
 

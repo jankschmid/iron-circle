@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store';
 import { getLevelProgress } from '@/lib/gamification';
 
 export default function OperationsBoard({ userId }) {
-    const { t } = useTranslation();
+    const { t, language } = useTranslation();
     const { user, setUser } = useStore();
     const [operations, setOperations] = useState([]);
     const [rerolls, setRerolls] = useState(0);
@@ -27,7 +27,7 @@ export default function OperationsBoard({ userId }) {
                 .from('user_operations')
                 .select(`
                 id, current_progress, is_completed, expires_at,
-                template:operations_templates(title, description, target_value, target_metric, xp_reward, type)
+                template:operations_templates(title, description, target_value, target_metric, xp_reward, type, translations)
             `)
                 .eq('user_id', userId)
                 // .eq('is_claimed', false) // REMOVED: Column does not exist. Assuming is_completed means claimed/done.
@@ -107,7 +107,7 @@ export default function OperationsBoard({ userId }) {
         }
     };
 
-    if (loading) return <div style={{ height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Operations...</div>;
+    if (loading) return <div style={{ height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t('Loading Operations...')}</div>;
 
     return (
         <div style={{ padding: '0 20px 20px', maxWidth: '600px', margin: '0 auto' }}>
@@ -116,7 +116,7 @@ export default function OperationsBoard({ userId }) {
                     ⚠️ {t('Active Operations')}
                 </h2>
                 <div style={{ fontSize: '0.8rem', color: rerolls > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
-                    Turnovers: {rerolls}/1
+                    {t('Turnovers')}: {rerolls}/1
                 </div>
             </div>
 
@@ -129,6 +129,9 @@ export default function OperationsBoard({ userId }) {
                         // So Ready = Progress Met AND NOT Claimed (is_completed false)
                         const isReadyToClaim = !op.is_completed && op.current_progress >= op.template.target_value;
                         const icon = getIcon(op.template.target_metric, op.template.type);
+
+                        const displayTitle = op.template.translations?.[language]?.title || op.template.title;
+                        const displayDescription = op.template.translations?.[language]?.description || op.template.description;
 
                         return (
                             <motion.div
@@ -157,8 +160,8 @@ export default function OperationsBoard({ userId }) {
                                             {icon}
                                         </div>
                                         <div>
-                                            <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>{op.template.title}</div>
-                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{op.template.description}</div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>{displayTitle}</div>
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{displayDescription}</div>
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
@@ -178,8 +181,8 @@ export default function OperationsBoard({ userId }) {
                                     }} />
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    <span>{op.current_progress} / {op.template.target_value} {op.template.target_metric}</span>
-                                    {isReadyToClaim && <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>MISSION COMPLETE</span>}
+                                    <span>{op.current_progress} / {op.template.target_value} {t(op.template.target_metric)}</span>
+                                    {isReadyToClaim && <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>{t('MISSION COMPLETE')}</span>}
                                 </div>
 
                                 {/* Actions */}

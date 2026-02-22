@@ -14,6 +14,7 @@ function CreateMissionContent() {
     const editScope = searchParams.get('scope');
 
     const [loading, setLoading] = useState(false);
+    const [translating, setTranslating] = useState(false);
 
     // Form State
     const [scope, setScope] = useState('SOLO'); // 'SOLO' | 'GROUP'
@@ -22,9 +23,10 @@ function CreateMissionContent() {
         description: '',
         type: 'daily', // Only for SOLO
         metric: 'workouts',
-        target_value: 1,
-        xp_reward: 100,
-        focus: [] // Array of strings
+        target_value: 10,
+        xp_reward: 800,
+        focus: [], // Array of strings
+        translations: {}
     });
 
     // Fetch existing data if editing
@@ -42,7 +44,8 @@ function CreateMissionContent() {
                             metric: (data.target_metric || data.metric || 'workouts').toLowerCase(),
                             target_value: data.target_value,
                             xp_reward: data.xp_reward,
-                            focus: data.focus || []
+                            focus: data.focus || [],
+                            translations: data.translations || {}
                         });
                         setScope(editScope);
                     } else {
@@ -65,6 +68,43 @@ function CreateMissionContent() {
         });
     };
 
+    const handleAutoTranslate = async () => {
+        if (!formData.title || !formData.description) {
+            alert("Please enter title and description first.");
+            return;
+        }
+        setTranslating(true);
+        try {
+            const translations = { ...(formData.translations || {}) };
+            const targetLangs = ['de', 'es', 'fr', 'it'];
+
+            for (const lang of targetLangs) {
+                const { data: titleData, error: titleErr } = await supabase.functions.invoke('translate', {
+                    body: { texts: [formData.title], targetLang: lang }
+                });
+                if (titleErr) throw titleErr;
+
+                const { data: descData, error: descErr } = await supabase.functions.invoke('translate', {
+                    body: { texts: [formData.description], targetLang: lang }
+                });
+                if (descErr) throw descErr;
+
+                translations[lang] = {
+                    title: titleData.translations?.[0] || '',
+                    description: descData.translations?.[0] || ''
+                };
+            }
+
+            setFormData(prev => ({ ...prev, translations }));
+            alert("Auto-translation complete for DE, ES, FR, IT!");
+        } catch (err) {
+            console.error("Translation Error:", err);
+            alert("Translation failed. See console.");
+        } finally {
+            setTranslating(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -85,7 +125,8 @@ function CreateMissionContent() {
                 metric,
                 target_value,
                 xp_reward,
-                focus: focus.length > 0 ? focus : null
+                focus: focus.length > 0 ? focus : null,
+                translations: formData.translations
             };
 
             if (scope === 'SOLO') {
@@ -212,6 +253,32 @@ function CreateMissionContent() {
                                 placeholder="Brief instructions for the operative..."
                                 style={{ padding: '12px', background: '#333', border: '1px solid #444', borderRadius: '8px', color: '#fff', minHeight: '80px', fontFamily: 'Inter' }}
                             />
+                        </div>
+
+                        {/* Translations Trigger */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px', background: 'rgba(255, 200, 0, 0.05)', border: '1px solid rgba(255, 200, 0, 0.2)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ color: '#FFC800', fontSize: '0.9rem', fontWeight: 'bold' }}>Translations</label>
+                                <button
+                                    type="button"
+                                    onClick={handleAutoTranslate}
+                                    disabled={translating || !formData.title || !formData.description}
+                                    style={{
+                                        padding: '8px 16px',
+                                        background: translating ? '#555' : '#FFC800',
+                                        color: translating ? '#888' : '#000',
+                                        fontWeight: 'bold',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        cursor: translating ? 'default' : 'pointer'
+                                    }}
+                                >
+                                    {translating ? 'Translating via DeepL...' : 'Auto-Translate (DeepL)'}
+                                </button>
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                                Generated translations for dynamic languages: {Object.keys(formData.translations || {}).length > 0 ? Object.keys(formData.translations).join(', ').toUpperCase() : 'None yet.'}
+                            </div>
                         </div>
 
                         {/* Config Grid */}

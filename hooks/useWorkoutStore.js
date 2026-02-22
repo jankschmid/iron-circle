@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase';
 import { EXERCISES } from '@/lib/data';
 import { useToast } from '@/components/ToastProvider';
 import { calculateSessionXP } from '@/lib/gamification';
+import { foregroundService } from '@/lib/foregroundService';
 
 const supabase = createClient();
 
@@ -161,6 +162,12 @@ export function useWorkoutStore(user) {
             return;
         }
         setWorkoutSession(session);
+
+        // Start Foreground Service Notification for Gym Session
+        foregroundService.start(
+            'Iron Circle',
+            `Checked into ${gymName}`
+        );
     };
 
     const stopTrackingSession = async (reason = 'manual') => {
@@ -183,6 +190,9 @@ export function useWorkoutStore(user) {
             .eq('id', workoutSession.id);
 
         setWorkoutSession(null);
+
+        // End Foreground Notification if it wasn't a workout
+        foregroundService.stop();
     };
 
     // --- WORKOUT ACTIONS ---
@@ -211,10 +221,17 @@ export function useWorkoutStore(user) {
             logs: initialLogs,
             status: 'active',
             planId,
+            planId,
             dayId,
             templateId
         };
         setActiveWorkout(newWorkout);
+
+        // Start Android Foreground Service
+        foregroundService.start(
+            'Iron Circle',
+            `Workout Active: ${name}`
+        );
     };
 
     const logSet = (exerciseId, setIndex, data) => {
@@ -288,6 +305,9 @@ export function useWorkoutStore(user) {
     const finishWorkout = async ({ visibility = 'public' } = {}) => {
         if (!activeWorkout || !user) return;
         if (workoutSession) await stopTrackingSession();
+
+        // Stop Android Foreground Service
+        foregroundService.stop();
 
         const endTime = new Date();
         const duration = Math.round((endTime - new Date(activeWorkout.startTime)) / 1000);
@@ -416,6 +436,10 @@ export function useWorkoutStore(user) {
 
     const cancelWorkout = async () => {
         if (!activeWorkout) return;
+
+        // Stop Android Foreground Service
+        foregroundService.stop();
+
         localStorage.removeItem('iron-circle-active-workout');
         setActiveWorkout(null);
         if (activeWorkout.id) await supabase.from('workouts').delete().eq('id', activeWorkout.id);

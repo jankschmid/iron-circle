@@ -1,7 +1,7 @@
 "use client";
 
 import { useStore } from '@/lib/store';
-import { useGeoTracker } from '@/lib/hooks/useGeoTracker';
+import { useGlobalGeoTracker } from '@/components/GlobalTrackerProvider';
 import BottomNav from '@/components/BottomNav';
 import LiveStatus from '@/components/LiveStatus'; // Re-added Live Circle
 import Link from 'next/link';
@@ -15,8 +15,8 @@ const MapPicker = dynamic(() => import('../../components/MapPicker'), { ssr: fal
 
 function TrackerContent() {
     const { t } = useTranslation();
-    const { user, saveUserGym, removeUserGym, updateUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity, deleteSession, updateSession, friends, inviteToSession, joinSession, updateGym, deleteGlobalGym } = useStore();
-    const { status, currentLocation, distanceToGym, isAtGym, workoutSession, startTracking, stopTracking, warning } = useGeoTracker();
+    const { user, saveUserGym, removeUserGym, updateUserGym, setDefaultGym, updateUserProfile, fetchCommunities, joinCommunity, leaveCommunity, deleteSession, updateSession, friends, inviteToSession, joinSession, updateGym, deleteGlobalGym, workoutSession } = useStore();
+    const { status, currentLocation, distanceToGym, isAtGym, startTracking, stopTracking, warning } = useGlobalGeoTracker();
 
     const searchParams = useSearchParams();
     const router = useRouter();

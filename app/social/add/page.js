@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
 import Link from 'next/link';
+import { useTranslation } from '@/context/TranslationContext';
 
 export default function AddFriendPage() {
     const { user } = useStore();
+    const { t } = useTranslation();
     const supabase = createClient();
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -36,13 +38,13 @@ export default function AddFriendPage() {
             if (error) throw error;
 
             if (!data || data.length === 0) {
-                setMessage("User not found.");
+                setMessage(t("User not found."));
             } else {
                 setResults(data);
             }
         } catch (err) {
             console.error(err);
-            setMessage("Error: " + (err.message || "User not found"));
+            setMessage(t("Error:") + " " + (err.message || t("User not found")));
         } finally {
             setLoading(false);
         }
@@ -68,7 +70,7 @@ export default function AddFriendPage() {
                 .maybeSingle();
 
             if (existing) {
-                const statusMsg = existing.status === 'accepted' ? "Already friends" : "Request pending";
+                const statusMsg = existing.status === 'accepted' ? t("Already friends") : t("Request pending");
                 setRequestStatus(prev => ({
                     ...prev,
                     [targetUser.id]: { status: 'success', message: statusMsg }
@@ -88,7 +90,7 @@ export default function AddFriendPage() {
 
             setRequestStatus(prev => ({
                 ...prev,
-                [targetUser.id]: { status: 'success', message: "Request sent!" }
+                [targetUser.id]: { status: 'success', message: t("Request sent!") }
             }));
 
         } catch (err) {
@@ -108,7 +110,7 @@ export default function AddFriendPage() {
             <header style={{ padding: '24px 0', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <Link href="/social" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>←</Link>
-                    <h1 style={{ fontSize: '1.5rem' }}>Find Friends</h1>
+                    <h1 style={{ fontSize: '1.5rem' }}>{t('Find Friends')}</h1>
                 </div>
             </header>
 
@@ -117,7 +119,7 @@ export default function AddFriendPage() {
                     <input
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Search username or name..."
+                        placeholder={t("Search username or name...")}
                         style={{
                             flex: 1,
                             padding: '12px',
@@ -139,7 +141,7 @@ export default function AddFriendPage() {
                             border: 'none'
                         }}
                     >
-                        Search
+                        {t('Search')}
                     </button>
                 </form>
 
@@ -162,7 +164,7 @@ export default function AddFriendPage() {
                                     style={{ width: '48px', height: '48px', borderRadius: '50%' }}
                                 />
                                 <div>
-                                    <div style={{ fontWeight: '700' }}>{result.name} {result.id === user.id && '(You)'}</div>
+                                    <div style={{ fontWeight: '700' }}>{result.name} {result.id === user.id && `(${t('You')})`}</div>
                                     <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>@{result.username}</div>
                                 </div>
                             </div>
@@ -191,7 +193,7 @@ export default function AddFriendPage() {
                                                 opacity: (loading || requestStatus[result.id]?.status === 'loading') ? 0.7 : 1
                                             }}
                                         >
-                                            {requestStatus[result.id]?.status === 'loading' ? '...' : (requestStatus[result.id]?.status === 'error' ? 'Retry' : 'Add +')}
+                                            {requestStatus[result.id]?.status === 'loading' ? '...' : (requestStatus[result.id]?.status === 'error' ? t('Retry') : t('Add +'))}
                                         </button>
                                     )}
                                     {requestStatus[result.id]?.status === 'error' && (
