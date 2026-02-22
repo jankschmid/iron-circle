@@ -29,8 +29,9 @@
         </provider>
 
         <!-- Foreground Service Registration -->
+        <receiver android:name="io.capawesome.capacitorjs.plugins.foregroundservice.NotificationActionBroadcastReceiver" />
         <service 
-            android:name="com.capawesome.capacitor.android.foregroundservice.ForegroundService" 
+            android:name="io.capawesome.capacitorjs.plugins.foregroundservice.AndroidForegroundService" 
             android:enabled="true" 
             android:exported="false" 
             android:foregroundServiceType="specialUse">
