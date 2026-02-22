@@ -165,6 +165,13 @@ export function useWorkoutStore(user) {
 
     const stopTrackingSession = async (reason = 'manual') => {
         if (!workoutSession) return;
+
+        // If manually stopped while auto-tracking is enabled (or even generally), suppress immediate restart for this gym
+        if (reason === 'manual' && workoutSession.gym_id) {
+            sessionStorage.setItem('suppressedGymId', workoutSession.gym_id);
+            console.log('[WorkoutStore] Manually stopped. Suppressing auto-start for gym:', workoutSession.gym_id);
+        }
+
         const endTime = new Date().toISOString();
         const duration = Math.round((new Date(endTime) - new Date(workoutSession.start_time)) / 1000);
 
@@ -215,12 +222,17 @@ export function useWorkoutStore(user) {
         const updatedLogs = activeWorkout.logs.map(log => {
             if (log.exerciseId === exerciseId) {
                 const newSets = [...log.sets];
-                newSets[setIndex] = { ...newSets[setIndex], ...data };
+                const now = Date.now();
+                newSets[setIndex] = {
+                    ...newSets[setIndex],
+                    ...data,
+                    completedAt: data.completed ? now : null
+                };
                 return { ...log, sets: newSets };
             }
             return log;
         });
-        setActiveWorkout({ ...activeWorkout, logs: updatedLogs });
+        setActiveWorkout({ ...activeWorkout, logs: updatedLogs, lastActionTime: Date.now() });
     };
 
     const addSetToWorkout = (exerciseId) => {
@@ -374,6 +386,20 @@ export function useWorkoutStore(user) {
                 }
             }
             // --------------------------------
+
+            // --- PHASE 5: OPERATIONS / MISSIONS ---
+            try {
+                const { data: opResult, error: opError } = await supabase.rpc('check_operations_progress', {
+                    p_workout_id: inserted.id
+                });
+                if (opError) {
+                    console.error("Failed to check operations:", opError);
+                } else {
+                    console.log("Operations Check:", opResult);
+                }
+            } catch (err) {
+                console.error("Operations exception:", err);
+            }
 
             setWorkoutSummary(summaryData);
             setActiveWorkout(null);
@@ -673,13 +699,39 @@ export function useWorkoutStore(user) {
                 if (logs.length > 0) {
                     await supabase.from('workout_logs').insert(logs.map(l => ({ workout_id: w.id, exercise_id: l.exerciseId, sets: JSON.stringify(l.sets) })));
                 }
+
+                // Increase user XP/Stats for manual addition
+                const xpResult = calculateSessionXP({ duration, volume, prs: 0, streak: 1, distance: 0 }, { volume: 1 });
+                if (xpResult.total > 0) {
+                    await supabase.rpc('increment_user_xp', { amount: xpResult.total });
+                }
+
                 fetchHistory();
                 return true;
             } catch (e) { console.error(e); return false; }
         },
         deleteWorkoutHistory: async (id) => {
+            const workoutToDelete = history.find(w => w.id === id);
             setHistory(prev => prev.filter(w => w.id !== id));
+
+            // Delete from Database
             await supabase.from('workouts').delete().eq('id', id);
+
+            // Deduct XP and Stats
+            if (workoutToDelete) {
+                // Calculate how much XP this workout gave
+                const xpResult = calculateSessionXP({
+                    duration: workoutToDelete.duration || 0,
+                    volume: workoutToDelete.volume || 0,
+                    prs: 0, streak: 1, distance: 0
+                }, { volume: 1 });
+
+                if (xpResult.total > 0) {
+                    // Subtract XP (calling the increment RPC with a negative number)
+                    const { error } = await supabase.rpc('increment_user_xp', { amount: -xpResult.total });
+                    if (error) console.error("XP Deduction error", error);
+                }
+            }
         },
         updateWorkoutHistory: async (id, data) => { }, // Stub
 
