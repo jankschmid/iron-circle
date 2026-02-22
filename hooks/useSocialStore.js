@@ -209,21 +209,42 @@ export function useSocialStore(user, workoutSession) {
         if (!user) return;
         fetchUnreadCount();
 
-        // Listen to all new messages (RLS protects unauthorized access) 
-        // because we don't have a direct 'receiver_id' on 'messages'.
-        const channel = supabase.channel('social_updates')
+        // Listen to all new messages (RLS protects unauthorized access)
+        const msgChannel = supabase.channel('social_updates')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-                // Ignore our own messages
                 if (payload.new.sender_id === user.id) return;
-
-                // We should only increment unread if this message is in our active chats
                 setUnreadCount(prev => prev + 1);
-                toast.success("New Message Received");
+                toast.success('New Message Received');
             })
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        return () => { supabase.removeChannel(msgChannel); };
     }, [user, pathname]);
+
+    // --- REALTIME: Live Circle (workout_sessions + workouts) ---
+    // Re-fetch friends whenever any friend starts/stops a gym session or workout.
+    // Fetching (not just patching from payload) ensures we always get the joined gyms.name.
+    useEffect(() => {
+        if (!user?.id) return;
+
+        // Initial load
+        fetchFriends();
+
+        const liveChannel = supabase.channel('friends_live_status')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'workout_sessions' },
+                () => { fetchFriends(); }   // Re-fetch to get gyms.name join
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'workouts' },
+                () => { fetchFriends(); }   // Re-fetch to get live workout info
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(liveChannel); };
+    }, [user?.id]);
 
     // --- FEED & INTERACTIONS ---
     const fetchFeed = async (page = 0, limit = 20) => {
