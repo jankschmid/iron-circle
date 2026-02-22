@@ -37,6 +37,18 @@ export function useWorkoutStore(user) {
                 const valid = parsed.startTime && (new Date() - new Date(parsed.startTime) < 24 * 60 * 60 * 1000);
                 if (valid && !activeWorkout) {
                     setActiveWorkout(parsed);
+
+                    // Resume Foreground Service Timer and Completion
+                    foregroundService.startTracking('Iron Circle', `Workout Active: ${parsed.name}`, new Date(parsed.startTime).getTime());
+                    let tSets = 0, dSets = 0;
+                    if (parsed.logs) {
+                        parsed.logs.forEach(l => {
+                            tSets += l.sets?.length || 0;
+                            dSets += l.sets?.filter(s => s.completed)?.length || 0;
+                        });
+                        foregroundService.setCompletionText(` • ${dSets}/${tSets} Sets`);
+                    }
+
                     toast.success('Session restored from local backup');
                 } else if (!valid) {
                     localStorage.removeItem('iron-circle-active-workout');
@@ -62,14 +74,24 @@ export function useWorkoutStore(user) {
                     exerciseId: log.exercise_id,
                     sets: typeof log.sets === 'string' ? JSON.parse(log.sets) : log.sets
                 }));
-                setActiveWorkout({
+                const restoredWorkout = {
                     id: data.id,
                     templateId: data.plan_id,
                     name: data.name,
                     startTime: data.start_time,
                     logs: restoredLogs,
                     status: 'active'
+                };
+                setActiveWorkout(restoredWorkout);
+
+                // Resume Foreground Service Timer and Completion
+                foregroundService.startTracking('Iron Circle', `Workout Active: ${restoredWorkout.name}`, new Date(restoredWorkout.startTime).getTime());
+                let tSets = 0, dSets = 0;
+                restoredLogs.forEach(l => {
+                    tSets += l.sets?.length || 0;
+                    dSets += l.sets?.filter(s => s.completed)?.length || 0;
                 });
+                foregroundService.setCompletionText(` • ${dSets}/${tSets} Sets`);
             }
         };
         fetchActiveFromDB();
@@ -165,9 +187,10 @@ export function useWorkoutStore(user) {
 
         // Start Foreground Service Notification for Gym Session
         const displayGymName = session?.gyms?.name || gymName || 'a Gym';
-        foregroundService.start(
+        foregroundService.startTracking(
             'Iron Circle',
-            `Checked into ${displayGymName}`
+            `Checked into ${displayGymName}`,
+            new Date(session.start_time).getTime()
         );
     };
 
@@ -229,9 +252,10 @@ export function useWorkoutStore(user) {
         setActiveWorkout(newWorkout);
 
         // Start Android Foreground Service
-        foregroundService.start(
+        foregroundService.startTracking(
             'Iron Circle',
-            `Workout Active: ${name}`
+            `Workout Active: ${name}`,
+            new Date(newWorkout.startTime).getTime()
         );
     };
 
@@ -250,7 +274,18 @@ export function useWorkoutStore(user) {
             }
             return log;
         });
-        setActiveWorkout({ ...activeWorkout, logs: updatedLogs, lastActionTime: Date.now() });
+        const newState = { ...activeWorkout, logs: updatedLogs, lastActionTime: Date.now() };
+
+        // Update Foreground Service Progress (e.g. 5/10 Sets)
+        let totalSets = 0;
+        let doneSets = 0;
+        newState.logs.forEach(l => {
+            totalSets += l.sets.length;
+            doneSets += l.sets.filter(s => s.completed).length;
+        });
+        foregroundService.setCompletionText(` • ${doneSets}/${totalSets} Sets`);
+
+        setActiveWorkout(newState);
     };
 
     const addSetToWorkout = (exerciseId) => {
