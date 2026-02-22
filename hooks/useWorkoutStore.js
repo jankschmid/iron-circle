@@ -164,9 +164,10 @@ export function useWorkoutStore(user) {
         setWorkoutSession(session);
 
         // Start Foreground Service Notification for Gym Session
+        const displayGymName = session?.gyms?.name || gymName || 'a Gym';
         foregroundService.start(
             'Iron Circle',
-            `Checked into ${gymName}`
+            `Checked into ${displayGymName}`
         );
     };
 
