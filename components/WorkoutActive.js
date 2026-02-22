@@ -32,6 +32,8 @@ export default function WorkoutActive() {
     } = useStore();
 
     const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [savedOffline, setSavedOffline] = useState(false);
     const [isPrivate, setIsPrivate] = useState(false);
     const [showPicker, setShowPicker] = useState(false);
     const { t } = useTranslation();
@@ -163,9 +165,12 @@ export default function WorkoutActive() {
         />;
     }
 
-    const handleFinish = () => {
-        finishWorkout({ visibility: isPrivate ? 'private' : 'public' });
+    const handleFinish = async () => {
+        setIsSaving(true);
         setShowFinishConfirm(false);
+        const result = await finishWorkout({ visibility: isPrivate ? 'private' : 'public' });
+        if (result?.offline) setSavedOffline(true);
+        setIsSaving(false);
     };
 
     const handleCancel = () => {
@@ -430,10 +435,27 @@ export default function WorkoutActive() {
                             <p style={{ color, marginBottom: '16px', fontWeight: '500', fontSize: '1.05rem' }}>{message}</p>
                             <button
                                 onClick={() => setShowFinishConfirm(true)}
-                                style={{ width: '100%', padding: '16px', background: 'var(--warning)', color: '#000', borderRadius: '100px', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}
+                                disabled={isSaving}
+                                style={{
+                                    width: '100%', padding: '16px',
+                                    background: isSaving ? 'var(--surface-highlight)' : 'var(--warning)',
+                                    color: isSaving ? 'var(--text-muted)' : '#000',
+                                    borderRadius: '100px', fontWeight: 'bold', fontSize: '1.1rem',
+                                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                                    border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                                    opacity: isSaving ? 0.7 : 1, transition: 'all 0.2s'
+                                }}
                             >
-                                {t('FINISH WORKOUT')}
+                                {isSaving ? (
+                                    <><span style={{ fontSize: '1.2rem', animation: 'spin 1s linear infinite' }}>⏳</span> {t('Saving...')}</>
+                                ) : t('FINISH WORKOUT')}
                             </button>
+                            {savedOffline && (
+                                <div style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--warning)', textAlign: 'center' }}>
+                                    📶 {t('Saved locally — will sync when back online')}
+                                </div>
+                            )}
                         </div>
                     );
                 })()}

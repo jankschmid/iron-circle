@@ -345,6 +345,91 @@ export function useWorkoutStore(user) {
         }));
     };
 
+    // --- OFFLINE SYNC ---
+    const PENDING_KEY = 'iron-circle-pending-workout';
+
+    const syncPendingWorkout = async () => {
+        if (!user?.id) return;
+        const raw = localStorage.getItem(PENDING_KEY);
+        if (!raw) return;
+        try {
+            const pending = JSON.parse(raw);
+            console.log('[IronCircle] Syncing pending offline workout...');
+            const result = await _uploadWorkout(pending);
+            if (result.success) {
+                localStorage.removeItem(PENDING_KEY);
+                fetchHistory();
+                console.log('[IronCircle] ✅ Offline workout synced successfully');
+            }
+        } catch (e) {
+            console.warn('[IronCircle] Sync failed, will retry later:', e.message);
+        }
+    };
+
+    // Internal: performs the actual Supabase upload for a workout payload
+    const _uploadWorkout = async (payload) => {
+        const { workout, logs, summaryData, visibility } = payload;
+
+        const { data: inserted, error } = await supabase.from('workouts').insert({
+            user_id: user.id,
+            name: workout.name,
+            start_time: workout.startTime,
+            end_time: workout.endTime,
+            duration: workout.duration,
+            volume: workout.volume,
+            distance: workout.distance,
+            visibility,
+            plan_id: workout.planId,
+            plan_day_id: workout.dayId
+        }).select().single();
+
+        if (error) throw error;
+
+        const logsPayload = logs.map(l => ({
+            workout_id: inserted.id,
+            exercise_id: l.exerciseId,
+            sets: JSON.stringify(l.sets)
+        }));
+        await supabase.from('workout_logs').insert(logsPayload);
+
+        // Feed event
+        await supabase.from('feed_events').insert({
+            user_id: user.id,
+            type: 'workout',
+            data: summaryData
+        });
+
+        // Community goals
+        const { data: myCommunities } = await supabase.from('community_members')
+            .select('community_id').eq('user_id', user.id);
+        if (myCommunities?.length > 0) {
+            const communityIds = myCommunities.map(c => c.community_id);
+            const { data: activeGoals } = await supabase.from('community_goals')
+                .select('*').in('community_id', communityIds).eq('status', 'ACTIVE');
+
+            if (activeGoals?.length > 0) {
+                for (const goal of activeGoals) {
+                    let contribution = 0;
+                    if (goal.metric === 'VOLUME') contribution = workout.volume;
+                    else if (goal.metric === 'WORKOUTS') contribution = 1;
+                    else if (goal.metric === 'DISTANCE') contribution = workout.distance;
+                    if (contribution > 0) {
+                        await supabase.rpc('contribute_to_goal', { p_goal_id: goal.id, p_amount: contribution });
+                    }
+                }
+            }
+        }
+
+        // Operations / Missions
+        try {
+            await supabase.rpc('check_operations_progress', { p_workout_id: inserted.id });
+        } catch (err) {
+            console.error('Operations check error:', err);
+        }
+
+        return { success: true, insertedId: inserted.id };
+    };
+
     const finishWorkout = async ({ visibility = 'public' } = {}) => {
         if (!activeWorkout || !user) return;
         if (workoutSession) await stopTrackingSession();
@@ -367,7 +452,10 @@ export function useWorkoutStore(user) {
             });
         });
 
-        const xpResult = calculateSessionXP({ duration, volume: totalVol, prs: 0, streak: 1, distance: totalDistance }, { volume: 1 });
+        const xpResult = calculateSessionXP(
+            { duration, volume: totalVol, prs: 0, streak: 1, distance: totalDistance },
+            { volume: 1 }
+        );
 
         const summaryData = {
             earnedXP: xpResult.total,
@@ -376,106 +464,55 @@ export function useWorkoutStore(user) {
             volume: totalVol,
             name: activeWorkout.name,
             breakdown: xpResult.breakdown,
-            analysis: {
-                volumeDelta: 0, // Placeholder for now, could act calc later
-                newRecords: [] // Placeholder
-            }
+            analysis: { volumeDelta: 0, newRecords: [] }
         };
 
-        try {
-            const { data: inserted, error } = await supabase.from('workouts').insert({
-                user_id: user.id,
+        // Build the full payload (needed for both online and offline paths)
+        const payload = {
+            workout: {
                 name: activeWorkout.name,
-                start_time: activeWorkout.startTime,
-                end_time: endTime.toISOString(),
+                startTime: activeWorkout.startTime,
+                endTime: endTime.toISOString(),
                 duration,
                 volume: totalVol,
                 distance: totalDistance,
-                visibility,
-                plan_id: activeWorkout.planId,
-                plan_day_id: activeWorkout.dayId
-            }).select().single();
+                planId: activeWorkout.planId,
+                dayId: activeWorkout.dayId,
+            },
+            logs: activeWorkout.logs,
+            summaryData,
+            visibility,
+            savedAt: Date.now()
+        };
 
-            if (error) throw error;
+        // Optimistically clear the active workout immediately
+        setActiveWorkout(null);
+        localStorage.removeItem('iron-circle-active-workout');
 
-            const logsPayload = activeWorkout.logs.map(l => ({
-                workout_id: inserted.id,
-                exercise_id: l.exerciseId,
-                sets: JSON.stringify(l.sets)
-            }));
-            await supabase.from('workout_logs').insert(logsPayload);
+        try {
+            // Race the entire upload against a 10-second timeout
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Network timeout')), 10000)
+            );
 
-            // --- PHASE 4: SOCIAL TRIGGERS ---
-            // 1. Post to Feed
-            await supabase.from('feed_events').insert({
-                user_id: user.id,
-                type: 'workout',
-                data: summaryData
-            });
-
-            // 2. Check & Update Community Goals
-            const { data: myCommunities } = await supabase.from('community_members').select('community_id').eq('user_id', user.id);
-            if (myCommunities && myCommunities.length > 0) {
-                const communityIds = myCommunities.map(c => c.community_id);
-                const { data: activeGoals } = await supabase.from('community_goals')
-                    .select('*')
-                    .in('community_id', communityIds)
-                    .eq('status', 'ACTIVE');
-
-                if (activeGoals && activeGoals.length > 0) {
-                    // Calculate totals
-                    let totalDistance = 0;
-                    activeWorkout.logs.forEach(l => {
-                        const ex = exercises.find(e => e.id === l.exerciseId);
-                        if (ex && ex.type === 'cardio') {
-                            // For cardio: Weight = Distance (meters), Reps = Time (min) - convention
-                            l.sets.forEach(s => { if (s.completed) totalDistance += Number(s.weight || 0); });
-                        }
-                    });
-
-                    for (const goal of activeGoals) {
-                        let contribution = 0;
-                        if (goal.metric === 'VOLUME') contribution = totalVol;
-                        else if (goal.metric === 'WORKOUTS') contribution = 1;
-                        else if (goal.metric === 'DISTANCE') contribution = totalDistance;
-
-                        if (contribution > 0) {
-                            await supabase.rpc('contribute_to_goal', {
-                                p_goal_id: goal.id,
-                                p_amount: contribution
-                            });
-                        }
-                    }
-                }
-            }
-            // --------------------------------
-
-            // --- PHASE 5: OPERATIONS / MISSIONS ---
-            try {
-                const { data: opResult, error: opError } = await supabase.rpc('check_operations_progress', {
-                    p_workout_id: inserted.id
-                });
-                if (opError) {
-                    console.error("Failed to check operations:", opError);
-                } else {
-                    console.log("Operations Check:", opResult);
-                }
-            } catch (err) {
-                console.error("Operations exception:", err);
-            }
+            await Promise.race([_uploadWorkout(payload), timeoutPromise]);
 
             setWorkoutSummary(summaryData);
-            setActiveWorkout(null);
-            localStorage.removeItem('iron-circle-active-workout');
             fetchHistory();
-            return { success: true, summary: summaryData };
+            return { success: true, offline: false, summary: summaryData };
 
         } catch (e) {
-            console.error("Finish failed:", e);
-            toast.error("Failed to save workout");
-            return { success: false };
+            console.warn('[IronCircle] Workout upload failed, saving offline:', e.message);
+
+            // Save full payload for later sync
+            localStorage.setItem(PENDING_KEY, JSON.stringify(payload));
+
+            // Still show success screen — data is safe
+            setWorkoutSummary({ ...summaryData, savedOffline: true });
+            return { success: true, offline: true, summary: summaryData };
         }
     };
+
 
     const cancelWorkout = async () => {
         if (!activeWorkout) return;
@@ -797,6 +834,7 @@ export function useWorkoutStore(user) {
 
         startTrackingSession,
         stopTrackingSession,
+        syncPendingWorkout,
         checkInGym: startTrackingSession, // Wrapper Alias
 
         addWorkoutTemplate,

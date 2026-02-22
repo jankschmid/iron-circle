@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { EXERCISES } from '@/lib/data';
 
 export default function HistoryPage() {
-    const { history, createManualWorkout, workoutTemplates, friends, sendMessage, user } = useStore();
+    const { history, createManualWorkout, deleteWorkoutHistory, workoutTemplates, friends, sendMessage, user } = useStore();
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [manualWorkout, setManualWorkout] = useState({
@@ -162,18 +162,16 @@ export default function HistoryPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {history.map((session) => (
-                    <div key={session.id} style={{ position: 'relative' }}>
+                    <div key={session.id} style={{
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        overflow: 'hidden'
+                    }}>
+                        {/* Clickable info area */}
                         <Link
                             href={`/workout/history/view?id=${session.id}`}
-                            style={{
-                                background: 'var(--surface)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 'var(--radius-md)',
-                                padding: '16px',
-                                display: 'block',
-                                textDecoration: 'none',
-                                color: 'inherit'
-                            }}
+                            style={{ display: 'block', padding: '16px', textDecoration: 'none', color: 'inherit' }}
                         >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                                 <span style={{ fontWeight: '600', fontSize: '1.1rem' }}>{session.name}</span>
@@ -185,30 +183,50 @@ export default function HistoryPage() {
                                 {session.visibility === 'private' && <span style={{ color: 'var(--warning)', marginLeft: 'auto' }}>🔒 Private</span>}
                             </div>
                         </Link>
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setWorkoutToShare(session);
-                                setShowShareModal(true);
-                            }}
-                            style={{
-                                position: 'absolute',
-                                right: '16px',
-                                bottom: '16px',
-                                background: 'var(--primary-dim)',
-                                color: 'var(--primary)',
-                                border: 'none',
-                                padding: '6px 12px',
-                                borderRadius: '100px',
-                                fontSize: '0.8rem',
-                                fontWeight: '600',
-                                cursor: 'pointer',
-                                zIndex: 1
-                            }}
-                        >
-                            Share
-                        </button>
+
+                        {/* Action bar — always visible, never overlapping */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            borderTop: '1px solid var(--border)',
+                        }}>
+                            <button
+                                onClick={() => {
+                                    setWorkoutToShare(session);
+                                    setShowShareModal(true);
+                                }}
+                                style={{
+                                    padding: '12px',
+                                    background: 'transparent',
+                                    color: 'var(--primary)',
+                                    border: 'none',
+                                    borderRight: '1px solid var(--border)',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                ↗ Share
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (window.confirm('Delete this workout? This cannot be undone.')) {
+                                        deleteWorkoutHistory(session.id);
+                                    }
+                                }}
+                                style={{
+                                    padding: '12px',
+                                    background: 'transparent',
+                                    color: 'var(--danger, #ef4444)',
+                                    border: 'none',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                🗑 Delete
+                            </button>
+                        </div>
                     </div>
                 ))}
 
