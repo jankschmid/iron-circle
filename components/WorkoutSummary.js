@@ -141,7 +141,7 @@ export default function WorkoutSummary({ data, onContinue }) {
                     </div>
 
                     {/* PR Celebration List */}
-                    {data.analysis && data.analysis.newRecords && data.analysis.newRecords.length > 0 && (
+                    {data.analysis?.newRecords?.length > 0 && (
                         <div style={{ marginBottom: '24px', textAlign: 'left' }}>
                             {data.analysis.newRecords.map((rec, idx) => (
                                 <motion.div
@@ -157,11 +157,16 @@ export default function WorkoutSummary({ data, onContinue }) {
                                         borderRadius: '4px'
                                     }}
                                 >
-                                    <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#fbbf24' }}>🏆 NEW RECORD</div>
-                                    <div style={{ fontSize: '1rem', color: '#fff' }}>
-                                        {/* We need exercise name, let's assume we can fetch or pass it. For now, ID */}
-                                        {/* Ideally the store passed the name. Let's fallback to "Exercise" if missing */}
-                                        Exercise Logged: {rec.value}kg <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>(Prev: {rec.previous}kg)</span>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#fbbf24' }}>
+                                        {rec.type === 'weight' ? '🏆 Weight PR' : '🔁 Rep PR'}
+                                    </div>
+                                    <div style={{ fontSize: '0.95rem', color: '#fff', marginTop: '2px' }}>
+                                        {rec.exerciseName}
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        {rec.type === 'weight'
+                                            ? `${rec.previous}kg → ${rec.value}kg`
+                                            : `${rec.previous} reps → ${rec.value} reps`}
                                     </div>
                                 </motion.div>
                             ))}

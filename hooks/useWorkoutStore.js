@@ -367,6 +367,7 @@ export function useWorkoutStore(user) {
     };
 
     // Internal: performs the actual Supabase upload for a workout payload
+    // Returns { success, insertedId, newLevel, didLevelUp } so the caller can update summaryData
     const _uploadWorkout = async (payload) => {
         const { workout, logs, summaryData, visibility } = payload;
 
@@ -392,50 +393,75 @@ export function useWorkoutStore(user) {
         }));
         await supabase.from('workout_logs').insert(logsPayload);
 
+        // --- XP: Write to DB then fetch new level ---
+        let newLevel = summaryData.newLevel || 1;
+        let didLevelUp = false;
+        try {
+            if (summaryData.earnedXP > 0) {
+                await supabase.rpc('increment_user_xp', { amount: summaryData.earnedXP });
+                // Fetch updated profile to detect level change
+                const { data: freshProfile } = await supabase
+                    .from('profiles')
+                    .select('level, current_xp')
+                    .eq('id', user.id)
+                    .single();
+                if (freshProfile) {
+                    newLevel = freshProfile.level || 1;
+                    didLevelUp = newLevel > (summaryData.newLevel || 1);
+                }
+            }
+        } catch (xpErr) {
+            console.warn('[IronCircle] XP increment failed (non-critical):', xpErr.message);
+        }
+
         // Feed event
         await supabase.from('feed_events').insert({
             user_id: user.id,
             type: 'workout',
             data: summaryData
-        });
+        }).catch(() => { }); // Non-critical
 
         // Community goals
-        const { data: myCommunities } = await supabase.from('community_members')
-            .select('community_id').eq('user_id', user.id);
-        if (myCommunities?.length > 0) {
-            const communityIds = myCommunities.map(c => c.community_id);
-            const { data: activeGoals } = await supabase.from('community_goals')
-                .select('*').in('community_id', communityIds).eq('status', 'ACTIVE');
+        try {
+            const { data: myCommunities } = await supabase.from('community_members')
+                .select('community_id').eq('user_id', user.id);
+            if (myCommunities?.length > 0) {
+                const communityIds = myCommunities.map(c => c.community_id);
+                const { data: activeGoals } = await supabase.from('community_goals')
+                    .select('*').in('community_id', communityIds).eq('status', 'ACTIVE');
 
-            if (activeGoals?.length > 0) {
-                for (const goal of activeGoals) {
-                    let contribution = 0;
-                    if (goal.metric === 'VOLUME') contribution = workout.volume;
-                    else if (goal.metric === 'WORKOUTS') contribution = 1;
-                    else if (goal.metric === 'DISTANCE') contribution = workout.distance;
-                    if (contribution > 0) {
-                        await supabase.rpc('contribute_to_goal', { p_goal_id: goal.id, p_amount: contribution });
+                if (activeGoals?.length > 0) {
+                    for (const goal of activeGoals) {
+                        let contribution = 0;
+                        if (goal.metric === 'VOLUME') contribution = workout.volume;
+                        else if (goal.metric === 'WORKOUTS') contribution = 1;
+                        else if (goal.metric === 'DISTANCE') contribution = workout.distance;
+                        if (contribution > 0) {
+                            await supabase.rpc('contribute_to_goal', { p_goal_id: goal.id, p_amount: contribution });
+                        }
                     }
                 }
             }
+        } catch (goalErr) {
+            console.warn('[IronCircle] Community goal update failed (non-critical):', goalErr.message);
         }
 
         // Operations / Missions
         try {
             await supabase.rpc('check_operations_progress', { p_workout_id: inserted.id });
         } catch (err) {
-            console.error('Operations check error:', err);
+            console.warn('Operations check error (non-critical):', err.message);
         }
 
-        return { success: true, insertedId: inserted.id };
+        return { success: true, insertedId: inserted.id, newLevel, didLevelUp };
     };
 
     const finishWorkout = async ({ visibility = 'public' } = {}) => {
         if (!activeWorkout || !user) return;
-        if (workoutSession) await stopTrackingSession();
 
-        // Stop Android Foreground Service
-        foregroundService.stop();
+        // Safely stop session/service — don't let network errors here break the offline fallback
+        try { if (workoutSession) await stopTrackingSession(); } catch (e) { console.warn('[IronCircle] stopTrackingSession failed (ignored):', e.message); }
+        try { foregroundService.stop(); } catch (e) { /* ignore */ }
 
         const endTime = new Date();
         const duration = Math.round((endTime - new Date(activeWorkout.startTime)) / 1000);
@@ -452,19 +478,69 @@ export function useWorkoutStore(user) {
             });
         });
 
+        // --- PR DETECTION ---
+        // For each exercise in this session, check weight PR and rep PR against all-time history
+        const newRecords = [];
+        activeWorkout.logs.forEach(log => {
+            const exObj = exercises.find(e => e.id === log.exerciseId);
+            const exName = exObj?.name || 'Unknown Exercise';
+            const completedSets = log.sets.filter(s => s.completed && s.weight > 0 && s.reps > 0);
+            if (completedSets.length === 0) return;
+
+            const sessionMaxWeight = Math.max(...completedSets.map(s => Number(s.weight)));
+            const sessionMaxReps = Math.max(...completedSets.map(s => Number(s.reps)));
+
+            // All historical sets for this exercise (excluding current session)
+            let allTimeMaxWeight = 0;
+            let allTimeMaxReps = 0;
+            if (history) {
+                history.forEach(session => {
+                    session.logs?.forEach(hl => {
+                        if (hl.exerciseId !== log.exerciseId) return;
+                        hl.sets?.forEach(s => {
+                            if (!s.completed) return;
+                            if (Number(s.weight) > allTimeMaxWeight) allTimeMaxWeight = Number(s.weight);
+                            if (Number(s.reps) > allTimeMaxReps) allTimeMaxReps = Number(s.reps);
+                        });
+                    });
+                });
+            }
+
+            // Weight PR
+            if (sessionMaxWeight > allTimeMaxWeight && allTimeMaxWeight > 0) {
+                newRecords.push({
+                    type: 'weight',
+                    exerciseName: exName,
+                    value: sessionMaxWeight,
+                    previous: allTimeMaxWeight
+                });
+            }
+            // Rep PR (only flag separately if no weight PR to avoid double announcement)
+            else if (sessionMaxReps > allTimeMaxReps && allTimeMaxReps > 0) {
+                newRecords.push({
+                    type: 'reps',
+                    exerciseName: exName,
+                    value: sessionMaxReps,
+                    previous: allTimeMaxReps
+                });
+            }
+        });
+
         const xpResult = calculateSessionXP(
-            { duration, volume: totalVol, prs: 0, streak: 1, distance: totalDistance },
+            { duration, volume: totalVol, prs: newRecords.length, streak: 1, distance: totalDistance },
             { volume: 1 }
         );
 
         const summaryData = {
             earnedXP: xpResult.total,
             newTotalXP: (user.current_xp || 0) + xpResult.total,
+            newLevel: user.level || 1, // Will be updated from server response
+            didLevelUp: false,
             duration,
             volume: totalVol,
             name: activeWorkout.name,
             breakdown: xpResult.breakdown,
-            analysis: { volumeDelta: 0, newRecords: [] }
+            analysis: { volumeDelta: 0, newRecords }
         };
 
         // Build the full payload (needed for both online and offline paths)
@@ -495,11 +571,18 @@ export function useWorkoutStore(user) {
                 setTimeout(() => reject(new Error('Network timeout')), 10000)
             );
 
-            await Promise.race([_uploadWorkout(payload), timeoutPromise]);
+            const uploadResult = await Promise.race([_uploadWorkout(payload), timeoutPromise]);
 
-            setWorkoutSummary(summaryData);
+            // Merge server-side level/levelUp data into the summary
+            const finalSummary = {
+                ...summaryData,
+                newLevel: uploadResult.newLevel || summaryData.newLevel,
+                didLevelUp: uploadResult.didLevelUp || false
+            };
+
+            setWorkoutSummary(finalSummary);
             fetchHistory();
-            return { success: true, offline: false, summary: summaryData };
+            return { success: true, offline: false, summary: finalSummary };
 
         } catch (e) {
             console.warn('[IronCircle] Workout upload failed, saving offline:', e.message);
@@ -507,11 +590,12 @@ export function useWorkoutStore(user) {
             // Save full payload for later sync
             localStorage.setItem(PENDING_KEY, JSON.stringify(payload));
 
-            // Still show success screen — data is safe
+            // Still show summary — data is safe locally
             setWorkoutSummary({ ...summaryData, savedOffline: true });
             return { success: true, offline: true, summary: summaryData };
         }
     };
+
 
 
     const cancelWorkout = async () => {
