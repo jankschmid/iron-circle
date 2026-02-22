@@ -143,33 +143,41 @@ export default function WorkoutSummary({ data, onContinue }) {
                     {/* PR Celebration List */}
                     {data.analysis?.newRecords?.length > 0 && (
                         <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                            {data.analysis.newRecords.map((rec, idx) => (
-                                <motion.div
-                                    key={idx}
-                                    initial={{ x: -20, opacity: 0 }}
-                                    animate={{ x: 0, opacity: 1 }}
-                                    transition={{ delay: 0.2 + (idx * 0.1) }}
-                                    style={{
-                                        background: 'linear-gradient(to right, rgba(251, 191, 36, 0.1), transparent)',
-                                        borderLeft: '4px solid #fbbf24',
-                                        padding: '12px',
-                                        marginBottom: '8px',
-                                        borderRadius: '4px'
-                                    }}
-                                >
-                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#fbbf24' }}>
-                                        {rec.type === 'weight' ? '🏆 Weight PR' : '🔁 Rep PR'}
-                                    </div>
-                                    <div style={{ fontSize: '0.95rem', color: '#fff', marginTop: '2px' }}>
-                                        {rec.exerciseName}
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                        {rec.type === 'weight'
-                                            ? `${rec.previous}kg → ${rec.value}kg`
-                                            : `${rec.previous} reps → ${rec.value} reps`}
-                                    </div>
-                                </motion.div>
-                            ))}
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
+                                Personal Records Broken 🏆
+                            </div>
+                            {data.analysis.newRecords.map((rec, idx) => {
+                                const prMeta = {
+                                    WEIGHT: { icon: '🏋️', label: 'Max Weight', fmt: v => `${v}kg` },
+                                    E1RM: { icon: '💪', label: 'Estimated 1RM', fmt: v => `${v}kg` },
+                                    VOLUME: { icon: '📦', label: 'Session Volume', fmt: v => `${v}kg` },
+                                }[rec.type] || { icon: '⚡', label: rec.type, fmt: v => v };
+                                return (
+                                    <motion.div
+                                        key={idx}
+                                        initial={{ x: -20, opacity: 0 }}
+                                        animate={{ x: 0, opacity: 1 }}
+                                        transition={{ delay: 0.2 + (idx * 0.1) }}
+                                        style={{
+                                            background: 'linear-gradient(to right, rgba(251,191,36,0.12), transparent)',
+                                            borderLeft: '4px solid #fbbf24',
+                                            padding: '10px 12px',
+                                            marginBottom: '8px',
+                                            borderRadius: '4px'
+                                        }}
+                                    >
+                                        <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#fbbf24' }}>
+                                            {prMeta.icon} {prMeta.label} PR
+                                        </div>
+                                        <div style={{ fontSize: '0.95rem', color: '#fff', margin: '2px 0' }}>
+                                            {rec.exerciseName || rec.exercise_id}
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            {prMeta.fmt(rec.old_value || rec.previous)} → <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{prMeta.fmt(rec.new_value || rec.value)}</span>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
                         </div>
                     )}
 

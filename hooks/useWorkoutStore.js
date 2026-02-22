@@ -453,7 +453,25 @@ export function useWorkoutStore(user) {
             console.warn('Operations check error (non-critical):', err.message);
         }
 
-        return { success: true, insertedId: inserted.id, newLevel, didLevelUp };
+        // --- PR EVALUATION (DB-side, authoritative) ---
+        // The RPC computes all 3 pillars, upserts bests, grants 500 XP/exercise, returns broken PRs
+        let brokenPRs = [];
+        try {
+            const { data: prData, error: prError } = await supabase.rpc(
+                'evaluate_workout_prs',
+                { p_workout_id: inserted.id }
+            );
+            if (prError) {
+                console.warn('[IronCircle] PR evaluation error (non-critical):', prError.message);
+            } else if (Array.isArray(prData)) {
+                brokenPRs = prData;
+                console.log(`[IronCircle] 🏆 ${brokenPRs.length} PR(s) broken:`, brokenPRs);
+            }
+        } catch (prErr) {
+            console.warn('[IronCircle] PR evaluation exception (non-critical):', prErr.message);
+        }
+
+        return { success: true, insertedId: inserted.id, newLevel, didLevelUp, brokenPRs };
     };
 
     const finishWorkout = async ({ visibility = 'public' } = {}) => {
@@ -478,56 +496,12 @@ export function useWorkoutStore(user) {
             });
         });
 
-        // --- PR DETECTION ---
-        // For each exercise in this session, check weight PR and rep PR against all-time history
+        // --- PR data is computed by the DB RPC after upload ---
+        // Placeholder for summary; real values filled in after upload returns
         const newRecords = [];
-        activeWorkout.logs.forEach(log => {
-            const exObj = exercises.find(e => e.id === log.exerciseId);
-            const exName = exObj?.name || 'Unknown Exercise';
-            const completedSets = log.sets.filter(s => s.completed && s.weight > 0 && s.reps > 0);
-            if (completedSets.length === 0) return;
-
-            const sessionMaxWeight = Math.max(...completedSets.map(s => Number(s.weight)));
-            const sessionMaxReps = Math.max(...completedSets.map(s => Number(s.reps)));
-
-            // All historical sets for this exercise (excluding current session)
-            let allTimeMaxWeight = 0;
-            let allTimeMaxReps = 0;
-            if (history) {
-                history.forEach(session => {
-                    session.logs?.forEach(hl => {
-                        if (hl.exerciseId !== log.exerciseId) return;
-                        hl.sets?.forEach(s => {
-                            if (!s.completed) return;
-                            if (Number(s.weight) > allTimeMaxWeight) allTimeMaxWeight = Number(s.weight);
-                            if (Number(s.reps) > allTimeMaxReps) allTimeMaxReps = Number(s.reps);
-                        });
-                    });
-                });
-            }
-
-            // Weight PR
-            if (sessionMaxWeight > allTimeMaxWeight && allTimeMaxWeight > 0) {
-                newRecords.push({
-                    type: 'weight',
-                    exerciseName: exName,
-                    value: sessionMaxWeight,
-                    previous: allTimeMaxWeight
-                });
-            }
-            // Rep PR (only flag separately if no weight PR to avoid double announcement)
-            else if (sessionMaxReps > allTimeMaxReps && allTimeMaxReps > 0) {
-                newRecords.push({
-                    type: 'reps',
-                    exerciseName: exName,
-                    value: sessionMaxReps,
-                    previous: allTimeMaxReps
-                });
-            }
-        });
 
         const xpResult = calculateSessionXP(
-            { duration, volume: totalVol, prs: newRecords.length, streak: 1, distance: totalDistance },
+            { duration, volume: totalVol, prs: 0, streak: 1, distance: totalDistance },
             { volume: 1 }
         );
 
@@ -573,11 +547,18 @@ export function useWorkoutStore(user) {
 
             const uploadResult = await Promise.race([_uploadWorkout(payload), timeoutPromise]);
 
-            // Merge server-side level/levelUp data into the summary
+            // Enrich broken PRs with exercise names (client-side, RPC returns raw IDs)
+            const namedPRs = (uploadResult.brokenPRs || []).map(pr => {
+                const exObj = exercises.find(e => e.id === pr.exercise_id);
+                return { ...pr, exerciseName: exObj?.name || pr.exercise_id };
+            });
+
+            // Merge server-side level/levelUp/PR data into the summary
             const finalSummary = {
                 ...summaryData,
                 newLevel: uploadResult.newLevel || summaryData.newLevel,
-                didLevelUp: uploadResult.didLevelUp || false
+                didLevelUp: uploadResult.didLevelUp || false,
+                analysis: { volumeDelta: 0, newRecords: namedPRs }
             };
 
             setWorkoutSummary(finalSummary);
