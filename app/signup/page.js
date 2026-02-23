@@ -11,7 +11,9 @@ export default function SignupPage() {
     const { t } = useTranslation()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
     const [error, setError] = useState(null)
+    const [fieldErrors, setFieldErrors] = useState({})
     const [loading, setLoading] = useState(false)
     const [success, setSuccess] = useState(false)
     const router = useRouter()
@@ -20,22 +22,23 @@ export default function SignupPage() {
 
     const handleSignup = async (e) => {
         e.preventDefault()
-        setLoading(true)
         setError(null)
+        setFieldErrors({})
 
-        const { error } = await supabase.auth.signUp({
-            email,
-            password,
-        })
+        // Client-side validation
+        const errs = {}
+        if (password.length < 6) errs.password = 'Password must be at least 6 characters.'
+        if (password !== confirmPassword) errs.confirm = 'Passwords do not match.'
+        if (Object.keys(errs).length > 0) { setFieldErrors(errs); return }
 
+        setLoading(true)
+        const { error } = await supabase.auth.signUp({ email, password })
         if (error) {
             setError(error.message)
-            setLoading(false)
         } else {
-            // Success! Show verification message
             setSuccess(true)
-            setLoading(false)
         }
+        setLoading(false)
     }
 
     return (
@@ -109,11 +112,25 @@ export default function SignupPage() {
                                 <input
                                     type="password"
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}
+                                    onChange={(e) => { setPassword(e.target.value); setFieldErrors(p => ({ ...p, password: undefined })) }}
+                                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: `1px solid ${fieldErrors.password ? 'var(--error)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}
                                     placeholder="••••••••"
                                     required
                                 />
+                                {fieldErrors.password && <p style={{ color: 'var(--error)', fontSize: '0.82rem', marginTop: '6px' }}>⚠ {fieldErrors.password}</p>}
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>{t('Confirm Password')}</label>
+                                <input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e) => { setConfirmPassword(e.target.value); setFieldErrors(p => ({ ...p, confirm: undefined })) }}
+                                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: `1px solid ${fieldErrors.confirm ? 'var(--error)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', color: 'var(--text-main)' }}
+                                    placeholder="••••••••"
+                                    required
+                                />
+                                {fieldErrors.confirm && <p style={{ color: 'var(--error)', fontSize: '0.82rem', marginTop: '6px' }}>⚠ {fieldErrors.confirm}</p>}
                             </div>
 
                             <button
