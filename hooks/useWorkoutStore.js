@@ -393,26 +393,8 @@ export function useWorkoutStore(user) {
         }));
         await supabase.from('workout_logs').insert(logsPayload);
 
-        // --- XP: Write to DB then fetch new level ---
-        let newLevel = summaryData.newLevel || 1;
-        let didLevelUp = false;
-        try {
-            if (summaryData.earnedXP > 0) {
-                await supabase.rpc('increment_user_xp', { amount: summaryData.earnedXP });
-                // Fetch updated profile to detect level change
-                const { data: freshProfile } = await supabase
-                    .from('profiles')
-                    .select('level, current_xp')
-                    .eq('id', user.id)
-                    .single();
-                if (freshProfile) {
-                    newLevel = freshProfile.level || 1;
-                    didLevelUp = newLevel > (summaryData.newLevel || 1);
-                }
-            }
-        } catch (xpErr) {
-            console.warn('[IronCircle] XP increment failed (non-critical):', xpErr.message);
-        }
+        // NOTE: XP increment now happens AFTER the streak RPC below,
+        // so the multiplier is known before we write to the DB.
 
         // Feed event
         await supabase.from('feed_events').insert({
@@ -471,7 +453,7 @@ export function useWorkoutStore(user) {
             console.warn('[IronCircle] PR evaluation exception (non-critical):', prErr.message);
         }
 
-        // --- STREAK UPDATE (DB-side, dynamic grace period) ---
+        // --- STREAK UPDATE (DB-side) — must run BEFORE XP increment so we know the multiplier ---
         let streakData = { current_streak: 1, longest_streak: 1, multiplier: 1.0, was_frozen: false, grace_hours: 108 };
         try {
             const { data: sData, error: sErr } = await supabase.rpc(
@@ -486,6 +468,35 @@ export function useWorkoutStore(user) {
             }
         } catch (sErr) {
             console.warn('[IronCircle] Streak exception (non-critical):', sErr.message);
+        }
+
+        // --- XP: Apply streak multiplier, then write to DB ---
+        // Streak must be calculated above FIRST — otherwise bonus XP is never persisted!
+        let newLevel = summaryData.newLevel || 1;
+        let didLevelUp = false;
+        try {
+            const streakMultiplier = streakData.was_frozen ? 1.0 : (streakData.multiplier || 1.0); // frozen = no bonus but don't punish
+            const baseXP = summaryData.earnedXP;
+            const streakBonusXP = streakMultiplier > 1.0 ? Math.floor(baseXP * (streakMultiplier - 1)) : 0;
+            const totalXPToWrite = baseXP + streakBonusXP;
+
+            if (totalXPToWrite > 0) {
+                await supabase.rpc('increment_user_xp', { amount: totalXPToWrite });
+                const { data: freshProfile } = await supabase
+                    .from('profiles')
+                    .select('level, current_xp')
+                    .eq('id', user.id)
+                    .single();
+                if (freshProfile) {
+                    newLevel = freshProfile.level || 1;
+                    didLevelUp = newLevel > (summaryData.newLevel || 1);
+                }
+            }
+            // Augment streak data with the bonus so finishWorkout can display it
+            streakData._bonusXP = streakBonusXP;
+            streakData._totalXP = totalXPToWrite;
+        } catch (xpErr) {
+            console.warn('[IronCircle] XP increment failed (non-critical):', xpErr.message);
         }
 
         return { success: true, insertedId: inserted.id, newLevel, didLevelUp, brokenPRs, streakData };
@@ -564,23 +575,34 @@ export function useWorkoutStore(user) {
 
             const uploadResult = await Promise.race([_uploadWorkout(payload), timeoutPromise]);
 
-            // Enrich broken PRs with exercise names (client-side, RPC returns raw IDs)
+            // Enrich broken PRs with exercise names
             const namedPRs = (uploadResult.brokenPRs || []).map(pr => {
                 const exObj = exercises.find(e => e.id === pr.exercise_id);
                 return { ...pr, exerciseName: exObj?.name || pr.exercise_id };
             });
 
-            // Apply streak XP multiplier (0 if frozen, 1.0–1.5 otherwise)
+            // Streak data — multiplier and bonus XP already applied to DB inside _uploadWorkout
             const streak = uploadResult.streakData || {};
             const streakMultiplier = streak.was_frozen ? 0 : (streak.multiplier || 1.0);
-            const baseXP = summaryData.earnedXP;
-            const streakBonusXP = streakMultiplier > 1.0 ? Math.floor(baseXP * (streakMultiplier - 1)) : 0;
-            const totalXP = streak.was_frozen ? baseXP : baseXP + streakBonusXP;
+            const streakBonusXP = streak._bonusXP || 0;
+            const totalXP = streak._totalXP || summaryData.earnedXP;
+
+            // Rebuild breakdown: append streak line since calculateSessionXP ran before we knew the streak
+            const enrichedBreakdown = [...(summaryData.breakdown || [])];
+            if (streak.was_frozen) {
+                enrichedBreakdown.push({ label: `❄️ ${streak.current_streak}-Day Streak (Frozen — 0x bonus)`, value: 0, isFrozen: true });
+            } else if (streakBonusXP > 0) {
+                const tierLabel = streak.current_streak >= 20 ? '1.5x' : streak.current_streak >= 10 ? '1.25x' : '1.1x';
+                enrichedBreakdown.push({ label: `🔥 ${streak.current_streak}-Day Streak (${tierLabel})`, value: streakBonusXP });
+            } else if ((streak.current_streak || 0) > 0) {
+                enrichedBreakdown.push({ label: `${streak.current_streak}-Day Streak (No bonus yet — keep going!)`, value: 0 });
+            }
 
             const finalSummary = {
                 ...summaryData,
                 earnedXP: totalXP,
                 newTotalXP: (user.current_xp || 0) + totalXP,
+                breakdown: enrichedBreakdown,
                 newLevel: uploadResult.newLevel || summaryData.newLevel,
                 didLevelUp: uploadResult.didLevelUp || false,
                 analysis: { volumeDelta: 0, newRecords: namedPRs },
@@ -767,20 +789,24 @@ export function useWorkoutStore(user) {
             }
         });
 
-        // Streak
-        const sortedDays = [...uniqueDays].sort().reverse();
-        let streak = 0;
-        const today = new Date().toISOString().split('T')[0];
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-        if (sortedDays.includes(today) || sortedDays.includes(yesterday)) {
-            streak = 1;
-            let checkDate = new Date(sortedDays.includes(today) ? today : yesterday);
-            for (let i = 1; i < sortedDays.length; i++) {
-                checkDate.setDate(checkDate.getDate() - 1);
-                if (sortedDays.includes(checkDate.toISOString().split('T')[0])) streak++;
-                else break;
+        // Streak: Use the DB value (update_streak_on_workout RPC) — it knows the dynamic grace period.
+        // Fallback to the old day-count method only if no DB value is available.
+        const streak = user?.current_streak || (() => {
+            const sortedDays = [...uniqueDays].sort().reverse();
+            let s = 0;
+            const today = new Date().toISOString().split('T')[0];
+            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+            if (sortedDays.includes(today) || sortedDays.includes(yesterday)) {
+                s = 1;
+                let checkDate = new Date(sortedDays.includes(today) ? today : yesterday);
+                for (let i = 1; i < sortedDays.length; i++) {
+                    checkDate.setDate(checkDate.getDate() - 1);
+                    if (sortedDays.includes(checkDate.toISOString().split('T')[0])) s++;
+                    else break;
+                }
             }
-        }
+            return s;
+        })();
 
         const totalWorkouts = history.length;
         const totalVolume = history.reduce((acc, s) => acc + (s.volume || 0), 0);
