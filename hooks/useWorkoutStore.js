@@ -481,15 +481,12 @@ export function useWorkoutStore(user) {
             const totalXPToWrite = baseXP + streakBonusXP;
 
             if (totalXPToWrite > 0) {
-                await supabase.rpc('increment_user_xp', { amount: totalXPToWrite });
-                const { data: freshProfile } = await supabase
-                    .from('profiles')
-                    .select('level, current_xp')
-                    .eq('id', user.id)
-                    .single();
-                if (freshProfile) {
-                    newLevel = freshProfile.level || 1;
-                    didLevelUp = newLevel > (summaryData.newLevel || 1);
+                // increment_user_xp now returns JSONB with new_level + did_level_up
+                // so we don't need a second SELECT — the level is recalculated inside the RPC
+                const { data: xpResult } = await supabase.rpc('increment_user_xp', { amount: totalXPToWrite });
+                if (xpResult) {
+                    newLevel = xpResult.new_level || summaryData.newLevel || 1;
+                    didLevelUp = xpResult.did_level_up || false;
                 }
             }
             // Augment streak data with the bonus so finishWorkout can display it
@@ -570,7 +567,8 @@ export function useWorkoutStore(user) {
         try {
             // Race the entire upload against a 10-second timeout
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Network timeout')), 10000)
+                // 30s: gives streak RPC + XP RPC enough time on slower connections
+                setTimeout(() => reject(new Error('Network timeout')), 30000)
             );
 
             const uploadResult = await Promise.race([_uploadWorkout(payload), timeoutPromise]);
