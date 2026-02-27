@@ -411,113 +411,64 @@ export function useWorkoutStore(user) {
         }));
         await supabase.from('workout_logs').insert(logsPayload);
 
-        // NOTE: XP increment now happens AFTER the streak RPC below,
-        // so the multiplier is known before we write to the DB.
-
-        // Feed event
-        await supabase.from('feed_events').insert({
-            user_id: user.id,
-            type: 'workout',
-            data: summaryData
-        }).catch(() => { }); // Non-critical
-
-        // Community goals
-        try {
-            const { data: myCommunities } = await supabase.from('community_members')
-                .select('community_id').eq('user_id', user.id);
-            if (myCommunities?.length > 0) {
-                const communityIds = myCommunities.map(c => c.community_id);
-                const { data: activeGoals } = await supabase.from('community_goals')
-                    .select('*').in('community_id', communityIds).eq('status', 'ACTIVE');
-
-                if (activeGoals?.length > 0) {
-                    for (const goal of activeGoals) {
-                        let contribution = 0;
-                        if (goal.metric === 'VOLUME') contribution = workout.volume;
-                        else if (goal.metric === 'WORKOUTS') contribution = 1;
-                        else if (goal.metric === 'DISTANCE') contribution = workout.distance;
-                        if (contribution > 0) {
-                            await supabase.rpc('contribute_to_goal', { p_goal_id: goal.id, p_amount: contribution });
-                        }
-                    }
-                }
-            }
-        } catch (goalErr) {
-            console.warn('[IronCircle] Community goal update failed (non-critical):', goalErr.message);
-        }
-
-        // Operations / Missions
-        try {
-            await supabase.rpc('check_operations_progress', { p_workout_id: inserted.id });
-        } catch (err) {
-            console.warn('Operations check error (non-critical):', err.message);
-        }
-
-        // --- PR EVALUATION (DB-side, authoritative) ---
-        // The RPC computes all 3 pillars, upserts bests, grants 500 XP/exercise, returns broken PRs
+        // --- UNIFIED POST-WORKOUT PIPELINE ---
+        // Single atomic DB call: streak + missions + PRs + XP — all at once
+        console.log(`[IronCircle] 🚀 Running finish_workout_pipeline for workout ${inserted.id}, base XP = ${summaryData.earnedXP}`);
         let brokenPRs = [];
-        try {
-            const { data: prData, error: prError } = await supabase.rpc(
-                'evaluate_workout_prs',
-                { p_workout_id: inserted.id }
-            );
-            if (prError) {
-                console.error('[IronCircle] ❌ PR evaluation error:', prError);
-            } else {
-                brokenPRs = Array.isArray(prData) ? prData : [];
-                console.log(`[IronCircle] 🏆 ${brokenPRs.length} PR(s) broken:`, brokenPRs);
-            }
-        } catch (prErr) {
-            console.error('[IronCircle] ❌ PR evaluation exception:', prErr);
-        }
-
-        // --- STREAK UPDATE (DB-side) — must run BEFORE XP increment so we know the multiplier ---
         let streakData = { current_streak: 1, longest_streak: 1, multiplier: 1.0, was_frozen: false, grace_hours: 108 };
-        try {
-            const { data: sData, error: sErr } = await supabase.rpc(
-                'update_streak_on_workout',
-                { p_workout_id: inserted.id }
-            );
-            if (sErr) {
-                console.error('[IronCircle] ❌ Streak update error:', sErr);
-            } else if (sData) {
-                streakData = sData;
-                console.log(`[IronCircle] 🔥 Streak: ${sData.current_streak} | Multiplier: ${sData.multiplier}x | Frozen: ${sData.was_frozen}`);
-            } else {
-                console.warn('[IronCircle] ⚠️ Streak RPC returned null/empty — using defaults');
-            }
-        } catch (sErr) {
-            console.error('[IronCircle] ❌ Streak exception:', sErr);
-        }
-
-        // --- XP: Apply streak multiplier, then write to DB ---
-        // Streak must be calculated above FIRST — otherwise bonus XP is never persisted!
         let newLevel = summaryData.newLevel || 1;
         let didLevelUp = false;
-        try {
-            const streakMultiplier = streakData.was_frozen ? 1.0 : (streakData.multiplier || 1.0); // frozen = no bonus but don't punish
-            const baseXP = summaryData.earnedXP;
-            const streakBonusXP = streakMultiplier > 1.0 ? Math.floor(baseXP * (streakMultiplier - 1)) : 0;
-            const totalXPToWrite = baseXP + streakBonusXP;
+        let totalXPWritten = summaryData.earnedXP;
 
-            if (totalXPToWrite > 0) {
-                console.log(`[IronCircle] 💰 Writing ${totalXPToWrite} XP (base=${baseXP}, streak bonus=${streakBonusXP})`);
-                const { data: xpResult, error: xpError } = await supabase.rpc('increment_user_xp', { amount: totalXPToWrite });
-                if (xpError) {
-                    console.error('[IronCircle] ❌ XP increment error:', xpError);
-                } else if (xpResult) {
-                    newLevel = xpResult.new_level || summaryData.newLevel || 1;
-                    didLevelUp = xpResult.did_level_up || false;
-                    console.log(`[IronCircle] ✅ XP written. New level: ${newLevel} | Level up: ${didLevelUp}`);
-                } else {
-                    console.warn('[IronCircle] ⚠️ XP increment returned null');
+        try {
+            const { data: pipelineResult, error: pipelineError } = await supabase.rpc(
+                'finish_workout_pipeline',
+                {
+                    p_workout_id: inserted.id,
+                    p_base_xp: summaryData.earnedXP
                 }
+            );
+
+            if (pipelineError) {
+                console.error('[IronCircle] ❌ Pipeline error:', pipelineError);
+            } else if (pipelineResult) {
+                console.log('[IronCircle] ✅ Pipeline result:', pipelineResult);
+
+                // Streak
+                if (pipelineResult.streak) {
+                    streakData = pipelineResult.streak;
+                    console.log(`[IronCircle] 🔥 Streak: ${streakData.current_streak} | Multiplier: ${streakData.multiplier}x`);
+                }
+
+                // Broken PRs
+                brokenPRs = Array.isArray(pipelineResult.broken_prs) ? pipelineResult.broken_prs : [];
+                console.log(`[IronCircle] 🏆 ${brokenPRs.length} PR(s):`, brokenPRs);
+
+                // XP
+                const xpResult = pipelineResult.xp || {};
+                if (xpResult.error) {
+                    console.error('[IronCircle] ❌ XP error inside pipeline:', xpResult.error);
+                } else {
+                    newLevel = xpResult.new_level || newLevel;
+                    didLevelUp = xpResult.did_level_up || false;
+                    totalXPWritten = pipelineResult.total_xp || summaryData.earnedXP;
+                    console.log(`[IronCircle] 💰 XP written: ${totalXPWritten} | Level: ${newLevel} | LevelUp: ${didLevelUp}`);
+                }
+
+                // Augment streak data for UI display
+                streakData._bonusXP = pipelineResult.bonus_xp || 0;
+                streakData._totalXP = totalXPWritten;
+
+                // Ops/Missions result
+                const opsResult = pipelineResult.operations;
+                if (opsResult?.completed_count > 0) {
+                    console.log(`[IronCircle] ✅ ${opsResult.completed_count} mission(s) completed:`, opsResult.completed_names);
+                }
+            } else {
+                console.warn('[IronCircle] ⚠️ Pipeline returned null — XP might not have been written');
             }
-            // Augment streak data with the bonus so finishWorkout can display it
-            streakData._bonusXP = streakBonusXP;
-            streakData._totalXP = totalXPToWrite;
-        } catch (xpErr) {
-            console.warn('[IronCircle] XP increment failed (non-critical):', xpErr.message);
+        } catch (pipelineErr) {
+            console.error('[IronCircle] ❌ Pipeline exception:', pipelineErr);
         }
 
         return { success: true, insertedId: inserted.id, newLevel, didLevelUp, brokenPRs, streakData };

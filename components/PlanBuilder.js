@@ -243,7 +243,7 @@ export default function PlanBuilder({ existingPlan, onClose }) {
                                             }}
                                         >
                                             <option value="">{isFlex ? 'Select Routine...' : 'Rest Day 💤'}</option>
-                                            {templates.map(t => (
+                                            {(templates || []).map(t => (
                                                 <option key={t.id} value={t.id}>{t.name}</option>
                                             ))}
                                         </select>
