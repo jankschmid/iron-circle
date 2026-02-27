@@ -462,13 +462,13 @@ export function useWorkoutStore(user) {
                 { p_workout_id: inserted.id }
             );
             if (prError) {
-                console.warn('[IronCircle] PR evaluation error (non-critical):', prError.message);
-            } else if (Array.isArray(prData)) {
-                brokenPRs = prData;
+                console.error('[IronCircle] ❌ PR evaluation error:', prError);
+            } else {
+                brokenPRs = Array.isArray(prData) ? prData : [];
                 console.log(`[IronCircle] 🏆 ${brokenPRs.length} PR(s) broken:`, brokenPRs);
             }
         } catch (prErr) {
-            console.warn('[IronCircle] PR evaluation exception (non-critical):', prErr.message);
+            console.error('[IronCircle] ❌ PR evaluation exception:', prErr);
         }
 
         // --- STREAK UPDATE (DB-side) — must run BEFORE XP increment so we know the multiplier ---
@@ -479,13 +479,15 @@ export function useWorkoutStore(user) {
                 { p_workout_id: inserted.id }
             );
             if (sErr) {
-                console.warn('[IronCircle] Streak update error (non-critical):', sErr.message);
+                console.error('[IronCircle] ❌ Streak update error:', sErr);
             } else if (sData) {
                 streakData = sData;
                 console.log(`[IronCircle] 🔥 Streak: ${sData.current_streak} | Multiplier: ${sData.multiplier}x | Frozen: ${sData.was_frozen}`);
+            } else {
+                console.warn('[IronCircle] ⚠️ Streak RPC returned null/empty — using defaults');
             }
         } catch (sErr) {
-            console.warn('[IronCircle] Streak exception (non-critical):', sErr.message);
+            console.error('[IronCircle] ❌ Streak exception:', sErr);
         }
 
         // --- XP: Apply streak multiplier, then write to DB ---
@@ -499,12 +501,16 @@ export function useWorkoutStore(user) {
             const totalXPToWrite = baseXP + streakBonusXP;
 
             if (totalXPToWrite > 0) {
-                // increment_user_xp now returns JSONB with new_level + did_level_up
-                // so we don't need a second SELECT — the level is recalculated inside the RPC
-                const { data: xpResult } = await supabase.rpc('increment_user_xp', { amount: totalXPToWrite });
-                if (xpResult) {
+                console.log(`[IronCircle] 💰 Writing ${totalXPToWrite} XP (base=${baseXP}, streak bonus=${streakBonusXP})`);
+                const { data: xpResult, error: xpError } = await supabase.rpc('increment_user_xp', { amount: totalXPToWrite });
+                if (xpError) {
+                    console.error('[IronCircle] ❌ XP increment error:', xpError);
+                } else if (xpResult) {
                     newLevel = xpResult.new_level || summaryData.newLevel || 1;
                     didLevelUp = xpResult.did_level_up || false;
+                    console.log(`[IronCircle] ✅ XP written. New level: ${newLevel} | Level up: ${didLevelUp}`);
+                } else {
+                    console.warn('[IronCircle] ⚠️ XP increment returned null');
                 }
             }
             // Augment streak data with the bonus so finishWorkout can display it
