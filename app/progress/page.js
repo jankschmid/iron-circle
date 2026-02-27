@@ -65,13 +65,19 @@ export default function ProgressPage() {
 
     const getMuscleColor = (muscle) => {
         const colors = {
-            'Chest': 'var(--primary)',
-            'Back': '#9b59b6',
-            'Legs': '#3498db',
-            'Arms': '#f1c40f',
-            'Shoulders': '#e74c3c',
-            'Abs': '#2ecc71',
-            'Other': '#95a5a6'
+            'Chest': 'var(--primary)',   // yellow
+            'Back': '#9b59b6',           // purple
+            'Legs': '#3498db',           // blue
+            'Biceps': '#f1c40f',           // gold
+            'Triceps': '#e67e22',           // orange
+            'Shoulders': '#e74c3c',           // red
+            'Core': '#2ecc71',           // green
+            'Calves': '#1abc9c',           // teal
+            'Traps': '#f39c12',           // amber
+            'Neck': '#fd79a8',           // pink
+            'Cardio': '#00cec9',           // cyan
+            'Full Body': '#a29bfe',           // lavender
+            'Other': '#95a5a6'            // grey
         };
         return colors[muscle] || colors['Other'];
     };
