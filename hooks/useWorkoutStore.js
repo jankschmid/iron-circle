@@ -226,6 +226,24 @@ export function useWorkoutStore(user) {
         foregroundService.stop();
     };
 
+    // Delete a past workout session by ID
+    const deleteSession = async (sessionId) => {
+        const { error } = await supabase.from('workout_sessions').delete().eq('id', sessionId);
+        if (error) {
+            console.error('[IronCircle] deleteSession error:', error.message);
+            throw error;
+        }
+    };
+
+    // Update a past workout session (e.g. edit times)
+    const updateSession = async (sessionId, updates) => {
+        const { error } = await supabase.from('workout_sessions').update(updates).eq('id', sessionId);
+        if (error) {
+            console.error('[IronCircle] updateSession error:', error.message);
+            throw error;
+        }
+    };
+
     // --- WORKOUT ACTIONS ---
     const startWorkout = async (templateId, planId = null, dayId = null) => {
         if (!user) return alert("Please sign in.");
@@ -957,6 +975,8 @@ export function useWorkoutStore(user) {
 
         startTrackingSession,
         stopTrackingSession,
+        deleteSession,
+        updateSession,
         syncPendingWorkout,
         checkInGym: startTrackingSession, // Wrapper Alias
 

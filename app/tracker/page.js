@@ -272,18 +272,18 @@ function TrackerContent() {
 
     const confirmDelete = async () => {
         if (!deletingSessionId) return;
+        const idToDelete = deletingSessionId;
+        setDeletingSessionId(null); // Close dialog immediately
         try {
             // Optimistic update local state
-            setHistory(prev => prev.filter(h => h.id !== deletingSessionId));
-
-            await deleteSession(deletingSessionId);
-            setDeletingSessionId(null);
-
-            // Optional: Refetch to be 100% sure, but local update gives instant feedback
-            // await fetchHistory(); 
+            setHistory(prev => prev.filter(h => h.id !== idToDelete));
+            await deleteSession(idToDelete);
+            // Refetch to confirm server state
+            await fetchHistory();
         } catch (err) {
             console.error(err);
-            // Store handles alert.
+            // Restore on failure
+            await fetchHistory();
         }
     };
 
