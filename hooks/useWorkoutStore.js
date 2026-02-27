@@ -9,7 +9,7 @@ import { foregroundService } from '@/lib/foregroundService';
 
 const supabase = createClient();
 
-export function useWorkoutStore(user) {
+export function useWorkoutStore(user, refreshUserProfile) {
     const toast = useToast();
     const [activeWorkout, setActiveWorkout] = useState(null);
     const [workoutSummary, setWorkoutSummary] = useState(null);
@@ -467,6 +467,12 @@ export function useWorkoutStore(user) {
             } else {
                 console.warn('[IronCircle] ⚠️ Pipeline returned null — XP might not have been written');
             }
+
+            // Always refresh the user profile from DB so Me tab shows new XP/level
+            if (refreshUserProfile) {
+                refreshUserProfile().catch(e => console.warn('[IronCircle] Profile refresh failed:', e.message));
+            }
+
         } catch (pipelineErr) {
             console.error('[IronCircle] ❌ Pipeline exception:', pipelineErr);
         }

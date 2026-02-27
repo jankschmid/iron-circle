@@ -208,6 +208,14 @@ export function useUserStore() {
 
     const updateUserProfile = (updates) => setUser(prev => ({ ...prev, ...updates }));
 
+    // Re-fetch the full profile from DB — call this after any server-side XP/level change
+    const refreshUserProfile = async () => {
+        if (!user?.id) return;
+        const session = await supabase.auth.getSession();
+        const refreshed = await fetchProfile(session.data.session);
+        if (refreshed) setUser(refreshed);
+    };
+
     const updateProfileData = async (updates) => {
         const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
         if (!error) setUser(prev => ({ ...prev, ...updates }));
@@ -229,6 +237,7 @@ export function useUserStore() {
         gyms, setGyms, // Nearby gyms
         fetchGyms,
         updateUserProfile,
+        refreshUserProfile,
         updateProfileData,
         updatePrivacySettings,
         toggleUnits,
