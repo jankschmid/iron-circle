@@ -276,6 +276,12 @@ export function useSocialStore(user, workoutSession) {
             if (error.code === '23505') return;
             throw error;
         }
+
+        if (type === 'hype') {
+            supabase.rpc('check_event_achievements', { p_event_type: 'HYPE_SENT' }).then(({ data: achievements }) => {
+                if (achievements?.length > 0) achievements.forEach(() => setTimeout(() => toast.success('🎖️ Achievement Unlocked!'), 500));
+            });
+        }
     };
 
     // --- GROUP DASHBOARD ---

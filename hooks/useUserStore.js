@@ -218,7 +218,12 @@ export function useUserStore() {
 
     const updateProfileData = async (updates) => {
         const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
-        if (!error) setUser(prev => ({ ...prev, ...updates }));
+        if (!error) {
+            setUser(prev => ({ ...prev, ...updates }));
+            supabase.rpc('check_event_achievements', { p_event_type: 'PROFILE_UPDATED' }).then(({ data: achievements }) => {
+                if (achievements?.length > 0) achievements.forEach(() => setTimeout(() => toast.success('🎖️ Achievement Unlocked!'), 500));
+            });
+        }
     };
 
     const updatePrivacySettings = async (settings) => {

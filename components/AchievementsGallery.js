@@ -2,192 +2,301 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
-import { Lock, Star, Trophy, Medal, Shield } from 'lucide-react';
-import { useTranslation } from '@/context/TranslationContext';
+import { Lock } from 'lucide-react';
+
+const CATEGORY_META = {
+    initiation: { label: 'The Initiation', color: '#60BEF2' },
+    grind: { label: 'The Grind', color: '#F2A900' },
+    heavy_duty: { label: 'Heavy Duty', color: '#E85D75' },
+    secret: { label: 'Secret', color: '#A78BFA' },
+    social: { label: 'Social & Community', color: '#4ADE80' },
+};
+
+const CATEGORY_ORDER = ['initiation', 'grind', 'heavy_duty', 'secret', 'social'];
 
 export default function AchievementsGallery({ userId }) {
-    const { t } = useTranslation();
     const [achievements, setAchievements] = useState([]);
-    const [unlocked, setUnlocked] = useState(new Set());
+    const [unlocked, setUnlocked] = useState(new Map()); // id → unlocked_at
     const [loading, setLoading] = useState(true);
+    const [selected, setSelected] = useState(null);
     const [supabase] = useState(() => createClient());
 
     useEffect(() => {
-        async function loadData() {
-            if (!userId) return;
-
-            // Fetch all achievements
-            const { data: allAchievements } = await supabase
-                .from('achievements')
-                .select('*')
-                .order('xp_reward', { ascending: true }); // order by difficulty/reward
-
-            // Fetch user's unlocked achievements
-            const { data: userAchievements } = await supabase
-                .from('user_achievements')
-                .select('achievement_id, unlocked_at')
-                .eq('user_id', userId);
-
-            if (allAchievements) {
-                setAchievements(allAchievements);
-            }
-            if (userAchievements) {
-                const unlockedSet = new Set(userAchievements.map(ua => ua.achievement_id));
-                setUnlocked(unlockedSet);
-            }
+        if (!userId) return;
+        async function load() {
+            const [{ data: all }, { data: mine }] = await Promise.all([
+                supabase.from('achievements').select('*').order('xp_reward', { ascending: true }),
+                supabase.from('user_achievements').select('achievement_id, unlocked_at').eq('user_id', userId),
+            ]);
+            setAchievements(all || []);
+            const map = new Map((mine || []).map(r => [r.achievement_id, r.unlocked_at]));
+            setUnlocked(map);
             setLoading(false);
         }
-
-        loadData();
+        load();
     }, [userId, supabase]);
 
     if (loading) return (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '2px', padding: '32px' }}>
-            {t('Loading Dossier...')}
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '32px' }}>
+            Loading achievements...
         </div>
     );
+
+    const unlockedCount = unlocked.size;
+    const totalCount = achievements.length;
+
+    // Group by category
+    const grouped = {};
+    for (const cat of CATEGORY_ORDER) grouped[cat] = [];
+    for (const a of achievements) {
+        (grouped[a.category] = grouped[a.category] || []).push(a);
+    }
 
     return (
         <div style={{ width: '100%' }}>
-            <h3 style={{
-                fontSize: '1rem',
-                fontWeight: '900',
-                color: '#fff',
-                marginBottom: '16px',
-                display: 'flex',
-                items: 'center',
-                gap: '8px',
-                textTransform: 'uppercase',
-                letterSpacing: '1px'
-            }}>
-                <span style={{ color: '#FFD700' }}>🎖️</span> {t('Service Record')}
-            </h3>
 
+            {/* Header */}
             <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px'
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px'
             }}>
-                {achievements.map((achievement) => {
-                    const isUnlocked = unlocked.has(achievement.id);
-                    const isHidden = achievement.is_hidden && !isUnlocked;
-
-                    if (isHidden) {
-                        return (
-                            <div key={achievement.id} style={{
-                                aspectRatio: '1/1',
-                                background: '#0a0a0a',
-                                border: '1px solid var(--border)',
-                                borderRadius: '8px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: '8px',
-                                opacity: 0.3,
-                                cursor: 'help'
-                            }} title="Secret Achievement">
-                                <Lock size={24} color="var(--text-muted)" style={{ marginBottom: '8px' }} />
-                                <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>CLASSIFIED</div>
-                                <div style={{ fontSize: '0.5rem', color: 'var(--text-dim)', marginTop: '4px' }}>???</div>
-                            </div>
-                        );
-                    }
-
-                    return (
-                        <div
-                            key={achievement.id}
-                            style={{
-                                aspectRatio: '1/1',
-                                position: 'relative',
-                                border: isUnlocked ? '1px solid rgba(255, 215, 0, 0.3)' : '1px solid var(--border)',
-                                borderRadius: '8px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: '12px',
-                                textAlign: 'center',
-                                transition: 'all 0.2s',
-                                background: isUnlocked
-                                    ? 'linear-gradient(135deg, rgba(20,20,20,1) 0%, rgba(30,30,30,1) 100%)'
-                                    : '#0a0a0a',
-                                boxShadow: isUnlocked ? '0 0 15px rgba(255, 215, 0, 0.1)' : 'none',
-                                filter: isUnlocked ? 'none' : 'grayscale(100%) opacity(0.6)'
-                            }}
-                        >
-                            {/* Icon Placeholder */}
-                            <div style={{
-                                marginBottom: '8px',
-                                padding: '8px',
-                                borderRadius: '50%',
-                                background: isUnlocked ? 'rgba(255, 215, 0, 0.1)' : 'var(--surface-highlight)',
-                                color: isUnlocked ? '#FFD700' : 'var(--text-muted)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}>
-                                <AchievementIcon iconKey={achievement.icon_key || ''} />
-                            </div>
-
-                            <div style={{
-                                fontSize: '0.75rem',
-                                fontWeight: 'bold',
-                                lineHeight: '1.2',
-                                marginBottom: '4px',
-                                color: isUnlocked ? '#fff' : 'var(--text-muted)'
-                            }}>
-                                {achievement.name}
-                            </div>
-
-                            <div style={{
-                                fontSize: '0.6rem',
-                                color: 'var(--text-muted)',
-                                lineHeight: '1.1',
-                                padding: '0 4px',
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden'
-                            }}>
-                                {achievement.description}
-                            </div>
-
-                            {/* Reward Badge */}
-                            <div style={{
-                                position: 'absolute',
-                                top: '4px',
-                                right: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '2px'
-                            }}>
-                                <span style={{
-                                    fontSize: '0.55rem',
-                                    fontFamily: 'monospace',
-                                    color: isUnlocked ? '#FFD700' : 'var(--text-dim)'
-                                }}>
-                                    {achievement.xp_reward}XP
-                                </span>
-                            </div>
-                        </div>
-                    );
-                })}
+                <h3 style={{
+                    fontSize: '1rem',
+                    fontWeight: '900',
+                    color: '#fff',
+                    margin: 0,
+                    textTransform: 'uppercase',
+                    letterSpacing: '1px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                }}>
+                    🎖️ Achievements
+                </h3>
+                <span style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                    background: 'var(--surface-highlight)',
+                    padding: '4px 10px',
+                    borderRadius: '20px'
+                }}>
+                    {unlockedCount} / {totalCount}
+                </span>
             </div>
+
+            {/* Overall progress bar */}
+            <div style={{
+                height: '4px',
+                background: 'var(--border)',
+                borderRadius: '4px',
+                marginBottom: '28px',
+                overflow: 'hidden'
+            }}>
+                <div style={{
+                    height: '100%',
+                    width: `${totalCount > 0 ? (unlockedCount / totalCount) * 100 : 0}%`,
+                    background: 'linear-gradient(90deg, #FFD700, #F2A900)',
+                    borderRadius: '4px',
+                    transition: 'width 0.6s ease'
+                }} />
+            </div>
+
+            {/* Categories */}
+            {CATEGORY_ORDER.map(cat => {
+                const items = grouped[cat] || [];
+                if (items.length === 0) return null;
+                const meta = CATEGORY_META[cat] || { label: cat, color: '#888' };
+                const catUnlocked = items.filter(a => unlocked.has(a.id)).length;
+
+                return (
+                    <div key={cat} style={{ marginBottom: '28px' }}>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '12px'
+                        }}>
+                            <span style={{
+                                fontSize: '0.7rem',
+                                fontWeight: '700',
+                                color: meta.color,
+                                textTransform: 'uppercase',
+                                letterSpacing: '2px'
+                            }}>
+                                {meta.label}
+                            </span>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                {catUnlocked}/{items.length}
+                            </span>
+                        </div>
+
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
+                            gap: '10px'
+                        }}>
+                            {items.map(a => {
+                                const isUnlocked = unlocked.has(a.id);
+                                const isHidden = a.is_hidden && !isUnlocked;
+
+                                if (isHidden) {
+                                    return (
+                                        <div
+                                            key={a.id}
+                                            style={{
+                                                aspectRatio: '1/1',
+                                                background: '#0a0a0a',
+                                                border: '1px solid var(--border)',
+                                                borderRadius: '12px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                opacity: 0.35,
+                                                cursor: 'help'
+                                            }}
+                                            title="Secret Achievement — keep working out to discover it!"
+                                        >
+                                            <Lock size={20} color="var(--text-muted)" />
+                                            <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontFamily: 'monospace', letterSpacing: '1px' }}>
+                                                SECRET
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                const unlockedAt = unlocked.get(a.id);
+
+                                return (
+                                    <div
+                                        key={a.id}
+                                        onClick={() => setSelected(selected?.id === a.id ? null : a)}
+                                        style={{
+                                            aspectRatio: '1/1',
+                                            position: 'relative',
+                                            borderRadius: '12px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '10px',
+                                            textAlign: 'center',
+                                            cursor: 'pointer',
+                                            transition: 'transform 0.15s, box-shadow 0.15s',
+                                            border: isUnlocked
+                                                ? `1px solid ${meta.color}55`
+                                                : '1px solid var(--border)',
+                                            background: isUnlocked
+                                                ? `linear-gradient(135deg, #141414 0%, #1e1e1e 100%)`
+                                                : '#0a0a0a',
+                                            boxShadow: isUnlocked
+                                                ? `0 0 12px ${meta.color}22`
+                                                : 'none',
+                                            filter: isUnlocked ? 'none' : 'grayscale(100%) opacity(0.5)',
+                                        }}
+                                    >
+                                        {/* Emoji */}
+                                        <div style={{ fontSize: '1.6rem', marginBottom: '6px', lineHeight: 1 }}>
+                                            {a.emoji}
+                                        </div>
+
+                                        {/* Name */}
+                                        <div style={{
+                                            fontSize: '0.6rem',
+                                            fontWeight: '700',
+                                            lineHeight: '1.2',
+                                            color: isUnlocked ? '#fff' : 'var(--text-muted)',
+                                            marginBottom: '2px'
+                                        }}>
+                                            {a.name}
+                                        </div>
+
+                                        {/* XP badge */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '5px',
+                                            right: '5px',
+                                            fontSize: '0.5rem',
+                                            fontFamily: 'monospace',
+                                            color: isUnlocked ? '#FFD700' : 'var(--text-dim)',
+                                            background: isUnlocked ? 'rgba(255,215,0,0.1)' : 'transparent',
+                                            padding: '1px 4px',
+                                            borderRadius: '4px'
+                                        }}>
+                                            {a.xp_reward}XP
+                                        </div>
+
+                                        {/* Unlocked indicator */}
+                                        {isUnlocked && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '5px',
+                                                left: '5px',
+                                                fontSize: '0.55rem',
+                                                color: meta.color
+                                            }}>✓</div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })}
+
+            {/* Detail popup when an achievement is tapped */}
+            {selected && (
+                <div
+                    onClick={() => setSelected(null)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.8)',
+                        zIndex: 1000,
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        padding: '0'
+                    }}
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            width: '100%',
+                            background: 'var(--surface)',
+                            borderRadius: '20px 20px 0 0',
+                            padding: '28px 24px 40px',
+                            borderTop: `3px solid ${CATEGORY_META[selected.category]?.color || '#FFD700'}`
+                        }}
+                    >
+                        <div style={{ fontSize: '3rem', textAlign: 'center', marginBottom: '12px' }}>
+                            {selected.emoji}
+                        </div>
+                        <div style={{ textAlign: 'center', fontWeight: '900', fontSize: '1.2rem', color: '#fff', marginBottom: '8px' }}>
+                            {selected.name}
+                        </div>
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px', lineHeight: '1.5' }}>
+                            {selected.description}
+                        </div>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            gap: '16px',
+                            fontSize: '0.8rem',
+                            color: 'var(--text-muted)'
+                        }}>
+                            <span>🏅 {selected.xp_reward} XP Reward</span>
+                            {unlocked.has(selected.id) && (
+                                <span style={{ color: '#4ADE80' }}>
+                                    ✓ Unlocked {new Date(unlocked.get(selected.id)).toLocaleDateString()}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
-}
-
-function AchievementIcon({ iconKey }) {
-    // Simple mapping for now
-    if (!iconKey) return <Trophy size={20} />;
-
-    if (iconKey.includes('bootcamp')) return <Shield size={20} />;
-    if (iconKey.includes('dawn')) return <Star size={20} />;
-    if (iconKey.includes('night')) return <Star size={20} />;
-    if (iconKey.includes('friend') || iconKey.includes('squad')) return <Trophy size={20} />;
-    if (iconKey.includes('titan')) return <Medal size={20} />;
-    if (iconKey.includes('officer')) return <Medal size={20} />;
-
-    return <Trophy size={20} />;
 }

@@ -464,6 +464,18 @@ export function useWorkoutStore(user, refreshUserProfile) {
                 if (opsResult?.completed_count > 0) {
                     console.log(`[IronCircle] ✅ ${opsResult.completed_count} mission(s) completed:`, opsResult.completed_names);
                 }
+
+                // New achievements
+                const newAchievements = pipelineResult.new_achievements || [];
+                if (newAchievements.length > 0) {
+                    console.log(`[IronCircle] 🎖️ ${newAchievements.length} achievement(s) unlocked:`, newAchievements);
+                    newAchievements.forEach(id => {
+                        // Small delay so toasts don't stack all at once
+                        setTimeout(() => {
+                            toast(`🎖️ Achievement Unlocked!`, 'success');
+                        }, 500);
+                    });
+                }
             } else {
                 console.warn('[IronCircle] ⚠️ Pipeline returned null — XP might not have been written');
             }
@@ -702,7 +714,12 @@ export function useWorkoutStore(user, refreshUserProfile) {
             visibility: template.visibility || 'public',
             exercises: template.exercises
         }).select().single();
-        if (!error && data) setWorkoutTemplates(prev => [...prev, data]);
+        if (!error && data) {
+            setWorkoutTemplates(prev => [...prev, data]);
+            supabase.rpc('check_event_achievements', { p_event_type: 'TEMPLATE_CREATION' }).then(({ data: achievements }) => {
+                if (achievements?.length > 0) achievements.forEach(() => setTimeout(() => toast.success('🎖️ Achievement Unlocked!'), 500));
+            });
+        }
         return data;
     };
 
