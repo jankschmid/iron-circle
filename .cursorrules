@@ -1,0 +1,42 @@
+# Terminal & Git Rules
+I am using Windows PowerShell. NEVER use `&&` to chain terminal commands. You MUST always use `;` instead (e.g., `git add . ; git commit -m "..."`).
+Keep Git commit messages clean, concise, and use conventional commits (feat:, fix:, refactor:).
+
+# Project Context
+The app is called "IronCircle". It is a fitness tracking and social networking app.
+Core themes: Gamification (XP, Leveling, Streaks, Achievements), Offline-First Architecture, and Social Hype.
+The primary UI color scheme is Dark Mode default with Yellow/Gold accents.
+
+# Tech Stack & Framework Rules
+- Framework: Next.js (App Router, completely avoid old Pages Router paradigms).
+- Styling: Tailwind CSS. Never use standard CSS files or inline styles unless absolutely necessary.
+- Backend/Database: Supabase.
+- State Management: React Hooks (useState, useEffect) and Zustand (if applicable).
+
+# Code Style & Architecture
+- Always write Functional Components with Arrow Functions.
+- Prioritize early returns to keep code readable and avoid deep nesting.
+- When handling Supabase queries, always include proper error handling and gracefully manage `null` or loading states.
+- DO NOT remove or modify the `setup_completed` routing guard or the `offline-first` localStorage logic in the workout tracker without explicit permission.
+
+# UI / UX Guidelines
+- Build for mobile-first. Ensure buttons and touch targets are "fat-finger-proof".
+- When using icons, prefer `lucide-react` if available.
+- Do not use overlapping UI elements on mobile views. Use Action Bars instead.
+
+# UI & Feedback Rules
+NEVER use `console.log`, `console.error`, `alert()`, or `prompt()` to display information, state, or errors to the user. 
+Always build full, proper UI elements (e.g., Toast notifications via `@/components/ToastProvider`, Modals, inline text messages, or loading spinners) to provide visual feedback directly within the app interface.
+
+# Supabase & Database Rules
+- **Migrations & Schema**: Always check the live database schema before writing migrations (e.g. `ALTER TABLE`). Do not rely blindly on old migration files, as `remote_schema.sql` or manual changes might differ (e.g., unexpected `NOT NULL` columns or UUID vs TEXT types).
+- **Idempotency**: Write migrations to be safely repeatable (use `CREATE OR REPLACE FUNCTION`, `IF NOT EXISTS`, `ON CONFLICT DO UPDATE`).
+- **Debugging**: If a Supabase migration push fails, DO NOT blindly guess the fix. Run the command with `--debug` or check the logs to identify the exact SQL line and constraint causing the error.
+- **Atomic Operations**: For complex multi-step updates (like saving a workout, calculating XP, and updating streaks), use a single atomic Postgres RPC (e.g., `finish_workout_pipeline`) instead of making 4-5 sequential API calls from the frontend to avoid race conditions.
+
+# Client-Side State & Sync
+- **Data Freshness**: Whenever backend state changes significantly (like Leveling up, earning XP, or completing a mission), ALWAYS trigger a global store refresh (e.g., `refreshUserProfile()`) to ensure the UI (like the 'Me' tab) instantly reflects the changes without requiring a hard reload.
+- **Null Safety**: Always use optional chaining (`?.`) and fallback values (`|| []`) when mapping over arrays or accessing deeply nested store objects to prevent `TypeError: undefined is not a function` crashes.
+
+# Core Gamification & Streak Logic
+NEVER implement or revert to a "daily app presence" model for streaks. The logic for when a streak ends MUST always be based on the user's personal training frequency (the dynamic 'Grace Period' calculated from their yearly_workout_goal). Furthermore, the XP system must always maintain a scalable XP multiplier as a reward for keeping an active streak. Do not overwrite or simplify this logic.
