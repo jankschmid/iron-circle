@@ -58,7 +58,7 @@ export default function ProfileStatsPage() {
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
-            <header style={{ paddingTop: 'env(safe-area-inset-top, 40px)', paddingBottom: '32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <header style={{ paddingTop: 'calc(max(env(safe-area-inset-top), 40px))', paddingBottom: '32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <Link href="/profile/settings" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>←</Link>
                 <h1 style={{ fontSize: '1.5rem' }}>{t('My Profile')}</h1>
             </header>

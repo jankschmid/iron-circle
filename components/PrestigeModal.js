@@ -239,7 +239,7 @@ export default function PrestigeModal({ isOpen, onClose, currentPrestige, curren
     return (
         <div style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 9999,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'calc(env(safe-area-inset-top, 40px) + 20px) 20px calc(env(safe-area-inset-bottom, 20px) + 20px)', overflowY: 'auto'
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'calc(max(env(safe-area-inset-top), 40px) + 20px) 20px calc(max(env(safe-area-inset-bottom), 40px) + 20px)', overflowY: 'auto'
         }}>
             <div style={{
                 background: 'linear-gradient(145deg, #1a1a1a, #000000)',

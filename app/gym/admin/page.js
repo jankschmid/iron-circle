@@ -264,7 +264,11 @@ function GymAdminPage() {
 
         const { data: news } = await supabase.from('gym_news').select('*').eq('gym_id', gymId).order('created_at', { ascending: false });
         const { data: events } = await supabase.from('gym_events').select('*').eq('gym_id', gymId).order('event_date', { ascending: true });
-        const { data: challenges } = await supabase.from('gym_challenges').select('*').eq('gym_id', gymId).order('end_date', { ascending: true });
+        const { data: challenges } = await supabase
+            .from('gym_challenges')
+            .select('*, teams:challenge_teams(id, team_name)')
+            .eq('gym_id', gymId)
+            .order('end_date', { ascending: true });
 
         setContentData({
             news: news || [],

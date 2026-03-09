@@ -622,7 +622,7 @@ function TeamSelectionModal({ challenge, onClose, onJoin, supabase, user, create
     const [teams, setTeams] = useState([]);
     const [newTeamName, setNewTeamName] = useState('');
     const [loading, setLoading] = useState(true);
-    const { toast } = useToast();
+    const toast = useToast();
 
     useEffect(() => {
         const fetchTeams = async () => {
@@ -718,7 +718,7 @@ function SubmitResultModal({ challenge, onClose }) {
     const [note, setNote] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const { toast } = useToast();
+    const toast = useToast();
 
     const handleSubmit = async () => {
         if (!value) return toast.error(t("Please enter a value"));
@@ -735,7 +735,7 @@ function SubmitResultModal({ challenge, onClose }) {
             if (error) throw error;
 
             if (data.success) {
-                toast.success(t("Result Submitted! Pending verification."));
+                toast.success(t("Result Submitted!"));
                 onClose();
             } else {
                 toast.error(`${t("Submission failed")}: ${data.message}`);
