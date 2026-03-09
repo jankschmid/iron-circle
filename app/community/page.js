@@ -12,7 +12,8 @@ function CommunityContent() {
     const searchParams = useSearchParams();
     const communityId = searchParams.get('id');
     const gymIdParam = searchParams.get('gymId');
-    const { user, joinCommunity, gyms } = useStore();
+    const action = searchParams.get('action');
+    const { user, joinCommunity, gyms, startTrackingSession, workoutSession } = useStore();
     const supabase = createClient();
     const router = useRouter();
 
@@ -33,6 +34,18 @@ function CommunityContent() {
             setError("No Community ID provided.");
         }
     }, [communityId, gymIdParam, user?.gymId]);
+
+    // Handle QR Auto-Checkin
+    useEffect(() => {
+        // isMember must be calculated here so we can read it, wait, we can calculate it earlier.
+        // Actually, let's just use user?.gyms?
+        const memberCheck = community && user?.gyms?.some(g => g.id === community.gym_id);
+
+        if (memberCheck && action === 'qr_scan' && community && !workoutSession) {
+            startTrackingSession(community.gym_id, 'manual', community.gyms?.name || community.name);
+            router.replace(`/community?id=${community.id}`);
+        }
+    }, [user, community, action, workoutSession, startTrackingSession, router]);
 
     const fetchPrimaryHub = async (gId) => {
         fetchCommunityByGym(gId);
@@ -68,7 +81,8 @@ function CommunityContent() {
 
     const handleJoin = async () => {
         if (!user) {
-            router.push(`/login?returnUrl=/community?id=${communityId}`);
+            const currentParams = new URLSearchParams(searchParams.toString());
+            router.push(`/login?returnUrl=${encodeURIComponent(`/community?${currentParams.toString()}`)}`);
             return;
         }
 

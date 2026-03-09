@@ -43,12 +43,17 @@ export function useSocialStore(user, workoutSession) {
         // Initialize map
         friendIds.forEach(id => liveMap[id] = { tracker: null, workout: null });
 
+        const MAX_SESSION_MS = 14 * 60 * 60 * 1000; // 14 hours
         activeSessions?.forEach(s => {
-            liveMap[s.user_id].tracker = { location: s.gyms?.name, startTime: s.start_time };
+            if (new Date() - new Date(s.start_time) < MAX_SESSION_MS) {
+                liveMap[s.user_id].tracker = { location: s.gyms?.name, startTime: s.start_time };
+            }
         });
 
         activeWorkouts?.forEach(w => {
-            liveMap[w.user_id].workout = { name: w.name, detail: w.name, status: 'Active', startTime: w.start_time };
+            if (new Date() - new Date(w.start_time) < MAX_SESSION_MS) {
+                liveMap[w.user_id].workout = { name: w.name, detail: w.name, status: 'Active', startTime: w.start_time };
+            }
         });
 
         setFriends(profiles.map(p => ({
@@ -142,6 +147,43 @@ export function useSocialStore(user, workoutSession) {
             // Hide Chat? Maybe leave it for now.
         }
         return { success: true };
+    };
+
+    const joinChallenge = async (challengeId, teamId = null) => {
+        if (!user) {
+            toast.error("Please login to join this challenge.");
+            return false;
+        }
+
+        const payload = { challenge_id: challengeId, user_id: user.id };
+        if (teamId) payload.team_id = teamId;
+
+        const { error } = await supabase.from('challenge_participants').insert(payload);
+        if (error) {
+            if (error.code === '23505') {
+                toast.success("You are already participating!");
+                return true;
+            }
+            toast.error(error.message);
+            return false;
+        }
+        toast.success("Challenge Accepted! Let's get to work.");
+        return true;
+    };
+
+    const createChallengeTeam = async (challengeId, teamName) => {
+        if (!user) return null;
+        const { data, error } = await supabase.from('challenge_teams').insert({
+            challenge_id: challengeId,
+            team_name: teamName,
+            creator_id: user.id
+        }).select().single();
+
+        if (error) {
+            toast.error(error.message);
+            return null;
+        }
+        return data.id;
     };
 
     const getCommunityMembers = async (cId) => {
@@ -310,7 +352,7 @@ export function useSocialStore(user, workoutSession) {
         unreadCount,
         fetchFriends, fetchUnreadCount,
         sendMessage, createGroupChat, addMemberToGroup, renameGroup, leaveGroup, getChat,
-        fetchCommunities, joinGymCommunity, joinCommunity, leaveCommunity, getCommunityMembers,
+        fetchCommunities, joinGymCommunity, joinCommunity, leaveCommunity, getCommunityMembers, joinChallenge, createChallengeTeam,
         joinEvent, leaveEvent,
         shareWorkout, shareTemplate,
         inviteToSession,

@@ -1,5 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { createClient } from "@/lib/supabase";
+import toast from 'react-hot-toast';
 // Dynamic import for Leaflet map to avoid SSR issues
 import dynamic from 'next/dynamic';
 
@@ -26,6 +28,72 @@ export default function GymEditorModal({ gym = null, onClose, onSave }) {
     const initialCoords = getCoords(gym?.location);
     const [lat, setLat] = useState(initialCoords.lat);
     const [lng, setLng] = useState(initialCoords.lng);
+    const [isGeocoding, setIsGeocoding] = useState(false);
+
+    // Track coords we just set via "Find" so we don't immediately reverse-geocode them back in a loop
+    const lastGeocodedCoords = useRef(null);
+
+    const supabase = createClient(); // Added this line
+
+    const handleGeocode = async () => {
+        if (!address.trim()) return;
+        setIsGeocoding(true);
+        try {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&email=contact@ironcircle.app`;
+            const res = await fetch(url);
+
+            if (!res.ok) {
+                if (res.status === 429) throw new Error("Rate limit exceeded. Try again in a moment.");
+                throw new Error(`HTTP ${res.status}`);
+            }
+
+            const data = await res.json();
+
+            if (data && data.length > 0) {
+                const newLat = parseFloat(data[0].lat);
+                const newLng = parseFloat(data[0].lon);
+                lastGeocodedCoords.current = { lat: newLat, lng: newLng };
+                setLat(newLat);
+                setLng(newLng);
+            } else {
+                toast.error("Address not found. Please place the pin manually.");
+            }
+        } catch (e) {
+            console.error("Geocoding failed", e);
+            toast.error(e.message || "Error locating address");
+        }
+        setIsGeocoding(false);
+    };
+
+    const handleReverseGeocode = async (revLat, revLng) => {
+        try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${revLat}&lon=${revLng}&email=contact@ironcircle.app`;
+            const res = await fetch(url);
+
+            if (!res.ok) {
+                if (res.status === 429) console.warn("Reverse geocode rate limit exceeded.");
+                return;
+            }
+
+            const data = await res.json();
+
+            if (data && data.display_name) {
+                // Try to format it nicely, otherwise use display_name
+                let newAddress = data.display_name;
+                if (data.address) {
+                    const city = data.address.city || data.address.town || data.address.village;
+                    const street = data.address.road;
+                    const houseNumber = data.address.house_number;
+                    if (city && street) {
+                        newAddress = `${street} ${houseNumber ? houseNumber + ', ' : ', '}${city}`;
+                    }
+                }
+                setAddress(newAddress);
+            }
+        } catch (e) {
+            console.error("Reverse Geocoding failed", e);
+        }
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -63,13 +131,24 @@ export default function GymEditorModal({ gym = null, onClose, onSave }) {
 
                 <div style={{ marginBottom: '16px' }}>
                     <label style={{ display: 'block', marginBottom: '8px', color: '#888' }}>Address (City/Street)</label>
-                    <input
-                        required
-                        value={address}
-                        onChange={e => setAddress(e.target.value)}
-                        style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#333', border: 'none', color: '#fff' }}
-                        placeholder="e.g. Musterstraße 1, Berlin"
-                    />
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                            required
+                            value={address}
+                            onChange={e => setAddress(e.target.value)}
+                            onBlur={handleGeocode}
+                            style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#333', border: 'none', color: '#fff' }}
+                            placeholder="e.g. Musterstraße 1, Berlin"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleGeocode}
+                            disabled={isGeocoding}
+                            style={{ padding: '0 16px', borderRadius: '8px', background: '#444', border: '1px solid #555', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        >
+                            {isGeocoding ? '...' : '📍 Find'}
+                        </button>
+                    </div>
                 </div>
 
                 <div style={{ marginBottom: '24px' }}>
@@ -80,6 +159,14 @@ export default function GymEditorModal({ gym = null, onClose, onSave }) {
                         onLocationSelect={(newLat, newLng) => {
                             setLat(newLat);
                             setLng(newLng);
+
+                            // Only reverse geocode if this pin movement wasn't just caused by the 'Find' button
+                            if (!lastGeocodedCoords.current ||
+                                Math.abs(lastGeocodedCoords.current.lat - newLat) > 0.0001 ||
+                                Math.abs(lastGeocodedCoords.current.lng - newLng) > 0.0001) {
+                                handleReverseGeocode(newLat, newLng);
+                                lastGeocodedCoords.current = null; // Reset tracker
+                            }
                         }}
                     />
                     <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>
@@ -102,7 +189,7 @@ export default function GymEditorModal({ gym = null, onClose, onSave }) {
                         {gym ? 'Top Up / Save' : 'Create Gym'}
                     </button>
                 </div>
-            </form>
-        </div>
+            </form >
+        </div >
     );
 }

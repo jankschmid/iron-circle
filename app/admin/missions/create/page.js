@@ -170,7 +170,7 @@ function CreateMissionContent() {
     if (!user) return <div style={{ padding: '50px', textAlign: 'center' }}>Loading...</div>;
 
     return (
-        <div style={{ minHeight: '100vh', background: '#111', color: '#fff', fontFamily: 'Inter', padding: '40px 20px' }}>
+        <div style={{ minHeight: '100vh', background: '#111', color: '#fff', fontFamily: 'Inter', padding: 'env(safe-area-inset-top, 40px) 20px 40px 20px' }}>
             <div style={{ maxWidth: '800px', margin: '0 auto' }}>
                 <header style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '40px' }}>
                     <button
@@ -189,7 +189,7 @@ function CreateMissionContent() {
 
                         {/* Scope Toggle - Locked if Editing */}
                         {!editId && (
-                            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                            <div className="scope-toggle" style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
                                 <label style={{ flex: 1, cursor: 'pointer' }}>
                                     <input
                                         type="radio"
@@ -257,7 +257,7 @@ function CreateMissionContent() {
 
                         {/* Translations Trigger */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px', background: 'rgba(255, 200, 0, 0.05)', border: '1px solid rgba(255, 200, 0, 0.2)', borderRadius: '8px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                                 <label style={{ color: '#FFC800', fontSize: '0.9rem', fontWeight: 'bold' }}>Translations</label>
                                 <button
                                     type="button"
@@ -282,7 +282,7 @@ function CreateMissionContent() {
                         </div>
 
                         {/* Config Grid */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                        <div className="config-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                             {scope === 'SOLO' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     <label style={{ color: '#888', fontSize: '0.9rem', fontWeight: 'bold' }}>Duration Type</label>

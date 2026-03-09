@@ -60,10 +60,10 @@ export default function MissionControlPage() {
     if (!user) return <div style={{ padding: '50px', textAlign: 'center' }}>Loading Mission Control...</div>;
 
     return (
-        <div style={{ minHeight: '100vh', background: '#111', color: '#fff', fontFamily: 'Inter', padding: '40px 20px' }}>
+        <div style={{ minHeight: '100vh', background: '#111', color: '#fff', fontFamily: 'Inter', padding: 'env(safe-area-inset-top, 40px) 20px 40px 20px' }}>
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
                 {/* Header */}
-                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '40px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <button
                             onClick={() => router.push('/admin/master')}

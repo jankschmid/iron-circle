@@ -209,7 +209,8 @@ export default function MasterAdminPage() {
                 .update({
                     name: gymData.name,
                     address: gymData.address,
-                    location: gymData.location
+                    location: gymData.location,
+                    radius: gymData.radius
                 })
                 .eq('id', gymData.id);
 
@@ -227,6 +228,7 @@ export default function MasterAdminPage() {
                     name: gymData.name,
                     address: gymData.address,
                     location: gymData.location,
+                    radius: gymData.radius,
                     is_verified: true, // Partner gyms default to verified
                     created_by: user.id,
                     display_key: Math.random().toString(36).substring(2, 8).toUpperCase()

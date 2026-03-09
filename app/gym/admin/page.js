@@ -8,8 +8,26 @@ import Link from 'next/link';
 import { useToast } from '@/components/ToastProvider';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import InputModal from '@/components/InputModal';
+import { pushTemplates, injectTemplateVariables } from '@/lib/pushTemplates';
+import { downloadCSV } from '@/lib/csv';
+import { useTranslation } from '@/context/TranslationContext';
+
+// Tabs
+import AnalyticsTab from './tabs/AnalyticsTab';
+import OverviewTab from './tabs/OverviewTab';
+import TvContentTab from './tabs/TvContentTab';
+import OperationsTab from './tabs/OperationsTab';
+import MembersTab from './tabs/MembersTab';
+import InvitesTab from './tabs/InvitesTab';
+import SettingsTab from './tabs/SettingsTab';
+import BroadcastTab from './tabs/BroadcastTab';
+
+// Components
+import StatCard from './components/StatCard';
+import NavBtn from './components/NavBtn';
 
 function GymAdminPage() {
+    const { t } = useTranslation();
     const searchParams = useSearchParams();
     const gymId = searchParams.get('id');
     const { user } = useStore();
@@ -48,6 +66,8 @@ function GymAdminPage() {
     // Modal States
     const [confirmModal, setConfirmModal] = useState({ isOpen: false });
     const [inputModal, setInputModal] = useState({ isOpen: false });
+    const [manageModal, setManageModal] = useState({ isOpen: false, member: null });
+    const [broadcastStartAudience, setBroadcastStartAudience] = useState('all');
 
     useEffect(() => {
         if (!user || !gymId) return;
@@ -71,7 +91,7 @@ function GymAdminPage() {
         if (!input) return;
 
         const code = input.value.toUpperCase();
-        if (code.length < 6) return toast.error("Invalid Code");
+        if (code.length < 6) return toast.error(t("Invalid Code"));
 
         setConnectingTv(true);
         try {
@@ -85,14 +105,14 @@ function GymAdminPage() {
 
             if (error) throw error;
             if (data) {
-                toast.success("Success! TV Connected.");
+                toast.success(t("Success! TV Connected."));
                 input.value = '';
                 fetchMonitors(); // Refresh list
             } else {
-                toast.error("Code not found or expired.");
+                toast.error(t("Code not found or expired."));
             }
         } catch (err) {
-            toast.error("Error: " + err.message);
+            toast.error(t("Error") + ": " + err.message);
         } finally {
             setConnectingTv(false);
         }
@@ -101,9 +121,9 @@ function GymAdminPage() {
     const handleDisconnectMonitor = async (monitorId) => {
         setConfirmModal({
             isOpen: true,
-            title: "Disconnect Screen?",
-            message: "Disconnect this screen? It will return to pairing mode.",
-            confirmText: "Disconnect",
+            title: t("Disconnect Screen?"),
+            message: t("Disconnect this screen? It will return to pairing mode."),
+            confirmText: t("Disconnect"),
             isDangerous: true,
             onConfirm: async () => {
                 setConfirmModal({ isOpen: false });
@@ -113,11 +133,49 @@ function GymAdminPage() {
 
                     // Optimistic update
                     setMonitors(prev => prev.filter(m => m.id !== monitorId));
-                    toast.success("Monitor Disconnected.");
+                    toast.success(t("Monitor Disconnected."));
                     fetchMonitors(); // Verify with server
                 } catch (err) {
-                    toast.error("Error: " + err.message);
+                    toast.error(t("Error") + ": " + err.message);
                 }
+            },
+            onCancel: () => setConfirmModal({ isOpen: false })
+        });
+    };
+
+    const handleUpdateRole = async (userId, newRole) => {
+        const { error } = await supabase.from('user_gyms').upsert({
+            user_id: userId,
+            gym_id: gymId,
+            role: newRole
+        }, { onConflict: 'user_id, gym_id' });
+
+        if (error) {
+            toast.error(t("Failed to update role") + ": " + error.message);
+        } else {
+            toast.success(t("Role updated"));
+            if (community) fetchMembers(community.id);
+            setManageModal({ isOpen: false, member: null });
+        }
+    };
+
+    const handleKickMember = async (userId) => {
+        if (!community) return;
+        setConfirmModal({
+            isOpen: true,
+            title: t("Remove Member?"),
+            message: t("Are you sure you want to remove this member from the gym? They will lose access to the community."),
+            confirmText: t("Remove"),
+            isDangerous: true,
+            onConfirm: async () => {
+                setConfirmModal({ isOpen: false });
+
+                await supabase.from('community_members').delete().eq('community_id', community.id).eq('user_id', userId);
+                await supabase.from('user_gyms').delete().eq('gym_id', gymId).eq('user_id', userId);
+
+                toast.success(t("Member removed"));
+                if (community) fetchMembers(community.id);
+                setManageModal({ isOpen: false, member: null });
             },
             onCancel: () => setConfirmModal({ isOpen: false })
         });
@@ -156,7 +214,7 @@ function GymAdminPage() {
             }
 
             if (!hasAccess) {
-                toast.error("Access Denied: You are not an admin of this gym.");
+                toast.error(t("Access Denied: You are not an admin of this gym."));
                 router.push('/');
                 return;
             }
@@ -234,20 +292,58 @@ function GymAdminPage() {
         if (membersData && membersData.length > 0) {
             // 2. Adjust for manual join
             const userIds = membersData.map(m => m.user_id);
-            const { data: profiles } = await supabase
+            const { data: profiles, error: profileError } = await supabase
                 .from('profiles')
-                .select('id, name, username, avatar_url, privacy_settings')
+                .select('id, name, username, avatar_url, privacy_settings, last_workout_date, yearly_workout_goal, current_xp, lifetime_volume, is_super_admin')
                 .in('id', userIds);
 
+            if (profileError) {
+                console.error("DEBUG PROFILE ERROR:", JSON.stringify(profileError, null, 2));
+            }
+
+            // Fetch streaks separately
+            const { data: streaks } = await supabase
+                .from('user_streaks')
+                .select('user_id, current_streak')
+                .in('user_id', userIds);
+
+            // Fetch true gym roles
+            const { data: gymRoles } = await supabase
+                .from('user_gyms')
+                .select('user_id, role')
+                .eq('gym_id', gymId)
+                .in('user_id', userIds);
+
             const profileMap = new Map(profiles?.map(p => [p.id, p]));
+            const streakMap = new Map(streaks?.map(s => [s.user_id, s.current_streak]));
+            const gymRoleMap = new Map(gymRoles?.map(g => [g.user_id, g.role]));
 
             setMembers(membersData.map(m => {
                 const profile = profileMap.get(m.user_id) || {};
+                const streak = streakMap.get(m.user_id) || 0;
                 const isPrivate = !profile || profile.privacy_settings?.profile_visibility === 'private';
+
+                // Determine true role (gym_role > community_role) and super_admin overrides
+                let finalRole = m.role;
+                if (gymRoleMap.has(m.user_id)) {
+                    finalRole = gymRoleMap.get(m.user_id);
+                }
+
+                // Gym creators are the defacto owners of the gym
+                if (gym && gym.created_by === m.user_id) {
+                    finalRole = 'owner';
+                }
+
+                // Super admins override all local roles in the UI
+                if (profile.is_super_admin) {
+                    finalRole = 'super_admin';
+                }
+
                 return {
                     id: m.user_id,
                     ...profile,
-                    role: m.role,
+                    current_streak: streak,
+                    role: finalRole,
                     joined: m.joined_at,
                     isPrivate
                 };
@@ -260,9 +356,9 @@ function GymAdminPage() {
     const handleCreateCommunity = async () => {
         setConfirmModal({
             isOpen: true,
-            title: "Initialize Community?",
-            message: "Initialize Community for this gym?",
-            confirmText: "Create Community",
+            title: t("Initialize Community?"),
+            message: t("Initialize Community for this gym?"),
+            confirmText: t("Create Community"),
             onConfirm: async () => {
                 setConfirmModal({ isOpen: false });
                 const { error } = await supabase.from('communities').insert({
@@ -273,10 +369,10 @@ function GymAdminPage() {
                     privacy: 'public'
                 });
                 if (!error) {
-                    toast.success("Community Created. Refreshing...");
+                    toast.success(t("Community Created. Refreshing..."));
                     fetchGymDetails();
                 } else {
-                    toast.error("Error: " + error.message);
+                    toast.error(t("Error") + ": " + error.message);
                 }
             },
             onCancel: () => setConfirmModal({ isOpen: false })
@@ -304,19 +400,19 @@ function GymAdminPage() {
 
             if (error) {
                 console.error("Key Update Error:", error);
-                if (!silent) toast.error("Failed to update key: " + error.message);
+                if (!silent) toast.error(t("Failed to update key") + ": " + error.message);
             } else {
                 setGym(prev => ({ ...prev, display_key: newKey }));
-                if (!silent) toast.success("New Key Generated: " + newKey);
+                if (!silent) toast.success(t("New Key Generated") + ": " + newKey);
             }
         };
 
         if (!silent) {
             setConfirmModal({
                 isOpen: true,
-                title: "Regenerate Key?",
-                message: "Are you sure? This will disconnect current displays.",
-                confirmText: "Regenerate",
+                title: t("Regenerate Key?"),
+                message: t("Are you sure? This will disconnect current displays."),
+                confirmText: t("Regenerate"),
                 isDangerous: true,
                 onConfirm: async () => {
                     setConfirmModal({ isOpen: false });
@@ -351,18 +447,34 @@ function GymAdminPage() {
     };
 
     // Content handlers
+    const renderVarHelper = (targetField) => {
+        return (values, handleChange) => (
+            <div style={{ marginTop: '-8px', marginBottom: '16px', fontSize: '0.8rem', color: '#888' }}>
+                <span style={{ color: '#aaa' }}>{t('You can use the following variables:')}</span> <br />
+                {['{name}', '{streak}', '{gym_name}', '{hours_left}', '{next_streak}'].map(v => (
+                    <span key={v}
+                        onClick={() => handleChange(targetField, (values[targetField] || '') + ' ' + v)}
+                        style={{ cursor: 'pointer', background: '#333', padding: '2px 6px', borderRadius: '4px', margin: '4px 4px 0 0', display: 'inline-block', color: '#FFC800' }}>
+                        {v}
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
     const handleAddNews = async () => {
         setInputModal({
             isOpen: true,
-            title: "Add News",
+            title: t("Add News"),
             fields: [
-                { name: 'title', label: 'Title', type: 'text' },
-                { name: 'content', label: 'Content', type: 'textarea' }
+                { name: 'title', label: t('Title'), type: 'text' },
+                { name: 'content', label: t('Content'), type: 'textarea' },
+                { name: 'helper', type: 'custom', render: renderVarHelper('content') }
             ],
-            confirmText: "Post News",
+            confirmText: t("Post News"),
             onConfirm: async (values) => {
                 setInputModal({ isOpen: false });
-                if (!values.title || !values.content) return toast.error("Title and Content required");
+                if (!values.title || !values.content) return toast.error(t("Title and Content required"));
                 const { error } = await supabase.from('gym_news').insert({
                     gym_id: gymId,
                     title: values.title,
@@ -370,10 +482,10 @@ function GymAdminPage() {
                     is_active: true
                 });
                 if (!error) {
-                    toast.success("News posted");
+                    toast.success(t("News posted"));
                     fetchTvContent();
                 } else {
-                    toast.error("Error posting news");
+                    toast.error(t("Error posting news"));
                 }
             },
             onCancel: () => setInputModal({ isOpen: false })
@@ -383,12 +495,13 @@ function GymAdminPage() {
     const handleEditNews = async (item) => {
         setInputModal({
             isOpen: true,
-            title: "Edit News",
+            title: t("Edit News"),
             fields: [
-                { name: 'title', label: 'Title', type: 'text', defaultValue: item.title },
-                { name: 'content', label: 'Content', type: 'textarea', defaultValue: item.content }
+                { name: 'title', label: t('Title'), type: 'text', defaultValue: item.title },
+                { name: 'content', label: t('Content'), type: 'textarea', defaultValue: item.content },
+                { name: 'helper', type: 'custom', render: renderVarHelper('content') }
             ],
-            confirmText: "Update",
+            confirmText: t("Update"),
             onConfirm: async (values) => {
                 setInputModal({ isOpen: false });
                 const { error } = await supabase.from('gym_news').update({
@@ -396,10 +509,10 @@ function GymAdminPage() {
                     content: values.content
                 }).eq('id', item.id);
                 if (!error) {
-                    toast.success("News updated");
+                    toast.success(t("News updated"));
                     fetchTvContent();
                 } else {
-                    toast.error("Update failed");
+                    toast.error(t("Update failed"));
                 }
             },
             onCancel: () => setInputModal({ isOpen: false })
@@ -409,12 +522,12 @@ function GymAdminPage() {
     const handleEditEvent = async (item) => {
         setInputModal({
             isOpen: true,
-            title: "Edit Event",
+            title: t("Edit Event"),
             fields: [
-                { name: 'title', label: 'Title', type: 'text', defaultValue: item.title },
-                { name: 'date', label: 'Date', type: 'date', defaultValue: new Date(item.event_date).toISOString().split('T')[0] }
+                { name: 'title', label: t('Title'), type: 'text', defaultValue: item.title },
+                { name: 'date', label: t('Date'), type: 'date', defaultValue: new Date(item.event_date).toISOString().split('T')[0] }
             ],
-            confirmText: "Update",
+            confirmText: t("Update"),
             onConfirm: async (values) => {
                 setInputModal({ isOpen: false });
                 const { error } = await supabase.from('gym_events').update({
@@ -422,10 +535,10 @@ function GymAdminPage() {
                     event_date: new Date(values.date).toISOString()
                 }).eq('id', item.id);
                 if (!error) {
-                    toast.success("Event updated");
+                    toast.success(t("Event updated"));
                     fetchTvContent();
                 } else {
-                    toast.error("Update failed");
+                    toast.error(t("Update failed"));
                 }
             },
             onCancel: () => setInputModal({ isOpen: false })
@@ -435,23 +548,28 @@ function GymAdminPage() {
     const handleEditChallenge = async (item) => {
         setInputModal({
             isOpen: true,
-            title: "Edit Challenge",
+            title: t("Edit Challenge"),
             fields: [
-                { name: 'title', label: 'Title', type: 'text', defaultValue: item.title },
-                { name: 'description', label: 'Description', type: 'textarea', defaultValue: item.description }
+                { name: 'title', label: t('Title'), type: 'text', defaultValue: item.title },
+                { name: 'description', label: t('Description'), type: 'textarea', defaultValue: item.description },
+                { name: 'helper', type: 'custom', render: renderVarHelper('description') },
+                { name: 'target_value', label: t('Target Value (Goal)'), type: 'number', defaultValue: item.target_value },
+                { name: 'target_unit', label: t('Unit (e.g. kg, reps, hours)'), type: 'text', defaultValue: item.target_unit }
             ],
-            confirmText: "Update",
+            confirmText: t("Update"),
             onConfirm: async (values) => {
                 setInputModal({ isOpen: false });
                 const { error } = await supabase.from('gym_challenges').update({
                     title: values.title,
-                    description: values.description
+                    description: values.description,
+                    target_value: values.target_value ? parseFloat(values.target_value) : null,
+                    target_unit: values.target_unit || null
                 }).eq('id', item.id);
                 if (!error) {
-                    toast.success("Challenge updated");
+                    toast.success(t("Challenge updated"));
                     fetchTvContent();
                 } else {
-                    toast.error("Update failed");
+                    toast.error(t("Update failed"));
                 }
             },
             onCancel: () => setInputModal({ isOpen: false })
@@ -461,18 +579,18 @@ function GymAdminPage() {
     const handleDeleteContent = async (table, id) => {
         setConfirmModal({
             isOpen: true,
-            title: "Delete Content?",
-            message: "Are you sure you want to delete this item?",
-            confirmText: "Delete",
+            title: t("Delete Content?"),
+            message: t("Are you sure you want to delete this item?"),
+            confirmText: t("Delete"),
             isDangerous: true,
             onConfirm: async () => {
                 setConfirmModal({ isOpen: false });
                 const { error } = await supabase.from(table).delete().eq('id', id);
                 if (!error) {
-                    toast.success("Item deleted");
+                    toast.success(t("Item deleted"));
                     fetchTvContent();
                 } else {
-                    toast.error("Delete failed");
+                    toast.error(t("Delete failed"));
                 }
             },
             onCancel: () => setConfirmModal({ isOpen: false })
@@ -521,9 +639,9 @@ function GymAdminPage() {
         });
 
         if (error) {
-            toast.error("Failed to create invite: " + error.message);
+            toast.error(t("Failed to create invite") + ": " + error.message);
         } else {
-            toast.success("Invite Created!");
+            toast.success(t("Invite Created!"));
             fetchInvites();
         }
     };
@@ -531,15 +649,15 @@ function GymAdminPage() {
     const handleDeleteInvite = async (id) => {
         const { error } = await supabase.from('gym_invites').delete().eq('id', id);
         if (!error) {
-            toast.success("Invite Revoked");
+            toast.success(t("Invite Revoked"));
             fetchInvites();
         }
     };
 
 
-    if (!gymId) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Gym ID missing.</div>;
-    if (loading) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Dashboard...</div>;
-    if (!gym) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Gym not found.</div>;
+    if (!gymId) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t('Gym ID missing.')}</div>;
+    if (loading) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t('Loading Dashboard...')}</div>;
+    if (!gym) return <div style={{ padding: '40px', background: '#000', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t('Gym not found.')}</div>;
 
     return (
         <div className="dashboard-container" style={{ minHeight: '100vh', background: '#000', color: '#fff', fontFamily: 'Inter, sans-serif', display: 'flex' }}>
@@ -589,22 +707,25 @@ function GymAdminPage() {
             {/* Sidebar */}
             <aside className="dashboard-sidebar" style={{ width: '250px', borderRight: '1px solid #222', padding: '24px', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ marginBottom: '40px' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#666', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Admin Panel</div>
+                    <div style={{ fontSize: '0.8rem', color: '#666', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>{t('Admin Panel')}</div>
                     <h1 style={{ fontSize: '1.2rem', fontWeight: '900', margin: 0 }}>{gym.name}</h1>
-                    {gym.is_verified && <div style={{ display: 'inline-block', marginTop: '8px', background: '#FFC800', color: '#000', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' }}>VERIFIED PARTNER</div>}
+                    {gym.is_verified && <div style={{ display: 'inline-block', marginTop: '8px', background: '#FFC800', color: '#000', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' }}>{t('VERIFIED PARTNER')}</div>}
                 </div>
 
                 <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                    <NavBtn label="Overview" icon="📊" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
-                    <NavBtn label="TV Content" icon="📺" active={activeTab === 'content'} onClick={() => setActiveTab('content')} />
-                    <NavBtn label="Members" icon="👥" active={activeTab === 'members'} onClick={() => setActiveTab('members')} />
-                    <NavBtn label="Invitations" icon="📩" active={activeTab === 'invites'} onClick={() => setActiveTab('invites')} />
-                    <NavBtn label="Settings" icon="⚙️" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+                    <NavBtn label={t("Overview")} icon="📊" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
+                    <NavBtn label={t("Analytics")} icon="📈" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
+                    <NavBtn label={t("Broadcasts")} icon="📣" active={activeTab === 'broadcast'} onClick={() => setActiveTab('broadcast')} />
+                    <NavBtn label={t("TV Content")} icon="📺" active={activeTab === 'content'} onClick={() => setActiveTab('content')} />
+                    <NavBtn label={t("Operations")} icon="⚡" active={activeTab === 'operations'} onClick={() => setActiveTab('operations')} />
+                    <NavBtn label={t("Members")} icon="👥" active={activeTab === 'members'} onClick={() => setActiveTab('members')} />
+                    <NavBtn label={t("Invitations")} icon="📩" active={activeTab === 'invites'} onClick={() => setActiveTab('invites')} />
+                    <NavBtn label={t("Settings")} icon="⚙️" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
                 </nav>
 
                 <div style={{ marginTop: 'auto' }}>
                     <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#666', textDecoration: 'none', padding: '12px', borderRadius: '8px', transition: '0.2s' }}>
-                        <span>←</span> Back to App
+                        <span>←</span> {t('Back to App')}
                     </Link>
                 </div>
             </aside>
@@ -612,541 +733,148 @@ function GymAdminPage() {
             {/* Main Content */}
             <main className="dashboard-content" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
 
-                {activeTab === 'content' && (
-                    <div style={{ maxWidth: '900px' }}>
-                        <h2 style={{ fontSize: '2rem', marginBottom: '24px', fontWeight: 'bold' }}>TV Content Management</h2>
+                {activeTab === 'analytics' && <AnalyticsTab members={members} gym={gym} setActiveTab={setActiveTab} setBroadcastStartAudience={setBroadcastStartAudience} />}
 
-                        {/* 1. TV Configuration */}
-                        <section style={{ marginBottom: '40px', background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222' }}>
-                            <h3 style={{ margin: '0 0 16px', color: '#FFC800' }}>Screen Configuration & Timing</h3>
-                            <p style={{ color: '#888', marginBottom: '16px', fontSize: '0.9rem' }}>Select active screens and set duration (seconds) for each.</p>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fil, minmax(200px, 1fr))', gap: '20px' }}>
-                                {['live', 'leaderboard', 'news', 'events', 'challenges'].map(feat => {
-                                    const isEnabled = tvSettings.enabled_features?.includes(feat);
-                                    const duration = tvSettings.feature_durations?.[feat] || 20;
-
-                                    return (
-                                        <div key={feat} style={{
-                                            background: '#222', padding: '12px', borderRadius: '12px',
-                                            border: isEnabled ? '1px solid #FFC800' : '1px solid #333',
-                                            display: 'flex', flexDirection: 'column', gap: '12px'
-                                        }}>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', textTransform: 'capitalize' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isEnabled}
-                                                    onChange={() => toggleTvFeature(feat)}
-                                                />
-                                                {feat}
-                                            </label>
-
-                                            {isEnabled && (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: '#888' }}>
-                                                    <span>Duration:</span>
-                                                    <input
-                                                        type="number"
-                                                        min="5" max="300"
-                                                        value={duration}
-                                                        onChange={(e) => handleDurationChange(feat, e.target.value)}
-                                                        style={{
-                                                            width: '60px', background: '#000', border: '1px solid #444',
-                                                            color: '#fff', padding: '4px', borderRadius: '4px', textAlign: 'center'
-                                                        }}
-                                                    />
-                                                    <span>s</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </section>
-
-                        {/* 2. News */}
-                        <section style={{ marginBottom: '40px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h3 style={{ fontSize: '1.5rem', margin: 0 }}>📢 News & Updates</h3>
-                                <button onClick={handleAddNews} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>+ Add News</button>
-                            </div>
-                            <div style={{ display: 'grid', gap: '16px' }}>
-                                {contentData.news.map(item => (
-                                    <div key={item.id} style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222', display: 'flex', justifyContent: 'space-between' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{item.title}</div>
-                                            <div style={{ color: '#888' }}>{item.content}</div>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button onClick={() => handleEditNews(item)} style={{ background: '#222', color: '#fff', border: '1px solid #444', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Edit</button>
-                                            <button onClick={() => handleDeleteContent('gym_news', item.id)} style={{ background: '#300', color: '#f88', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Delete</button>
-                                        </div>
-                                    </div>
-                                ))}
-                                {contentData.news.length === 0 && <div style={{ color: '#666', fontStyle: 'italic' }}>No news posted.</div>}
-                            </div>
-                        </section>
-
-                        {/* 3. Events */}
-                        <section style={{ marginBottom: '40px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h3 style={{ fontSize: '1.5rem', margin: 0 }}>📅 Upcoming Events</h3>
-                                <button onClick={() => {
-                                    setInputModal({
-                                        isOpen: true,
-                                        title: "Add Event",
-                                        fields: [
-                                            { name: 'title', label: 'Title', type: 'text' },
-                                            { name: 'date', label: 'Date', type: 'date' }
-                                        ],
-                                        confirmText: "Add Event",
-                                        onConfirm: async (values) => {
-                                            setInputModal({ isOpen: false });
-                                            if (!values.title || !values.date) return toast.error("Title and Date required");
-                                            const { error } = await supabase.from('gym_events').insert({
-                                                gym_id: gymId,
-                                                title: values.title,
-                                                event_date: new Date(values.date).toISOString()
-                                            });
-                                            if (!error) {
-                                                toast.success("Event added");
-                                                fetchTvContent();
-                                            } else {
-                                                toast.error("Error adding event");
-                                            }
-                                        },
-                                        onCancel: () => setInputModal({ isOpen: false })
-                                    })
-                                }} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>+ Add Event</button>
-                            </div>
-                            <div style={{ display: 'grid', gap: '16px' }}>
-                                {contentData.events.map(item => (
-                                    <div key={item.id} style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222', display: 'flex', justifyContent: 'space-between' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{item.title}</div>
-                                            <div style={{ color: '#FFC800' }}>{new Date(item.event_date).toLocaleDateString()}</div>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button onClick={() => handleEditEvent(item)} style={{ background: '#222', color: '#fff', border: '1px solid #444', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Edit</button>
-                                            <button onClick={() => handleDeleteContent('gym_events', item.id)} style={{ background: '#300', color: '#f88', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Delete</button>
-                                        </div>
-                                    </div>
-                                ))}
-                                {contentData.events.length === 0 && <div style={{ color: '#666', fontStyle: 'italic' }}>No upcoming events.</div>}
-                            </div>
-                        </section>
-
-                        {/* 4. Challenges */}
-                        <section style={{ marginBottom: '40px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h3 style={{ fontSize: '1.5rem', margin: 0 }}>🏆 Active Challenges</h3>
-                                <button onClick={() => {
-                                    setInputModal({
-                                        isOpen: true,
-                                        title: "Add Challenge",
-                                        fields: [
-                                            { name: 'title', label: 'Title', type: 'text' },
-                                            { name: 'description', label: 'Description', type: 'textarea' }
-                                        ],
-                                        confirmText: "Add Challenge",
-                                        onConfirm: async (values) => {
-                                            setInputModal({ isOpen: false });
-                                            if (!values.title) return toast.error("Title required");
-                                            await supabase.from('gym_challenges').insert({
-                                                gym_id: gymId,
-                                                title: values.title,
-                                                description: values.description
-                                            });
-                                            toast.success("Challenge added");
-                                            fetchTvContent();
-                                        },
-                                        onCancel: () => setInputModal({ isOpen: false })
-                                    })
-                                }} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>+ Add Challenge</button>
-                            </div>
-                            <div style={{ display: 'grid', gap: '16px' }}>
-                                {contentData.challenges.map(item => (
-                                    <div key={item.id} style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222', display: 'flex', justifyContent: 'space-between' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{item.title}</div>
-                                            <div style={{ color: '#888' }}>{item.description}</div>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button onClick={() => handleEditChallenge(item)} style={{ background: '#222', color: '#fff', border: '1px solid #444', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Edit</button>
-                                            <button onClick={() => handleDeleteContent('gym_challenges', item.id)} style={{ background: '#300', color: '#f88', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>Delete</button>
-                                        </div>
-                                    </div>
-                                ))}
-                                {contentData.challenges.length === 0 && <div style={{ color: '#666', fontStyle: 'italic' }}>No active challenges.</div>}
-                            </div>
-                        </section>
-                    </div>
-                )}
+                {activeTab === 'broadcast' && <BroadcastTab members={members} gym={gym} supabase={supabase} initialAudience={broadcastStartAudience} />}
 
                 {activeTab === 'overview' && (
-                    <div style={{ maxWidth: '900px' }}>
-                        <h2 style={{ fontSize: '2rem', marginBottom: '24px', fontWeight: 'bold' }}>Dashboard Overview</h2>
+                    <OverviewTab
+                        gym={gym}
+                        members={members}
+                        stats={stats}
+                        contentData={contentData}
+                        monitors={monitors}
+                        setActiveTab={setActiveTab}
+                    />
+                )}
 
-                        {/* Stats Grid */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-                            <StatCard label="Total Members" value={stats.members} icon="👥" />
-                            <StatCard label="Visits Today" value={stats.todayVisits} icon="🔥" highlight />
-                            <StatCard label="Live Now" value="-" icon="🔴" note="(Check Monitor)" />
-                        </div>
+                {activeTab === 'content' && (
+                    <TvContentTab
+                        gymId={gymId}
+                        tvSettings={tvSettings}
+                        toggleTvFeature={toggleTvFeature}
+                        handleDurationChange={handleDurationChange}
+                        contentData={contentData}
+                        handleAddNews={handleAddNews}
+                        handleEditNews={handleEditNews}
+                        handleDeleteContent={handleDeleteContent}
+                        handleEditEvent={handleEditEvent}
+                        handleEditChallenge={handleEditChallenge}
+                        setInputModal={setInputModal}
+                        fetchTvContent={fetchTvContent}
+                        supabase={supabase}
+                    />
+                )}
 
-                        {/* Monitor Config */}
-                        <section style={{ marginBottom: '40px', background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                                <h3 style={{ fontSize: '1.2rem', margin: 0 }}>Step 1: Live Monitor</h3>
-                                <Link
-                                    href={`/gym/display?id=${gym.id}`}
-                                    target="_blank"
-                                    style={{ background: '#222', color: '#fff', padding: '8px 16px', borderRadius: '8px', textDecoration: 'none', fontSize: '0.9rem' }}
-                                >
-                                    Open Web Link ↗
-                                </Link>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
-                                {/* Option A: TV Pairing */}
-                                <div style={{ flex: 1, minWidth: '300px' }}>
-                                    <h4 style={{ color: '#FFC800', marginBottom: '12px' }}>Option A: Smart TV (Recommended)</h4>
-                                    <p style={{ color: '#888', marginBottom: '16px', fontSize: '0.9rem' }}>
-                                        Open <strong>{origin}/tv</strong> on your Gym TV and enter the code shown there:
-                                    </p>
-                                    <div style={{ display: 'flex', gap: '12px' }}>
-                                        <input
-                                            id="tv-code-input"
-                                            type="text"
-                                            placeholder="Ex: A7X-9P2"
-                                            maxLength={7}
-                                            disabled={connectingTv}
-                                            style={{
-                                                background: connectingTv ? '#222' : '#000',
-                                                border: '1px solid #333', color: connectingTv ? '#666' : '#fff',
-                                                padding: '12px', borderRadius: '8px', flex: 1,
-                                                fontSize: '1.2rem', fontFamily: 'monospace', letterSpacing: '2px', textTransform: 'uppercase'
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') handleLinkTv();
-                                            }}
-                                        />
-                                        <button
-                                            onClick={handleLinkTv}
-                                            disabled={connectingTv}
-                                            style={{
-                                                background: connectingTv ? '#444' : '#FFC800',
-                                                color: connectingTv ? '#888' : '#000',
-                                                border: 'none', padding: '0 24px', borderRadius: '8px', fontWeight: 'bold', cursor: connectingTv ? 'not-allowed' : 'pointer'
-                                            }}
-                                        >
-                                            {connectingTv ? 'Connecting...' : 'Connect'}
-                                        </button>
-                                    </div>
-
-                                    {/* Connected Monitors List */}
-                                    {monitors.length > 0 && (
-                                        <div style={{ marginTop: '20px', borderTop: '1px solid #333', paddingTop: '16px' }}>
-                                            <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Connected Screens</div>
-                                            {monitors.map(m => (
-                                                <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#222', padding: '12px', borderRadius: '8px', marginBottom: '8px' }}>
-                                                    <div>
-                                                        <div style={{ color: '#fff', fontSize: '1rem', fontWeight: 'bold' }}>TV {m.pairing_code}</div>
-                                                        <div style={{ color: '#888', fontSize: '0.8rem' }}>Active • Connected {new Date(m.updated_at).toLocaleDateString()}</div>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => handleDisconnectMonitor(m.id)}
-                                                        style={{ background: '#330000', color: '#ff4444', border: '1px solid #ff4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '0.8rem' }}
-                                                    >
-                                                        Disconnect
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Divider */}
-                                <div style={{ width: '1px', background: '#222' }}></div>
-
-                                {/* Option B: Key */}
-                                <div style={{ flex: 1, minWidth: '300px' }}>
-                                    <h4 style={{ color: '#fff', marginBottom: '12px' }}>Option B: Manual Key</h4>
-                                    <p style={{ color: '#888', marginBottom: '16px', fontSize: '0.9rem' }}>
-                                        Legacy: Connect a TV screen to <strong>{origin}/gym/display?id={gym.id}</strong> and enter this key:
-                                    </p>
-                                    <div style={{ display: 'flex', gap: '12px', background: '#000', padding: '10px', borderRadius: '8px', border: '1px solid #333' }}>
-                                        <div style={{ fontFamily: 'monospace', fontSize: '1.2rem', fontWeight: 'bold', letterSpacing: '2px', color: '#888', flex: 1 }}>
-                                            {gym.display_key || '----'}
-                                        </div>
-                                        <button onClick={regenerateKey} style={{ background: '#222', border: 'none', color: '#fff', padding: '0 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>Regen</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* QR Code / Check-in */}
-                        <section style={{ background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222' }}>
-                            <h3 style={{ fontSize: '1.2rem', margin: '0 0 20px 0' }}>Step 2: Member Check-in</h3>
-                            <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-                                <div style={{ background: '#fff', padding: '12px', borderRadius: '8px' }}>
-                                    {/* Simple QR Code to Gym Page */}
-                                    {/* In a real app, generate this robustly. Here using an API for immediate result. */}
-                                    <img
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`${origin}/community?id=${community?.id}`)}`}
-                                        alt="Gym QR"
-                                        style={{ display: 'block' }}
-                                    />
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <p style={{ margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                                        Print this QR Code and place it at your front desk.
-                                        Members scan it to <strong>Join the Community</strong> and unlock the Monitor.
-                                    </p>
-                                    {!community && (
-                                        <div style={{ padding: '12px', background: 'rgba(255,0,0,0.1)', border: '1px solid red', borderRadius: '8px', color: '#ffaaaa' }}>
-                                            ⚠️ No Community Linked!
-                                            <button onClick={handleCreateCommunity} style={{ marginLeft: '12px', background: '#d00', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}>Create Now</button>
-                                        </div>
-                                    )}
-                                    {community && <div style={{ color: '#0f0', fontSize: '0.9rem' }}>✅ Community Active: {community.name}</div>}
-                                </div>
-                            </div>
-                        </section>
-                    </div>
+                {activeTab === 'operations' && (
+                    <OperationsTab
+                        stats={stats}
+                        gym={gym}
+                        origin={origin}
+                        connectingTv={connectingTv}
+                        handleLinkTv={handleLinkTv}
+                        monitors={monitors}
+                        handleDisconnectMonitor={handleDisconnectMonitor}
+                        regenerateKey={regenerateKey}
+                        community={community}
+                        handleCreateCommunity={handleCreateCommunity}
+                    />
                 )}
 
                 {activeTab === 'members' && (
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                            <h2 style={{ fontSize: '1.8rem', margin: 0 }}>Member Management</h2>
-                            {/* <button style={{ background: '#fff', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold' }}>+ Invite</button> */}
-                        </div>
-
-                        <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', overflow: 'hidden', overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                <thead style={{ borderBottom: '1px solid #222', background: '#181818' }}>
-                                    <tr>
-                                        <th style={{ padding: '16px', color: '#888', fontSize: '0.8rem', textTransform: 'uppercase' }}>User</th>
-                                        <th style={{ padding: '16px', color: '#888', fontSize: '0.8rem', textTransform: 'uppercase' }}>Role</th>
-                                        <th style={{ padding: '16px', color: '#888', fontSize: '0.8rem', textTransform: 'uppercase' }}>Joined</th>
-                                        <th style={{ padding: '16px', color: '#888', fontSize: '0.8rem', textTransform: 'uppercase' }}>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {/* Private Members Summary Row */}
-                                    {members.filter(m => m.isPrivate).length > 0 && (
-                                        <tr style={{ borderBottom: '1px solid #222', background: 'rgba(255, 255, 255, 0.05)' }}>
-                                            <td colSpan="4" style={{ padding: '16px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#aaa', fontStyle: 'italic' }}>
-                                                    <span>🔒</span>
-                                                    <span>Private Members: <strong>{members.filter(m => m.isPrivate).length}</strong></span>
-                                                    <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>(Counted in total stats, but hidden from list)</span>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
-
-                                    {members.filter(m => !m.isPrivate).length === 0 && members.filter(m => m.isPrivate).length === 0 ? (
-                                        <tr><td colSpan="4" style={{ padding: '32px', textAlign: 'center', color: '#666' }}>No members found.</td></tr>
-                                    ) : members.filter(m => !m.isPrivate).map(m => (
-                                        <tr key={m.id} style={{ borderBottom: '1px solid #222' }}>
-                                            <td style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                {m.avatar_url ?
-                                                    <img src={m.avatar_url} style={{ width: '32px', height: '32px', borderRadius: '50%' }} /> :
-                                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#333' }} />
-                                                }
-                                                <div>
-                                                    <div style={{ fontWeight: 'bold' }}>{m.name}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: '#666' }}>@{m.username}</div>
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: '16px' }}>
-                                                <span style={{
-                                                    background: m.role === 'admin' ? '#FFC800' : m.role === 'trainer' ? '#00f' : '#222',
-                                                    color: m.role === 'admin' ? '#000' : '#fff',
-                                                    padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase'
-                                                }}>
-                                                    {m.role || 'Member'}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '16px', color: '#888', fontSize: '0.9rem' }}>
-                                                {new Date(m.joined).toLocaleDateString()}
-                                            </td>
-                                            <td style={{ padding: '16px' }}>
-                                                <button style={{ background: 'transparent', border: '1px solid #333', color: '#fff', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>Manage</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <MembersTab
+                        members={members}
+                        setManageModal={setManageModal}
+                    />
                 )}
 
                 {activeTab === 'invites' && (
-                    <div style={{ maxWidth: '900px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                            <div>
-                                <h2 style={{ fontSize: '2rem', marginBottom: '8px', fontWeight: 'bold' }}>Team Invitations</h2>
-                                <div style={{ color: '#888' }}>
-                                    Generate secure codes to invite Trainers and Admins to your team.
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-                            {/* Trainer Invite Card */}
-                            <div style={{ background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222' }}>
-                                <h3 style={{ color: '#FFC800', margin: '0 0 16px 0' }}>Invite Trainer</h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                    <button
-                                        onClick={() => handleCreateInvite('trainer', 'one_time')}
-                                        style={{ background: '#222', border: '1px solid #333', color: '#fff', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                        Only Once
-                                    </button>
-                                    <button
-                                        onClick={() => handleCreateInvite('trainer', '24h')}
-                                        style={{ background: '#222', border: '1px solid #333', color: '#fff', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                        Valid 24h
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Admin Invite Card */}
-                            <div style={{ background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222' }}>
-                                <h3 style={{ color: '#ff4444', margin: '0 0 16px 0' }}>Invite Admin</h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                    <button
-                                        onClick={() => handleCreateInvite('admin', 'one_time')}
-                                        style={{ background: '#222', border: '1px solid #333', color: '#fff', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                        Only Once
-                                    </button>
-                                    <button
-                                        onClick={() => handleCreateInvite('admin', '24h')}
-                                        style={{ background: '#222', border: '1px solid #333', color: '#fff', padding: '12px', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                        Valid 24h
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* List */}
-                        <h3 style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Active Invites</h3>
-                        <div style={{ background: '#111', borderRadius: '12px', border: '1px solid #222', overflow: 'hidden' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                <thead style={{ background: '#181818', borderBottom: '1px solid #222' }}>
-                                    <tr>
-                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>CODE</th>
-                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>ROLE</th>
-                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>TYPE</th>
-                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>STATUS</th>
-                                        <th style={{ padding: '16px', color: '#666', fontSize: '0.8rem' }}>ACTION</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {invites.length === 0 ? (
-                                        <tr><td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#444' }}>No active invites.</td></tr>
-                                    ) : invites.map(invite => {
-                                        const isExpired = invite.expires_at && new Date(invite.expires_at) < new Date();
-                                        const isUsed = invite.max_uses && invite.used_count >= invite.max_uses;
-                                        const status = isExpired ? 'Expired' : isUsed ? 'Used' : 'Active';
-
-                                        return (
-                                            <tr key={invite.id} style={{ borderBottom: '1px solid #222' }}>
-                                                <td style={{ padding: '16px' }}>
-                                                    <div style={{ fontFamily: 'monospace', fontSize: '1.2rem', fontWeight: 'bold', letterSpacing: '1px', color: status === 'Active' ? '#fff' : '#666' }}>
-                                                        {invite.code}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '16px' }}>
-                                                    <span style={{
-                                                        color: invite.role === 'admin' ? '#000' : '#fff',
-                                                        background: invite.role === 'admin' ? '#ff4444' : '#0066ff',
-                                                        padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold'
-                                                    }}>{invite.role.toUpperCase()}</span>
-                                                </td>
-                                                <td style={{ padding: '16px', fontSize: '0.9rem', color: '#888' }}>
-                                                    {invite.max_uses === 1 ? 'One-Time' : invite.expires_at ? '24 Hours' : 'Unlimited'}
-                                                </td>
-                                                <td style={{ padding: '16px' }}>
-                                                    <span style={{ color: status === 'Active' ? '#0f0' : '#666' }}>{status}</span>
-                                                    {invite.expires_at && <div style={{ fontSize: '0.7rem', color: '#444' }}>Expires: {new Date(invite.expires_at).toLocaleTimeString()}</div>}
-                                                </td>
-                                                <td style={{ padding: '16px' }}>
-                                                    <button onClick={() => handleDeleteInvite(invite.id)} style={{ color: '#ff4444', background: 'none', border: 'none', cursor: 'pointer' }}>Revoke</button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <InvitesTab
+                        handleCreateInvite={handleCreateInvite}
+                        invites={invites}
+                        handleDeleteInvite={handleDeleteInvite}
+                    />
                 )}
 
                 {activeTab === 'settings' && (
-                    <div style={{ maxWidth: '600px' }}>
-                        <h2 style={{ fontSize: '1.8rem', marginBottom: '24px' }}>Gym Settings</h2>
-                        <div style={{ background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222', marginBottom: '24px' }}>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: '#888' }}>Gym Name</label>
-                                <input type="text" defaultValue={gym.name} disabled style={{ width: '100%', padding: '12px', background: '#222', border: 'none', color: '#666', borderRadius: '8px' }} />
-                                <div style={{ fontSize: '0.8rem', color: '#444', marginTop: '4px' }}>Contact Super Admin to change name</div>
-                            </div>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', color: '#888' }}>Address</label>
-                                <input type="text" defaultValue={gym.address} disabled style={{ width: '100%', padding: '12px', background: '#222', border: 'none', color: '#666', borderRadius: '8px' }} />
-                            </div>
-                        </div>
-                    </div>
+                    <SettingsTab gym={gym} />
                 )}
             </main>
+
+            {/* Modals */}
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmText={confirmModal.confirmText}
+                isDangerous={confirmModal.isDangerous}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={confirmModal.onCancel}
+            />
+
+            <InputModal
+                isOpen={inputModal.isOpen}
+                title={inputModal.title}
+                fields={inputModal.fields}
+                confirmText={inputModal.confirmText}
+                onConfirm={inputModal.onConfirm}
+                onCancel={inputModal.onCancel}
+            />
+
+            {/* Manage Member Modal */}
+            {manageModal.isOpen && manageModal.member && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', zIndex: 9999,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '20px'
+                }} onClick={() => setManageModal({ isOpen: false, member: null })}>
+                    <div style={{ background: '#111', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '400px', border: '1px solid #333' }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ margin: '0 0 16px 0', fontSize: '1.2rem' }}>{t('Manage')} {manageModal.member.name}</h3>
+
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', marginBottom: '12px', color: '#888', fontSize: '0.9rem' }}>{t('Assign Role')}</label>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {['member', 'trainer', 'admin'].map(r => (
+                                    <button
+                                        key={r}
+                                        onClick={() => handleUpdateRole(manageModal.member.id, r)}
+                                        style={{
+                                            flex: 1, padding: '10px', borderRadius: '8px', border: manageModal.member.role === r ? '1px solid #FFC800' : '1px solid #333',
+                                            background: manageModal.member.role === r ? '#332b00' : '#222',
+                                            color: manageModal.member.role === r ? '#FFC800' : '#fff', cursor: 'pointer', textTransform: 'capitalize', fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {t(r)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px solid #333', paddingTop: '24px' }}>
+                            <h4 style={{ color: '#ff4444', margin: '0 0 12px 0', fontSize: '1rem' }}>{t('Danger Zone')}</h4>
+                            <button
+                                onClick={() => handleKickMember(manageModal.member.id)}
+                                style={{ width: '100%', padding: '12px', background: '#300', color: '#f88', border: '1px solid #ff4444', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                                {t('Remove from Gym')}
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={() => setManageModal({ isOpen: false, member: null })}
+                            style={{ width: '100%', padding: '12px', background: 'transparent', color: '#888', border: 'none', cursor: 'pointer', marginTop: '16px' }}
+                        >
+                            {t('Cancel')}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
 
-function NavBtn({ label, icon, active, onClick }) {
-    return (
-        <button
-            onClick={onClick}
-            style={{
-                display: 'flex', alignItems: 'center', gap: '12px',
-                width: '100%', padding: '12px',
-                background: active ? '#222' : 'transparent',
-                color: active ? '#fff' : '#888',
-                border: 'none', borderRadius: '8px',
-                cursor: 'pointer', textAlign: 'left',
-                fontWeight: active ? 'bold' : 'normal',
-                fontSize: '0.95rem'
-            }}
-        >
-            <span>{icon}</span> {label}
-        </button>
-    );
-}
 
-function StatCard({ label, value, icon, highlight, note }) {
-    return (
-        <div style={{
-            background: '#111', padding: '24px', borderRadius: '16px', border: '1px solid #222',
-            boxShadow: highlight ? '0 0 20px rgba(255, 200, 0, 0.1)' : 'none'
-        }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                <div style={{ color: '#888', fontSize: '0.9rem' }}>{label}</div>
-                <div style={{ fontSize: '1.2rem' }}>{icon}</div>
-            </div>
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: highlight ? '#FFC800' : '#fff' }}>
-                {value}
-            </div>
-            {note && <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>{note}</div>}
-        </div>
-    );
-}
 
 import { Suspense } from 'react';
 

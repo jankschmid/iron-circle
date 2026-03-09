@@ -6,15 +6,11 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
     // Initialize state from existing data. If 0, fallback to previousData or keep empty.
     const getInitialWeight = () => {
         if (initialData?.weight && initialData.weight !== 0) return initialData.weight;
-        // If no smart push, default to last weight
-        if (previousData?.lastWeight && (!suggestion || !suggestion.isPush)) return previousData.lastWeight;
         return '';
     };
 
     const getInitialReps = () => {
         if (initialData?.reps && initialData.reps !== 0) return initialData.reps;
-        // If no smart push, default to last reps
-        if (previousData?.lastReps && (!suggestion || !suggestion.isPush)) return previousData.lastReps;
         return '';
     };
 
@@ -100,12 +96,36 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
     };
 
     const handleLog = () => {
-        if ((!weight && weight !== 0) && (!reps && reps !== 0)) return;
+        let finalWeight = parseFloat(weight);
+        let finalReps = parseFloat(reps);
+
+        // Fallback to Ghost Text if input is empty
+        if (isNaN(finalWeight)) {
+            if (isPush && suggestion?.weight !== undefined) finalWeight = parseFloat(suggestion.weight);
+            else if (previousData?.lastWeight !== undefined) finalWeight = parseFloat(previousData.lastWeight);
+            else finalWeight = 0;
+
+            if (!isCardio) {
+                setWeight(finalWeight === 0 ? '' : finalWeight);
+            }
+        }
+
+        if (isNaN(finalReps)) {
+            if (isPush && suggestion?.reps !== undefined) finalReps = parseFloat(suggestion.reps);
+            else if (previousData?.lastReps !== undefined) finalReps = parseFloat(previousData.lastReps);
+            else finalReps = 0;
+
+            if (!isCardio) {
+                setReps(finalReps === 0 ? '' : finalReps);
+            }
+        }
+
+        if (finalWeight === 0 && finalReps === 0) return;
 
         const newLoggedState = !isLogged;
         const logData = {
-            weight: parseFloat(weight) || 0,
-            reps: parseFloat(reps) || 0,
+            weight: finalWeight || 0,
+            reps: finalReps || 0,
             rpe: parseFloat(rpe) || 0,
             completed: newLoggedState
         };
@@ -152,7 +172,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
                                 : (isCardio ? (isStretch ? 'Reps/Time' : 'Dist (km)') : (previousData ? previousData.lastWeight : '-'))
                     }
                     className={isPush && !weight ? "placeholder-blue" : ""}
-                    value={isLogged ? ((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '') : weight}
+                    value={isLogged ? (weight !== '' ? weight : ((initialData?.weight && initialData.weight !== 0) ? initialData.weight : '')) : weight}
                     onChange={(e) => setWeight(e.target.value)}
                     onBlur={handleBlur}
                     onClick={() => {
@@ -200,7 +220,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
                 <input
                     type={isCardio ? "text" : "number"}
                     placeholder={suggestion && isPush && !reps ? "" : (suggestion ? `${suggestion.reps}` : (isCardio ? 'Time (min)' : (previousData ? previousData.lastReps : '-')))}
-                    value={isLogged ? ((isCardio && durationStr) ? durationStr : ((initialData?.reps && initialData.reps !== 0) ? initialData.reps : '')) : (isCardio ? durationStr : reps)}
+                    value={isLogged ? ((isCardio && durationStr) ? durationStr : (reps !== '' ? reps : ((initialData?.reps && initialData.reps !== 0) ? initialData.reps : ''))) : (isCardio ? durationStr : reps)}
                     onChange={(e) => isCardio ? handleDurationChange(e.target.value) : setReps(e.target.value)}
                     onBlur={handleBlur}
                     onClick={() => {

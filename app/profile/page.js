@@ -9,6 +9,7 @@ import { useTranslation } from '@/context/TranslationContext';
 import PrestigeModal from '@/components/PrestigeModal';
 import StatsTab from '@/components/StatsTab';
 import AchievementsGallery from '@/components/AchievementsGallery';
+import StreakTimer from '@/components/StreakTimer';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -209,11 +210,11 @@ export default function ProfilePage() {
         }
     };
 
-    const userGym = (gyms || []).find(g => g.id === user.gymId);
+    const userGym = (user?.gyms || []).find(g => g.id === user.gymId) || (user?.gyms || [])[0];
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
-            <div style={{ padding: '24px 0 32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ paddingTop: 'env(safe-area-inset-top, 40px)', paddingBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingLeft: '20px', paddingRight: '20px' }}>
                 <div style={{ position: 'relative', marginBottom: '16px' }}>
                     <img
                         src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id || 'guest'}`}
@@ -600,6 +601,11 @@ export default function ProfilePage() {
                     </div>
                 )}
 
+                {/* Streak Timer (FOMO Widget) */}
+                <div style={{ width: '100%', maxWidth: '280px', marginBottom: '8px' }}>
+                    <StreakTimer />
+                </div>
+
                 {/* Prestige Status Card (Always Visible) */}
                 <div style={{
                     marginBottom: '16px',
@@ -907,8 +913,8 @@ export default function ProfilePage() {
                         </Link>
                     )}
 
-                    {(userGym?.role === 'admin' || userGym?.role === 'owner') && (
-                        <Link href={`/gym/admin?id=${userGym.id}`} style={{ textDecoration: 'none' }}>
+                    {(user.is_super_admin || userGym?.role === 'admin' || userGym?.role === 'owner') && (
+                        <Link href={`/gym/admin?id=${userGym?.id || ''}`} style={{ textDecoration: 'none' }}>
                             <div style={{
                                 padding: '16px',
                                 background: 'rgba(50, 50, 200, 0.15)',

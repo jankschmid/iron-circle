@@ -1,11 +1,30 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
-import { TRAINING_GOALS, TRAINING_GOAL_LABELS } from '@/lib/constants';
 import GoalWizard from '@/components/GoalWizard';
+
+// ── Training style options ────────────────────────────────────────────────────
+const TRAINING_STYLES = [
+    { id: 'Bodybuilding', emoji: '🏋️', label: 'Bodybuilding' },
+    { id: 'Powerlifting', emoji: '💪', label: 'Powerlifting' },
+    { id: 'Calisthenics', emoji: '🤸', label: 'Calisthenics' },
+    { id: 'Crossfit', emoji: '⚡', label: 'CrossFit' },
+    { id: 'Endurance', emoji: '🏃', label: 'Endurance' },
+    { id: 'General Fitness', emoji: '🎯', label: 'General Fitness' },
+];
+
+// ── Target rep ranges (Smart Suggestions) ────────────────────────────────────
+const REP_RANGES = [
+    { min: 1, max: 5, label: '1–5  (Strength / Max Effort)' },
+    { min: 3, max: 6, label: '3–6  (Powerbuilding)' },
+    { min: 6, max: 8, label: '6–8  (Hypertrophy – Heavy)' },
+    { min: 8, max: 12, label: '8–12 (Hypertrophy – Classic)' },
+    { min: 12, max: 15, label: '12–15 (Hypertrophy – Light)' },
+    { min: 15, max: 20, label: '15–20 (Muscular Endurance)' },
+];
 
 export default function PreferencesSettingsPage() {
     const { user, updateUserProfile } = useStore();
@@ -17,6 +36,29 @@ export default function PreferencesSettingsPage() {
     // State
     const [smartSuggestions, setSmartSuggestions] = useState(user?.user_metadata?.preferences?.smart_suggestions ?? true);
     const [workoutGoal, setWorkoutGoal] = useState(user?.workout_goal || 150);
+    const [trainingStyle, setTrainingStyle] = useState(user?.training_style || 'Bodybuilding');
+    const [repRangeMin, setRepRangeMin] = useState(user?.rep_range_min || 8);
+    const [repRangeMax, setRepRangeMax] = useState(user?.rep_range_max || 12);
+
+    // Auto-update effect for training style to rep range if they click a new style
+    const handleStyleChange = (styleId) => {
+        setTrainingStyle(styleId);
+
+        let recommendedRange = REP_RANGES.find(r => r.min === 8 && r.max === 12); // Default classic
+        switch (styleId) {
+            case 'Powerlifting': recommendedRange = REP_RANGES.find(r => r.min === 1 && r.max === 5); break;
+            case 'Bodybuilding':
+            case 'General Fitness': recommendedRange = REP_RANGES.find(r => r.min === 8 && r.max === 12); break;
+            case 'Endurance': recommendedRange = REP_RANGES.find(r => r.min === 15 && r.max === 20); break;
+            case 'Calisthenics':
+            case 'Crossfit': recommendedRange = REP_RANGES.find(r => r.min === 6 && r.max === 8); break;
+        }
+
+        if (recommendedRange) {
+            setRepRangeMin(recommendedRange.min);
+            setRepRangeMax(recommendedRange.max);
+        }
+    };
 
     if (!user) return <div className="container" style={{ paddingTop: 'calc(40px + var(--safe-top))' }}>Loading...</div>;
 
@@ -37,11 +79,19 @@ export default function PreferencesSettingsPage() {
             if (authError) throw authError;
 
             // 2. Update Column
-            const { error: profileError } = await supabase.from('profiles').update({ workout_goal: workoutGoal }).eq('id', user.id);
+            const { error: profileError } = await supabase.from('profiles').update({
+                workout_goal: workoutGoal,
+                training_style: trainingStyle,
+                rep_range_min: repRangeMin,
+                rep_range_max: repRangeMax
+            }).eq('id', user.id);
             if (profileError) throw profileError;
 
             updateUserProfile({
                 workout_goal: workoutGoal,
+                training_style: trainingStyle,
+                rep_range_min: repRangeMin,
+                rep_range_max: repRangeMax,
                 user_metadata: newMeta
             });
 
@@ -56,7 +106,7 @@ export default function PreferencesSettingsPage() {
 
     return (
         <div className="container" style={{ paddingBottom: '100px' }}>
-            <header style={{ padding: '24px 0 32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <header style={{ paddingTop: 'env(safe-area-inset-top, 40px)', paddingBottom: '32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <Link href="/profile/settings" style={{ fontSize: '1.5rem', color: 'var(--text-muted)', textDecoration: 'none' }}>←</Link>
                 <h1 style={{ fontSize: '1.5rem' }}>Preferences</h1>
             </header>
@@ -177,39 +227,28 @@ export default function PreferencesSettingsPage() {
                     }}>
                         <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Training Style 🏋️‍♂️</div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                            Affects your XP gains! (e.g. Endurance = more XP for cardio).
+                            Your main focus. This helps the algorithm recommend exercises and weights.
                         </div>
 
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '24px' }}>
+                            {TRAINING_STYLES.map(s => (
+                                <button key={s.id} onClick={() => handleStyleChange(s.id)}
+                                    style={{ padding: '14px', borderRadius: '12px', border: `1px solid ${trainingStyle === s.id ? 'var(--primary)' : 'var(--border)'}`, background: trainingStyle === s.id ? 'rgba(var(--primary-rgb, 50,255,126), 0.12)' : 'var(--background)', color: trainingStyle === s.id ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span> {s.label}
+                                </button>
+                            ))}
+                        </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {Object.values(TRAINING_GOALS).map(g => (
-                                <button
-                                    key={g}
-                                    onClick={async () => {
-                                        // Optimistic Update
-                                        updateUserProfile({ goal: g });
-                                        // Persist
-                                        const { error } = await supabase.from('profiles').update({ goal: g }).eq('id', user.id);
-                                        if (error) {
-                                            console.error("Failed to update goal:", error);
-                                            alert("Failed to save goal");
-                                        } else {
-                                            // Make sure store updates (fetchProfile might be needed if not using real-time)
-                                            // The updateUserProfile above handles local state
-                                        }
-                                    }}
-                                    style={{
-                                        padding: '12px',
-                                        borderRadius: '8px',
-                                        border: '1px solid var(--border)',
-                                        background: (user.goal === g) ? 'var(--primary)' : 'var(--background)',
-                                        color: (user.goal === g) ? '#000' : 'var(--text-muted)',
-                                        fontWeight: (user.goal === g) ? 'bold' : 'normal',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    {g === TRAINING_GOALS.HYPERTROPHY ? 'Hypertrophy' : g}
+                        <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Smart Suggestions Target Range 🎯</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                            What rep range the algorithm should aim for when suggesting weights.
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {REP_RANGES.map(r => (
+                                <button key={`${r.min}-${r.max}`} onClick={() => { setRepRangeMin(r.min); setRepRangeMax(r.max); }}
+                                    style={{ padding: '12px 16px', borderRadius: '10px', border: `1px solid ${repRangeMin === r.min && repRangeMax === r.max ? 'var(--primary)' : 'var(--border)'}`, background: repRangeMin === r.min && repRangeMax === r.max ? 'rgba(var(--primary-rgb, 50,255,126), 0.1)' : 'var(--background)', color: repRangeMin === r.min && repRangeMax === r.max ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', fontSize: '0.9rem' }}>
+                                    {r.label}
                                 </button>
                             ))}
                         </div>

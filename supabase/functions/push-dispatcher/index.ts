@@ -128,6 +128,26 @@ async function handleDatabaseWebhook(payload: any, supabase: any) {
         targetUserIds = [target_user_id];
     }
 
+    // 4. TRAINER REQUESTS
+    else if (table === 'trainer_relationships' && (type === 'INSERT' || type === 'UPDATE')) {
+        const { trainer_id, client_id, status } = record;
+
+        if (status === 'pending' && type === 'INSERT') {
+            // Client requested a trainer
+            const { data: client } = await supabase.from('profiles').select('username').eq('id', client_id).single();
+            title = "New Client Invitation";
+            body = `${client?.username || 'An athlete'} wants you as their trainer!`;
+            targetUserIds = [trainer_id];
+        }
+        else if (status === 'active' && type === 'UPDATE') {
+            // Trainer accepted
+            const { data: trainer } = await supabase.from('profiles').select('username').eq('id', trainer_id).single();
+            title = "Trainer Accepted";
+            body = `${trainer?.username || 'Your trainer'} accepted your request.`;
+            targetUserIds = [client_id];
+        }
+    }
+
     // Dispatch
     if (targetUserIds.length > 0 && title && body) {
         // Fetch valid push tokens

@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense, useRef } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-
+import QRCode from 'react-qr-code';
+import { useTranslation } from '@/context/TranslationContext';
 // --- Singleton Monitor Client (Stateless) ---
 const monitorSupabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -36,6 +37,7 @@ const COLOR_SURFACE = '#111';
 // --- Components ---
 
 function GymMonitorPage() {
+    const { t } = useTranslation();
     const searchParams = useSearchParams();
     const gymId = searchParams.get('id');
     const supabase = monitorSupabase;
@@ -75,7 +77,13 @@ function GymMonitorPage() {
 
         // Fetch Gym Info
         supabase.from('gyms').select('name').eq('id', gymId).single()
-            .then(({ data }) => setGymInfo(data));
+            .then(async ({ data }) => {
+                if (!data) return;
+                let info = { ...data };
+                const { data: commData } = await supabase.from('communities').select('id').eq('gym_id', gymId).single();
+                if (commData) info.communityId = commData.id;
+                setGymInfo(info);
+            });
 
         // Content Polling (Fetch key settings & content every 30s)
         const fetchContent = async (signal) => {
@@ -244,13 +252,13 @@ function GymMonitorPage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif'
             }}>
                 <form onSubmit={handleLogin} style={{ textAlign: 'center', width: '300px' }}>
-                    <h1 style={{ marginBottom: '20px', fontWeight: 900 }}>IRON MONITOR</h1>
+                    <h1 style={{ marginBottom: '20px', fontWeight: 900 }}>{t('IRON MONITOR')}</h1>
                     <p style={{ color: '#888', marginBottom: '20px' }}>{gymInfo?.name}</p>
                     <input
                         type="password"
                         value={displayKey}
                         onChange={(e) => setDisplayKey(e.target.value)}
-                        placeholder="ENTER KEY"
+                        placeholder={t('ENTER KEY')}
                         style={{
                             width: '100%', padding: '15px', background: COLOR_SURFACE,
                             border: '1px solid #333', color: '#fff', textAlign: 'center',
@@ -260,7 +268,7 @@ function GymMonitorPage() {
                     <button type="submit" style={{
                         width: '100%', padding: '15px', background: '#fff',
                         border: 'none', fontWeight: 'bold', cursor: 'pointer', borderRadius: '8px'
-                    }}>UNLOCK</button>
+                    }}>{t('UNLOCK')}</button>
                 </form>
             </div>
         );
@@ -284,11 +292,11 @@ function GymMonitorPage() {
                         animate={{ opacity: 1, y: 0 }} // Removed pulse for readability on mode switch
                         style={{ color: COLOR_ACCENT, fontSize: '1.5vw', fontWeight: 600, marginTop: '1vh', textTransform: 'uppercase' }}
                     >
-                        • {viewMode === 'live' ? 'LIVE FLOOR' : viewMode}
+                        • {viewMode === 'live' ? t('LIVE FLOOR') : t(viewMode.toUpperCase())}
                     </motion.div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '1.2vw', color: '#666' }}>Active Athletes</div>
+                    <div style={{ fontSize: '1.2vw', color: '#666' }}>{t('Active Athletes')}</div>
                     <div style={{ fontSize: '3vw', fontWeight: 800, lineHeight: 1 }}>{activeUsers.length}</div>
                 </div>
             </header>
@@ -360,6 +368,19 @@ function GymMonitorPage() {
                             <ChallengesWall challenges={contentData.challenges} />
                         </motion.div>
                     )}
+
+                    {viewMode === 'qr_checkin' && (
+                        <motion.div
+                            key="qr_checkin"
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 1.1 }}
+                            transition={{ duration: 0.5 }}
+                            style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <QRCheckinWall gymInfo={gymInfo} />
+                        </motion.div>
+                    )}
                 </AnimatePresence>
             </div>
             {/* Connection Lost Overlay */}
@@ -369,8 +390,8 @@ function GymMonitorPage() {
                     background: 'rgba(0,0,0,0.8)', zIndex: 9999,
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
                 }}>
-                    <h2 style={{ color: '#ff0000', fontSize: '3vw', marginBottom: '1vh' }}>CONNECTION LOST</h2>
-                    <p style={{ color: '#fff', fontSize: '1.5vw' }}>Attempting to reconnect...</p>
+                    <h2 style={{ color: '#ff0000', fontSize: '3vw', marginBottom: '1vh' }}>{t('CONNECTION LOST')}</h2>
+                    <p style={{ color: '#fff', fontSize: '1.5vw' }}>{t('Attempting to reconnect...')}</p>
                 </div>
             )}
         </div>
@@ -380,11 +401,12 @@ function GymMonitorPage() {
 // --- Sub-Components ---
 
 function LiveWall({ users }) {
+    const { t } = useTranslation();
     if (users.length === 0) {
         return (
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#333' }}>
-                <h2 style={{ fontSize: '3vw', fontWeight: 800 }}>THE FLOOR IS QUIET</h2>
-                <p style={{ fontSize: '1.5vw' }}>Start a workout to join the board.</p>
+                <h2 style={{ fontSize: '3vw', fontWeight: 800 }}>{t('THE FLOOR IS QUIET')}</h2>
+                <p style={{ fontSize: '1.5vw' }}>{t('Start a workout to join the board.')}</p>
             </div>
         );
     }
@@ -406,6 +428,7 @@ function LiveWall({ users }) {
 }
 
 function LiveCard({ user }) {
+    const { t } = useTranslation();
     const isRecent = true; // Todo: Check timestamp < 2min
 
     return (
@@ -455,7 +478,7 @@ function LiveCard({ user }) {
                     {user.username}
                 </h3>
                 <div style={{ color: '#888', fontSize: '1.2vw', fontWeight: 500 }}>
-                    {user.current_exercise || 'Resting'}
+                    {user.current_exercise || t('Resting')}
                 </div>
                 {user.current_set && (
                     <div style={{
@@ -463,7 +486,7 @@ function LiveCard({ user }) {
                         background: '#222', color: '#fff', padding: '0.2vw 0.8vw',
                         borderRadius: '100vw', fontSize: '0.9vw', fontWeight: 700
                     }}>
-                        SET {user.current_set}
+                        {t('SET')} {user.current_set}
                     </div>
                 )}
             </div>
@@ -472,6 +495,7 @@ function LiveCard({ user }) {
 }
 
 function Leaderboard({ gymId }) {
+    const { t } = useTranslation();
     const [leaders, setLeaders] = useState([]);
     const [metric, setMetric] = useState('volume'); // volume, xp, level
     const [loading, setLoading] = useState(true);
@@ -503,11 +527,11 @@ function Leaderboard({ gymId }) {
 
     const getTitle = () => {
         switch (metric) {
-            case 'volume': return 'MONTHLY LEADERS • VOLUME';
-            case 'xp': return 'ALL-TIME LEGENDS • XP';
-            case 'level': return 'HIGHEST LEVEL ATHLETES';
-            case 'workouts': return 'MOST CONSISTENT • WORKOUTS';
-            default: return 'LEADERBOARD';
+            case 'volume': return t('MONTHLY LEADERS • VOLUME');
+            case 'xp': return t('ALL-TIME LEGENDS • XP');
+            case 'level': return t('HIGHEST LEVEL ATHLETES');
+            case 'workouts': return t('MOST CONSISTENT • WORKOUTS');
+            default: return t('LEADERBOARD');
         }
     };
 
@@ -518,11 +542,11 @@ function Leaderboard({ gymId }) {
         return val;
     };
 
-    if (loading) return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+    if (loading) return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t('Loading...')}</div>;
     if (leaders.length === 0) return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
-            <h2 style={{ fontSize: '3vw', fontWeight: 900 }}>BE THE FIRST</h2>
-            <p style={{ fontSize: '1.5vw' }}>Log a workout to claim the throne.</p>
+            <h2 style={{ fontSize: '3vw', fontWeight: 900 }}>{t('BE THE FIRST')}</h2>
+            <p style={{ fontSize: '1.5vw' }}>{t('Log a workout to claim the throne.')}</p>
         </div>
     );
 
@@ -575,14 +599,15 @@ function Leaderboard({ gymId }) {
 }
 
 function NewsWall({ news }) {
-    if (!news || news.length === 0) return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2vw', color: '#666' }}>Checking for updates...</div>;
+    const { t } = useTranslation();
+    if (!news || news.length === 0) return <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2vw', color: '#666' }}>{t('Checking for updates...')}</div>;
 
     const mainItem = news[0];
     const otherItems = news.slice(1, 4);
 
     return (
         <div style={{ height: '100%', padding: '2vw' }}>
-            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>NEWS & ANNOUNCEMENTS</h2>
+            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>{t('NEWS & ANNOUNCEMENTS')}</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: otherItems.length > 0 ? '2fr 1fr' : '1fr', gap: '4vw', height: '80%' }}>
                 {/* Main Feature */}
@@ -608,11 +633,12 @@ function NewsWall({ news }) {
 }
 
 function EventsWall({ events }) {
+    const { t } = useTranslation();
     if (!events || events.length === 0) return <div />;
 
     return (
         <div style={{ height: '100%', padding: '2vw' }}>
-            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>UPCOMING EVENTS</h2>
+            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>{t('UPCOMING EVENTS')}</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(25vw, 1fr))', gap: '3vw' }}>
                 {events.map((event, i) => (
@@ -636,11 +662,12 @@ function EventsWall({ events }) {
 }
 
 function ChallengesWall({ challenges }) {
+    const { t } = useTranslation();
     if (!challenges || challenges.length === 0) return <div />;
 
     return (
         <div style={{ height: '100%', padding: '2vw' }}>
-            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>ACTIVE CHALLENGES</h2>
+            <h2 style={{ fontSize: '3vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>{t('ACTIVE CHALLENGES')}</h2>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '3vh', maxWidth: '80vw', margin: '0 auto' }}>
                 {challenges.map((challenge, i) => (
@@ -655,13 +682,40 @@ function ChallengesWall({ challenges }) {
                             <h3 style={{ fontSize: '2.5vw', fontWeight: 800, marginBottom: '1vh', color: '#fff' }}>{challenge.title}</h3>
                             <p style={{ fontSize: '1.8vw', color: '#aaa' }}>{challenge.description}</p>
                         </div>
-                        <div style={{ background: '#222', padding: '1.5vw 3vw', borderRadius: '1vw', textAlign: 'center' }}>
-                            <div style={{ fontSize: '1.2vw', color: '#666', textTransform: 'uppercase' }}>Goal</div>
-                            <div style={{ fontSize: '2.5vw', fontWeight: 900, color: COLOR_ACCENT }}>FAIL</div>
+                        <div style={{ background: '#222', padding: '1.5vw 3vw', borderRadius: '1vw', textAlign: 'center', minWidth: '15vw' }}>
+                            <div style={{ fontSize: '1.2vw', color: '#666', textTransform: 'uppercase', marginBottom: '4px' }}>{t('Goal')}</div>
+                            <div style={{ fontSize: '2.5vw', fontWeight: 900, color: COLOR_ACCENT }}>
+                                {challenge.target_value ? `${challenge.target_value} ${challenge.target_unit || ''}`.trim() : t('OPEN')}
+                            </div>
                         </div>
                     </motion.div>
                 ))}
             </div>
+        </div>
+    );
+
+
+}
+
+function QRCheckinWall({ gymInfo }) {
+    const { t } = useTranslation();
+    if (!gymInfo) return null;
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ironcircle.app';
+    const url = `${origin}/community?id=${gymInfo.communityId || ''}&gym_id=${gymInfo.id}&action=qr_scan`;
+
+    // Size calculation - safe fallback if window is undefined (e.g., SSR)
+    const qrSize = typeof window !== 'undefined' ? Math.min(window.innerHeight, window.innerWidth) * 0.4 : 300;
+
+    return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '4vw', fontWeight: 900, marginBottom: '4vh', color: COLOR_ACCENT }}>{t('CHECK IN OR JOIN')}</h2>
+            <div style={{ background: '#fff', padding: '2vw', borderRadius: '1.5vw', border: `0.5vw solid ${COLOR_ACCENT}` }}>
+                <QRCode value={url} size={qrSize} level="H" />
+            </div>
+            <p style={{ fontSize: '1.8vw', marginTop: '4vh', color: '#fff', maxWidth: '80%', lineHeight: 1.4 }}>
+                {t('Scan to start your workout, join')} <strong style={{ color: COLOR_ACCENT }}>{gymInfo.name}</strong> {t('on Iron Circle, or download the app.')}
+            </p>
         </div>
     );
 }

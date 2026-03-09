@@ -54,35 +54,46 @@ serve(async (req) => {
             return new Response("No users to notify.", { status: 200 });
         }
 
-        // Extract push tokens
-        const tokens = inactiveUsers.map((u: any) => u.push_token).filter(Boolean);
+        console.log(`Sending retention push to ${inactiveUsers.length} users with expiring streaks...`);
 
-        if (tokens.length === 0) {
-            return new Response("No valid tokens found.", { status: 200 });
+        // Send customized push to each user based on hours left
+        let successCount = 0;
+        let failureCount = 0;
+
+        for (const user of inactiveUsers) {
+            if (!user.push_token) continue;
+
+            const hoursRounded = Math.round(user.hours_left);
+            const timeText = hoursRounded > 1 ? `${hoursRounded} hours` : `1 hour`;
+
+            const message = {
+                notification: {
+                    title: "⚠️ Streak at Risk!",
+                    body: `You have ${timeText} left in your Grace Period! Log a workout to save your streak.`,
+                },
+                data: {
+                    type: "retention",
+                    hours_left: String(user.hours_left)
+                },
+                token: user.push_token,
+            };
+
+            try {
+                await getMessaging().send(message);
+                successCount++;
+            } catch (err) {
+                console.error(`Failed sending to ${user.user_id}:`, err);
+                failureCount++;
+            }
         }
 
-        console.log(`Sending retention push to ${tokens.length} users...`);
-
-        const message = {
-            notification: {
-                title: "Iron Circle Awaits 🚀",
-                body: "It's been 2 days! Time to hit the gym, lift some iron, and secure your XP.",
-            },
-            data: {
-                type: "retention",
-            },
-            tokens: tokens,
-        };
-
-        // Firebase multicast can handle up to 500 tokens at once
-        const response = await getMessaging().sendEachForMulticast(message);
-        console.log(`Successfully sent ${response.successCount} messages. Failed: ${response.failureCount}`);
+        console.log(`Successfully sent ${successCount} messages. Failed: ${failureCount}`);
 
         return new Response(
             JSON.stringify({
                 success: true,
-                sentCount: response.successCount,
-                failedCount: response.failureCount
+                sentCount: successCount,
+                failedCount: failureCount
             }),
             { status: 200, headers: { "Content-Type": "application/json" } }
         );

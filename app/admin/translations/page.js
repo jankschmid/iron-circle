@@ -295,7 +295,7 @@ export default function TranslationsAdminPage() {
         : 0;
 
     return (
-        <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#e0e0e0', padding: '20px', paddingBottom: '100px', fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#e0e0e0', padding: 'env(safe-area-inset-top, 40px) 20px 100px 20px', fontFamily: 'Inter, sans-serif' }}>
 
             {/* ALERT TOAST */}
             {message && (
@@ -311,7 +311,7 @@ export default function TranslationsAdminPage() {
 
             {/* HEADER */}
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', borderBottom: '1px solid #333', paddingBottom: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '32px', borderBottom: '1px solid #333', paddingBottom: '24px' }}>
                     <div>
                         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, letterSpacing: '-1px' }}>
                             TRANSLATION <span style={{ color: 'var(--primary, #00d2ff)' }}>CONTROLLER</span>
@@ -396,7 +396,7 @@ export default function TranslationsAdminPage() {
 
                 {/* CONTROLS BAR */}
                 <div style={{
-                    display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '24px',
+                    display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '24px',
                     background: '#111', padding: '16px', borderRadius: '16px', border: '1px solid #222'
                 }}>
                     <div style={{ flex: 1, position: 'relative' }}>

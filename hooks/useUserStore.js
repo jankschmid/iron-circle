@@ -49,7 +49,7 @@ export function useUserStore() {
             // 2. Fetch User Gyms (Separate query to avoid join issues)
             const { data: userGyms, error: gymError } = await supabase
                 .from('user_gyms')
-                .select('gym_id, label, is_default')
+                .select('gym_id, label, is_default, radius, role')
                 .eq('user_id', session.user.id);
 
             if (gymError) console.error("fetchProfile Supabase Error (UserGyms):", gymError);
@@ -74,7 +74,9 @@ export function useUserStore() {
                         location: g?.location,
                         address: g?.address,
                         source: g?.source,
-                        isDefault: ug.is_default
+                        isDefault: ug.is_default,
+                        radius: ug.radius,
+                        role: ug.role
                     };
                 });
             }
@@ -172,9 +174,14 @@ export function useUserStore() {
     };
 
     const updateUserGym = async (gymId, updates) => {
-        await supabase.from('user_gyms').update(updates).eq('user_id', user.id).eq('gym_id', gymId);
+        const { error } = await supabase.from('user_gyms').update(updates).eq('user_id', user.id).eq('gym_id', gymId);
+        if (error) {
+            console.error("Error updating user gym:", error);
+            return { success: false, error };
+        }
         const refreshed = await fetchProfile({ user });
         setUser(refreshed);
+        return { success: true };
     };
 
     const removeUserGym = async (gymId) => {
