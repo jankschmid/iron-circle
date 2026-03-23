@@ -11,7 +11,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useTranslation } from '@/context/TranslationContext';
 
-const MapPicker = dynamic(() => import('../../components/MapPicker'), { ssr: false, loading: () => <div className="spinner"></div> });
+const MapPicker = dynamic(() => import('@/components/MapPicker'), { ssr: false, loading: () => <div className="spinner"></div> });
+
 
 function TrackerContent() {
     const { t } = useTranslation();
