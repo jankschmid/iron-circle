@@ -21,6 +21,12 @@ export default function GymAdminModal({ gymId, onClose }) {
     const [eventDate, setEventDate] = useState('');
     const [eventDesc, setEventDesc] = useState('');
 
+    // Challenge Form
+    const [challengeTitle, setChallengeTitle] = useState('');
+    const [challengeDesc, setChallengeDesc] = useState('');
+    const [challengeTarget, setChallengeTarget] = useState('');
+    const [challengeUnit, setChallengeUnit] = useState('');
+
     const handleCreateNews = async () => {
         if (!newsTitle.trim() || !newsContent.trim()) return;
         setLoading(true);
@@ -69,6 +75,35 @@ export default function GymAdminModal({ gymId, onClose }) {
         } catch (err) {
             console.error(err);
             toast.error("Error creating event");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCreateChallenge = async () => {
+        if (!challengeTitle.trim()) return;
+        setLoading(true);
+        try {
+            const { error } = await supabase
+                .from('gym_challenges')
+                .insert({
+                    gym_id: gymId,
+                    title: challengeTitle,
+                    description: challengeDesc,
+                    target_value: challengeTarget ? parseFloat(challengeTarget) : null,
+                    target_unit: challengeUnit || null
+                });
+
+            if (error) throw error;
+            toast.success("Challenge Created!");
+            setChallengeTitle('');
+            setChallengeDesc('');
+            setChallengeTarget('');
+            setChallengeUnit('');
+            onClose();
+        } catch (err) {
+            console.error(err);
+            toast.error("Error creating challenge");
         } finally {
             setLoading(false);
         }
@@ -193,6 +228,16 @@ export default function GymAdminModal({ gymId, onClose }) {
                         Events
                     </button>
                     <button
+                        onClick={() => setActiveTab('challenges')}
+                        style={{
+                            flex: 1, padding: '16px', background: activeTab === 'challenges' ? 'var(--surface-highlight)' : 'transparent',
+                            color: activeTab === 'challenges' ? 'var(--primary)' : 'var(--text-muted)',
+                            border: 'none', fontWeight: 'bold', cursor: 'pointer'
+                        }}
+                    >
+                        Challenges
+                    </button>
+                    <button
                         onClick={() => setActiveTab('submissions')}
                         style={{
                             flex: 1, padding: '16px', background: activeTab === 'submissions' ? 'var(--surface-highlight)' : 'transparent',
@@ -276,6 +321,59 @@ export default function GymAdminModal({ gymId, onClose }) {
                                 }}
                             >
                                 {loading ? 'Creating...' : 'Create Event'}
+                            </button>
+                        </div>
+                    )}
+
+                    {activeTab === 'challenges' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Challenge Title</label>
+                                <input
+                                    value={challengeTitle} onChange={e => setChallengeTitle(e.target.value)}
+                                    placeholder="e.g. 10,000kg Volume"
+                                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Description</label>
+                                <textarea
+                                    value={challengeDesc} onChange={e => setChallengeDesc(e.target.value)}
+                                    placeholder="What are the rules?"
+                                    rows={3}
+                                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', resize: 'vertical' }}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Target Value (Goal)</label>
+                                    <input
+                                        type="number"
+                                        value={challengeTarget} onChange={e => setChallengeTarget(e.target.value)}
+                                        placeholder="e.g. 10000"
+                                        style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff' }}
+                                    />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Target Unit</label>
+                                    <input
+                                        type="text"
+                                        value={challengeUnit} onChange={e => setChallengeUnit(e.target.value)}
+                                        placeholder="e.g. kg, reps"
+                                        style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff' }}
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCreateChallenge}
+                                disabled={loading || !challengeTitle.trim()}
+                                style={{
+                                    padding: '12px', background: 'var(--primary)', color: '#000',
+                                    border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer',
+                                    marginTop: '8px'
+                                }}
+                            >
+                                {loading ? 'Creating...' : 'Create Challenge'}
                             </button>
                         </div>
                     )}

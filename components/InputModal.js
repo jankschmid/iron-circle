@@ -46,7 +46,7 @@ export default function InputModal({ isOpen, title, initialValue = '', fields = 
             background: 'rgba(0,0,0,0.8)', zIndex: 9999,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: '20px'
-        }} onClick={onCancel}>
+        }} onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
             <div style={{
                 background: 'var(--surface)',
                 padding: '24px',
@@ -63,7 +63,9 @@ export default function InputModal({ isOpen, title, initialValue = '', fields = 
                         fields.map((field, i) => (
                             <div key={field.name}>
                                 <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>{field.label}</label>
-                                {field.type === 'textarea' ? (
+                                {field.type === 'custom' ? (
+                                    field.render(values, handleChange)
+                                ) : field.type === 'textarea' ? (
                                     <textarea
                                         ref={i === 0 ? firstInputRef : null}
                                         value={values[field.name] || ''}

@@ -30,17 +30,37 @@ export function useSocialStore(user, workoutSession) {
         const { data: profiles } = await supabase.from('profiles').select('id, name, username, avatar_url, xp, level').in('id', friendIds);
         if (!profiles) return;
 
-        // 3. Live Activity (Basic)
+        // 3. Live Activity (Tracker / Gym)
         const { data: activeSessions } = await supabase.from('workout_sessions')
             .select('user_id, start_time, gyms(name)').in('user_id', friendIds).eq('status', 'active');
 
+        // 4. Live Activity (Workouts)
+        const { data: activeWorkouts } = await supabase.from('workouts')
+            .select('user_id, start_time, name').in('user_id', friendIds).is('end_time', null);
+
         const liveMap = {};
-        activeSessions?.forEach(s => { liveMap[s.user_id] = { location: s.gyms?.name, startTime: s.start_time }; });
+
+        // Initialize map
+        friendIds.forEach(id => liveMap[id] = { tracker: null, workout: null });
+
+        const MAX_SESSION_MS = 14 * 60 * 60 * 1000; // 14 hours
+        activeSessions?.forEach(s => {
+            if (new Date() - new Date(s.start_time) < MAX_SESSION_MS) {
+                liveMap[s.user_id].tracker = { location: s.gyms?.name, startTime: s.start_time };
+            }
+        });
+
+        activeWorkouts?.forEach(w => {
+            if (new Date() - new Date(w.start_time) < MAX_SESSION_MS) {
+                liveMap[w.user_id].workout = { name: w.name, detail: w.name, status: 'Active', startTime: w.start_time };
+            }
+        });
 
         setFriends(profiles.map(p => ({
             id: p.id, name: p.name, handle: '@' + p.username,
             avatar: p.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.id}`,
-            status: liveMap[p.id] ? 'active' : 'offline', activity: liveMap[p.id],
+            status: (liveMap[p.id].tracker || liveMap[p.id].workout) ? 'active' : 'offline',
+            activity: liveMap[p.id],
             level: p.level || 1, xp: p.xp || 0
         })));
     };
@@ -129,6 +149,43 @@ export function useSocialStore(user, workoutSession) {
         return { success: true };
     };
 
+    const joinChallenge = async (challengeId, teamId = null) => {
+        if (!user) {
+            toast.error("Please login to join this challenge.");
+            return false;
+        }
+
+        const payload = { challenge_id: challengeId, user_id: user.id };
+        if (teamId) payload.team_id = teamId;
+
+        const { error } = await supabase.from('challenge_participants').insert(payload);
+        if (error) {
+            if (error.code === '23505') {
+                toast.success("You are already participating!");
+                return true;
+            }
+            toast.error(error.message);
+            return false;
+        }
+        toast.success("Challenge Accepted! Let's get to work.");
+        return true;
+    };
+
+    const createChallengeTeam = async (challengeId, teamName) => {
+        if (!user) return null;
+        const { data, error } = await supabase.from('challenge_teams').insert({
+            challenge_id: challengeId,
+            team_name: teamName,
+            creator_id: user.id
+        }).select().single();
+
+        if (error) {
+            toast.error(error.message);
+            return null;
+        }
+        return data.id;
+    };
+
     const getCommunityMembers = async (cId) => {
         const { data } = await supabase.from('community_members').select('user_id, role, profiles(id, name, avatar_url)').eq('community_id', cId);
         return data || [];
@@ -193,14 +250,43 @@ export function useSocialStore(user, workoutSession) {
     useEffect(() => {
         if (!user) return;
         fetchUnreadCount();
-        const channel = supabase.channel('social_updates')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` }, () => {
+
+        // Listen to all new messages (RLS protects unauthorized access)
+        const msgChannel = supabase.channel('social_updates')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+                if (payload.new.sender_id === user.id) return;
                 setUnreadCount(prev => prev + 1);
-                toast.success("New Message");
+                toast.success('New Message Received');
             })
             .subscribe();
-        return () => { supabase.removeChannel(channel); };
+
+        return () => { supabase.removeChannel(msgChannel); };
     }, [user, pathname]);
+
+    // --- REALTIME: Live Circle (workout_sessions + workouts) ---
+    // Re-fetch friends whenever any friend starts/stops a gym session or workout.
+    // Fetching (not just patching from payload) ensures we always get the joined gyms.name.
+    useEffect(() => {
+        if (!user?.id) return;
+
+        // Initial load
+        fetchFriends();
+
+        const liveChannel = supabase.channel('friends_live_status')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'workout_sessions' },
+                () => { fetchFriends(); }   // Re-fetch to get gyms.name join
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'workouts' },
+                () => { fetchFriends(); }   // Re-fetch to get live workout info
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(liveChannel); };
+    }, [user?.id]);
 
     // --- FEED & INTERACTIONS ---
     const fetchFeed = async (page = 0, limit = 20) => {
@@ -232,6 +318,12 @@ export function useSocialStore(user, workoutSession) {
             if (error.code === '23505') return;
             throw error;
         }
+
+        if (type === 'hype') {
+            supabase.rpc('check_event_achievements', { p_event_type: 'HYPE_SENT' }).then(({ data: achievements }) => {
+                if (achievements?.length > 0) achievements.forEach(() => setTimeout(() => toast.success('🎖️ Achievement Unlocked!'), 500));
+            });
+        }
     };
 
     // --- GROUP DASHBOARD ---
@@ -260,7 +352,7 @@ export function useSocialStore(user, workoutSession) {
         unreadCount,
         fetchFriends, fetchUnreadCount,
         sendMessage, createGroupChat, addMemberToGroup, renameGroup, leaveGroup, getChat,
-        fetchCommunities, joinGymCommunity, joinCommunity, leaveCommunity, getCommunityMembers,
+        fetchCommunities, joinGymCommunity, joinCommunity, leaveCommunity, getCommunityMembers, joinChallenge, createChallengeTeam,
         joinEvent, leaveEvent,
         shareWorkout, shareTemplate,
         inviteToSession,

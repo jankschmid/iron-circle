@@ -57,11 +57,10 @@ export default function GymHub({ communityId, gymId, initialView = 'lobby' }) {
                 // 4. Events
                 const { data: eventsData } = await supabase.from('gym_events').select('*').eq('gym_id', gymId).gte('event_date', new Date().toISOString()).order('event_date', { ascending: true });
                 setEvents(eventsData || []);
-
                 // 4b. Challenges
-                const { data: challengesData } = await supabase.from('gym_challenges').select('*').eq('gym_id', gymId);
-                // Filter client side for now to be safe until schema is confirmed
-                setChallenges(challengesData?.filter(c => c.is_active !== false) || []);
+                const { data: challengesData } = await supabase.from('v_gym_challenges').select('*').eq('gym_id', gymId);
+                const visibleChallenges = (challengesData || []).filter(c => c.computed_status !== 'Draft');
+                setChallenges(visibleChallenges);
 
                 // 5. Leaderboard (Real)
                 const { data: lbData } = await supabase.rpc('get_gym_leaderboard', {
@@ -193,7 +192,7 @@ export default function GymHub({ communityId, gymId, initialView = 'lobby' }) {
             </div>
 
             {/* 3. TABS */}
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px', position: 'sticky', top: 0, zIndex: 10, background: 'rgba(5,5,5,0.95)', backdropFilter: 'blur(10px)' }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px', position: 'sticky', top: 0, zIndex: 10, background: 'rgba(5,5,5,0.95)', backdropFilter: 'blur(10px)', overflowX: 'auto', whiteSpace: 'nowrap', scrollbarWidth: 'none' }}>
                 {['lobby', 'leaderboard', 'events', 'challenges'].map(tab => (
                     <button
                         key={tab}
@@ -519,11 +518,12 @@ function GymEvents({ events, gymId, onAdd }) {
 
 export function GymChallenges({ challenges }) {
     const { t } = useTranslation();
-    const { user, joinChallenge } = useStore();
+    const { user, joinChallenge, createChallengeTeam } = useStore();
     const supabase = createClient();
     const [myChallenges, setMyChallenges] = useState({});
 
     const [showSubmitModal, setShowSubmitModal] = useState(null); // challengeId
+    const [showTeamModal, setShowTeamModal] = useState(null); // challenge obj
 
     useEffect(() => {
         if (!user) return;
@@ -559,6 +559,12 @@ export function GymChallenges({ challenges }) {
                             <h3 style={{ margin: '0 0 8px 0' }}>{c.title}</h3>
                             <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '16px' }}>{c.description}</p>
 
+                            {c.computed_status === 'Upcoming' && (
+                                <div style={{ display: 'inline-block', background: '#00d2ff22', color: '#00d2ff', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '12px' }}>
+                                    {t('Starts')} {new Date(c.start_date).toLocaleDateString()}
+                                </div>
+                            )}
+
                             {joined ? (
                                 <div style={{ background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
@@ -575,13 +581,13 @@ export function GymChallenges({ challenges }) {
                                         {t('Submit Result')}
                                     </button>
                                 </div>
-                            ) : (
+                            ) : c.computed_status === 'Active' ? (
                                 <button
-                                    onClick={() => handleJoin(c.id)}
+                                    onClick={() => setShowTeamModal(c)}
                                     style={{ width: '100%', padding: '12px', background: 'var(--brand-yellow)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                    {t('Join Challenge')}
+                                    {c.team_type === 'none' ? t('Join Challenge') : t('Join Team & Challenge')}
                                 </button>
-                            )}
+                            ) : null}
                         </div>
                     );
                 })}
@@ -593,9 +599,116 @@ export function GymChallenges({ challenges }) {
                     onClose={() => setShowSubmitModal(null)}
                 />
             )}
+
+            {showTeamModal && (
+                <TeamSelectionModal
+                    challenge={showTeamModal}
+                    onClose={() => setShowTeamModal(null)}
+                    onJoin={(teamId) => {
+                        setShowTeamModal(null);
+                        handleJoin(showTeamModal.id, teamId);
+                    }}
+                    supabase={supabase}
+                    user={user}
+                    createChallengeTeam={createChallengeTeam}
+                    t={t}
+                />
+            )}
         </>
     );
 }
+
+function TeamSelectionModal({ challenge, onClose, onJoin, supabase, user, createChallengeTeam, t }) {
+    const [teams, setTeams] = useState([]);
+    const [newTeamName, setNewTeamName] = useState('');
+    const [loading, setLoading] = useState(true);
+    const toast = useToast();
+
+    useEffect(() => {
+        const fetchTeams = async () => {
+            if (challenge.team_type === 'none' || challenge.team_type === 'squad_based') {
+                // Squads or Solo bypass this exact list for now, we just proceed
+                setLoading(false);
+                return;
+            }
+            const { data } = await supabase.from('challenge_teams').select('*').eq('challenge_id', challenge.id);
+            if (data) setTeams(data);
+            setLoading(false);
+        };
+        fetchTeams();
+    }, [challenge.id]);
+
+    const handleCreateTeam = async () => {
+        if (!newTeamName) return toast.error(t("Please enter a team name"));
+        setLoading(true);
+        const teamId = await createChallengeTeam(challenge.id, newTeamName);
+        if (teamId) {
+            onJoin(teamId);
+        }
+        setLoading(false);
+    };
+
+    if (challenge.team_type === 'none') {
+        // Should theoretically skip this entire modal, but just in case
+        return (
+            <div style={modalOverlayStyle} onClick={onClose}>
+                <div style={modalContentStyle} onClick={e => e.stopPropagation()}>
+                    <h3>{t('Confirm Join')}</h3>
+                    <p>{t('Are you sure you want to join this solo challenge?')}</p>
+                    <button onClick={() => onJoin(null)} style={primaryButtonStyle}>{t('Join Now')}</button>
+                </div>
+            </div>
+        );
+    }
+
+    if (challenge.team_type === 'squad_based') {
+        return (
+            <div style={modalOverlayStyle} onClick={onClose}>
+                <div style={modalContentStyle} onClick={e => e.stopPropagation()}>
+                    <h3>{t('Join Squad Challenge')}</h3>
+                    <p>{t('You will automatically represent your currently active Squad.')}</p>
+                    <button onClick={() => onJoin(null)} style={primaryButtonStyle}>{t('Represent my Squad')}</button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div style={modalOverlayStyle} onClick={onClose}>
+            <div style={modalContentStyle} onClick={e => e.stopPropagation()}>
+                <h3 style={{ margin: '0 0 16px 0' }}>{t('Select or Create Team')}</h3>
+                <p style={{ color: 'var(--text-muted)' }}>{challenge.title} ({challenge.team_type === 'admin_defined' ? t('Admin Defined') : t('Open Creation')})</p>
+
+                {loading ? <p>{t('Loading teams...')}</p> : (
+                    <div style={{ display: 'grid', gap: '8px', marginBottom: '24px', marginTop: '16px' }}>
+                        {teams.length === 0 && <p style={{ fontStyle: 'italic', color: '#888' }}>{t('No teams created yet.')}</p>}
+                        {teams.map(tData => (
+                            <button key={tData.id} onClick={() => onJoin(tData.id)} style={{ padding: '12px', background: 'var(--surface-highlight)', color: '#fff', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontWeight: 'bold' }}>
+                                {t('Join')} {tData.team_name}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {challenge.team_type === 'open_creation' && (
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '8px' }}>{t('Or create a new team:')}</label>
+                        <input
+                            type="text" value={newTeamName} onChange={e => setNewTeamName(e.target.value)}
+                            placeholder={t("New Team Name")}
+                            style={{ width: '100%', padding: '12px', background: 'var(--background)', color: '#fff', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '12px' }}
+                        />
+                        <button onClick={handleCreateTeam} disabled={loading} style={primaryButtonStyle}>{t('Create & Join')}</button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' };
+const modalContentStyle = { background: 'var(--surface)', width: '100%', maxWidth: '400px', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)' };
+const primaryButtonStyle = { width: '100%', padding: '12px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' };
 
 function SubmitResultModal({ challenge, onClose }) {
     const { t } = useTranslation();
@@ -605,7 +718,7 @@ function SubmitResultModal({ challenge, onClose }) {
     const [note, setNote] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const { toast } = useToast();
+    const toast = useToast();
 
     const handleSubmit = async () => {
         if (!value) return toast.error(t("Please enter a value"));
@@ -622,7 +735,7 @@ function SubmitResultModal({ challenge, onClose }) {
             if (error) throw error;
 
             if (data.success) {
-                toast.success(t("Result Submitted! Pending verification."));
+                toast.success(t("Result Submitted!"));
                 onClose();
             } else {
                 toast.error(`${t("Submission failed")}: ${data.message}`);

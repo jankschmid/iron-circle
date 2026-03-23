@@ -9,13 +9,15 @@ export default function ExercisePicker({ onSelect, onCancel }) {
     // Search & Filter State
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedMuscle, setSelectedMuscle] = useState('All');
-    const MUSCLES = ['All', 'Custom', 'Chest', 'Back', 'Legs', 'Calves', 'Shoulders', 'Biceps', 'Triceps', 'Traps', 'Neck', 'Core', 'Cardio', 'Other'];
+    const MUSCLES = ['All', 'Custom', 'Chest', 'Back', 'Legs', 'Calves', 'Shoulders', 'Biceps', 'Triceps', 'Traps', 'Neck', 'Core', 'Cardio', 'Full Body', 'Other'];
+    const MUSCLE_OPTIONS = MUSCLES.filter(m => m !== 'All' && m !== 'Custom'); // for dropdowns
 
     // Custom Exercise Modal State
     const [showCustomModal, setShowCustomModal] = useState(false);
     const [editingExercise, setEditingExercise] = useState(null);
     const [customFormName, setCustomFormName] = useState('');
     const [customFormMuscle, setCustomFormMuscle] = useState('Other');
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
     // Filtered Exercises
     const filteredExercises = exercises.filter(ex => {
@@ -30,6 +32,26 @@ export default function ExercisePicker({ onSelect, onCancel }) {
 
         return matchesMuscle && matchesSearch;
     });
+
+    const openEditModal = (ex, e) => {
+        e.stopPropagation(); // don't trigger onSelect
+        setEditingExercise(ex);
+        setCustomFormName(ex.name);
+        setCustomFormMuscle(ex.muscle || 'Other');
+        setShowCustomModal(true);
+    };
+
+    const handleDelete = async (exId, e) => {
+        e.stopPropagation();
+        if (confirmDeleteId === exId) {
+            await deleteCustomExercise(exId);
+            setConfirmDeleteId(null);
+        } else {
+            setConfirmDeleteId(exId);
+            // Auto-cancel confirm state after 3s
+            setTimeout(() => setConfirmDeleteId(null), 3000);
+        }
+    };
 
     const openAddModal = () => {
         setEditingExercise(null);
@@ -153,29 +175,81 @@ export default function ExercisePicker({ onSelect, onCancel }) {
 
                 {/* List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '40px' }}>
-                    {filteredExercises.map(ex => (
-                        <button
-                            key={ex.id}
-                            onClick={() => onSelect(ex)}
-                            style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '16px',
-                                background: 'var(--surface)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '8px',
-                                textAlign: 'left',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            <div>
-                                <div style={{ fontWeight: '600', color: 'var(--foreground)' }}>{ex.name}</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{ex.muscle}</div>
+                    {filteredExercises.map(ex => {
+                        const isCustom = ex.isCustom || ex.user_id;
+                        const isConfirmingDelete = confirmDeleteId === ex.id;
+                        return (
+                            <div
+                                key={ex.id}
+                                style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '14px 16px',
+                                    background: 'var(--surface)',
+                                    border: isConfirmingDelete ? '1px solid var(--error)' : '1px solid var(--border)',
+                                    borderRadius: '8px',
+                                    gap: '8px'
+                                }}
+                            >
+                                {/* Tap anywhere on left area to select */}
+                                <button
+                                    onClick={() => onSelect(ex)}
+                                    style={{ flex: 1, background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}
+                                >
+                                    <div style={{ fontWeight: '600', color: 'var(--foreground)' }}>{ex.name}</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        {ex.muscle}{isCustom ? ' · Custom' : ''}
+                                    </div>
+                                </button>
+
+                                {/* Edit / Delete — visible only for custom exercises */}
+                                {isCustom && (
+                                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                        <button
+                                            onClick={(e) => openEditModal(ex, e)}
+                                            title="Edit"
+                                            style={{
+                                                padding: '6px 10px',
+                                                background: 'var(--surface-highlight)',
+                                                border: '1px solid var(--border)',
+                                                borderRadius: '6px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.85rem'
+                                            }}
+                                        >
+                                            ✏️
+                                        </button>
+                                        <button
+                                            onClick={(e) => handleDelete(ex.id, e)}
+                                            title={isConfirmingDelete ? 'Tap again to confirm' : 'Delete'}
+                                            style={{
+                                                padding: '6px 10px',
+                                                background: isConfirmingDelete ? 'rgba(255,23,68,0.15)' : 'var(--surface-highlight)',
+                                                border: isConfirmingDelete ? '1px solid var(--error)' : '1px solid var(--border)',
+                                                borderRadius: '6px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.85rem',
+                                                color: isConfirmingDelete ? 'var(--error)' : 'inherit'
+                                            }}
+                                        >
+                                            {isConfirmingDelete ? '⚠️' : '🗑️'}
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Add button for non-custom, or show + always */}
+                                {!isCustom && (
+                                    <button
+                                        onClick={() => onSelect(ex)}
+                                        style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
+                                    >
+                                        +
+                                    </button>
+                                )}
                             </div>
-                            <span style={{ fontSize: '1.2rem', color: 'var(--primary)' }}>+</span>
-                        </button>
-                    ))}
+                        );
+                    })}
                     {filteredExercises.length === 0 && (
                         <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
                             No exercises found. Try creating a custom one!
@@ -221,7 +295,7 @@ export default function ExercisePicker({ onSelect, onCancel }) {
                                 onChange={(e) => setCustomFormMuscle(e.target.value)}
                                 style={{ width: '100%', padding: '10px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '6px', color: '#fff' }}
                             >
-                                {MUSCLES.filter(m => m !== 'All').map(m => (
+                                {MUSCLE_OPTIONS.map(m => (
                                     <option key={m} value={m}>{m}</option>
                                 ))}
                             </select>

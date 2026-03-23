@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getWarmupForRoutine, GENERAL_WARMUP } from '@/lib/smart-warmup';
 import { useStore } from '@/lib/store';
 import ExercisePicker from '@/components/ExercisePicker';
@@ -13,26 +13,30 @@ export default function WarmupScreen({ template, onComplete }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showPicker, setShowPicker] = useState(false);
     const [customExercises, setCustomExercises] = useState([]); // List of manually added exercises
+    const isInitialized = useRef(false);
 
     useEffect(() => {
-        if (template && exercises.length > 0) {
+        if (template && exercises.length > 0 && !isInitialized.current) {
             const generated = getWarmupForRoutine(template, exercises);
             setActivations(generated);
 
             const initialSelection = new Set();
-            // Pre-select Smart Activations
-            generated.forEach(ex => {
-                if (ex.id) initialSelection.add(ex.id);
-            });
+            // User requested that smart activations are NOT automatically selected.
+            // generated.forEach(ex => {
+            //     if (ex.id) initialSelection.add(ex.id);
+            // });
             setSelectedIds(initialSelection);
+            isInitialized.current = true;
         }
     }, [template, exercises]);
 
     const toggleItem = (id) => {
-        const newSet = new Set(selectedIds);
-        if (newSet.has(id)) newSet.delete(id);
-        else newSet.add(id);
-        setSelectedIds(newSet);
+        setSelectedIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return newSet;
+        });
     };
 
     const handleAddExercise = (ex) => {

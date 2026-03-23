@@ -5,10 +5,11 @@ import { createClient } from '@/lib/supabase';
 import { EXERCISES } from '@/lib/data';
 import { useToast } from '@/components/ToastProvider';
 import { calculateSessionXP } from '@/lib/gamification';
+import { foregroundService } from '@/lib/foregroundService';
 
 const supabase = createClient();
 
-export function useWorkoutStore(user) {
+export function useWorkoutStore(user, refreshUserProfile) {
     const toast = useToast();
     const [activeWorkout, setActiveWorkout] = useState(null);
     const [workoutSummary, setWorkoutSummary] = useState(null);
@@ -36,6 +37,22 @@ export function useWorkoutStore(user) {
                 const valid = parsed.startTime && (new Date() - new Date(parsed.startTime) < 24 * 60 * 60 * 1000);
                 if (valid && !activeWorkout) {
                     setActiveWorkout(parsed);
+
+                    // Resume Foreground Service Timer and Progress
+                    let tSets = 0, dSets = 0;
+                    if (parsed.logs) {
+                        parsed.logs.forEach(l => {
+                            tSets += l.sets?.length || 0;
+                            dSets += l.sets?.filter(s => s.completed)?.length || 0;
+                        });
+                    }
+                    foregroundService.startWorkoutTracking({
+                        workoutName: parsed.name,
+                        doneSets: dSets,
+                        totalSets: tSets,
+                        startTimeMs: new Date(parsed.startTime).getTime()
+                    });
+
                     toast.success('Session restored from local backup');
                 } else if (!valid) {
                     localStorage.removeItem('iron-circle-active-workout');
@@ -61,13 +78,27 @@ export function useWorkoutStore(user) {
                     exerciseId: log.exercise_id,
                     sets: typeof log.sets === 'string' ? JSON.parse(log.sets) : log.sets
                 }));
-                setActiveWorkout({
+                const restoredWorkout = {
                     id: data.id,
                     templateId: data.plan_id,
                     name: data.name,
                     startTime: data.start_time,
                     logs: restoredLogs,
                     status: 'active'
+                };
+                setActiveWorkout(restoredWorkout);
+
+                // Resume Foreground Service Timer and Progress
+                let tSets = 0, dSets = 0;
+                restoredLogs.forEach(l => {
+                    tSets += l.sets?.length || 0;
+                    dSets += l.sets?.filter(s => s.completed)?.length || 0;
+                });
+                foregroundService.startWorkoutTracking({
+                    workoutName: restoredWorkout.name,
+                    doneSets: dSets,
+                    totalSets: tSets,
+                    startTimeMs: new Date(restoredWorkout.startTime).getTime()
                 });
             }
         };
@@ -161,10 +192,24 @@ export function useWorkoutStore(user) {
             return;
         }
         setWorkoutSession(session);
+
+        // Start Foreground Service Notification for Gym Session
+        const displayGymName = session?.gyms?.name || gymName || 'a Gym';
+        foregroundService.startGymTracking({
+            gymName: displayGymName,
+            startTimeMs: new Date(session.start_time).getTime()
+        });
     };
 
     const stopTrackingSession = async (reason = 'manual') => {
         if (!workoutSession) return;
+
+        // If manually stopped while auto-tracking is enabled (or even generally), suppress immediate restart for this gym
+        if (reason === 'manual' && workoutSession.gym_id) {
+            sessionStorage.setItem('suppressedGymId', workoutSession.gym_id);
+            console.log('[WorkoutStore] Manually stopped. Suppressing auto-start for gym:', workoutSession.gym_id);
+        }
+
         const endTime = new Date().toISOString();
         const duration = Math.round((new Date(endTime) - new Date(workoutSession.start_time)) / 1000);
 
@@ -176,6 +221,27 @@ export function useWorkoutStore(user) {
             .eq('id', workoutSession.id);
 
         setWorkoutSession(null);
+
+        // End Foreground Notification if it wasn't a workout
+        foregroundService.stop();
+    };
+
+    // Delete a past workout session by ID
+    const deleteSession = async (sessionId) => {
+        const { error } = await supabase.from('workout_sessions').delete().eq('id', sessionId);
+        if (error) {
+            console.error('[IronCircle] deleteSession error:', error.message);
+            throw error;
+        }
+    };
+
+    // Update a past workout session (e.g. edit times)
+    const updateSession = async (sessionId, updates) => {
+        const { error } = await supabase.from('workout_sessions').update(updates).eq('id', sessionId);
+        if (error) {
+            console.error('[IronCircle] updateSession error:', error.message);
+            throw error;
+        }
     };
 
     // --- WORKOUT ACTIONS ---
@@ -204,10 +270,19 @@ export function useWorkoutStore(user) {
             logs: initialLogs,
             status: 'active',
             planId,
+            planId,
             dayId,
             templateId
         };
         setActiveWorkout(newWorkout);
+
+        // Start Android Foreground Service
+        foregroundService.startWorkoutTracking({
+            workoutName: name,
+            doneSets: 0,
+            totalSets: initialLogs.reduce((acc, l) => acc + (l.sets?.length || 0), 0),
+            startTimeMs: new Date(newWorkout.startTime).getTime()
+        });
     };
 
     const logSet = (exerciseId, setIndex, data) => {
@@ -215,12 +290,27 @@ export function useWorkoutStore(user) {
         const updatedLogs = activeWorkout.logs.map(log => {
             if (log.exerciseId === exerciseId) {
                 const newSets = [...log.sets];
-                newSets[setIndex] = { ...newSets[setIndex], ...data };
+                const now = Date.now();
+                newSets[setIndex] = {
+                    ...newSets[setIndex],
+                    ...data,
+                    completedAt: data.completed ? now : null
+                };
                 return { ...log, sets: newSets };
             }
             return log;
         });
-        setActiveWorkout({ ...activeWorkout, logs: updatedLogs });
+        const newState = { ...activeWorkout, logs: updatedLogs, lastActionTime: Date.now() };
+
+        // Push native progress bar update in real-time
+        let totalSets = 0, doneSets = 0;
+        newState.logs.forEach(l => {
+            totalSets += l.sets.length;
+            doneSets += l.sets.filter(s => s.completed).length;
+        });
+        foregroundService.setWorkoutProgress({ doneSets, totalSets });
+
+        setActiveWorkout(newState);
     };
 
     const addSetToWorkout = (exerciseId) => {
@@ -273,9 +363,146 @@ export function useWorkoutStore(user) {
         }));
     };
 
+    // --- OFFLINE SYNC ---
+    const PENDING_KEY = 'iron-circle-pending-workout';
+
+    const syncPendingWorkout = async () => {
+        if (!user?.id) return;
+        const raw = localStorage.getItem(PENDING_KEY);
+        if (!raw) return;
+        try {
+            const pending = JSON.parse(raw);
+            console.log('[IronCircle] Syncing pending offline workout...');
+            const result = await _uploadWorkout(pending);
+            if (result.success) {
+                localStorage.removeItem(PENDING_KEY);
+                fetchHistory();
+                console.log('[IronCircle] ✅ Offline workout synced successfully');
+            }
+        } catch (e) {
+            console.warn('[IronCircle] Sync failed, will retry later:', e.message);
+        }
+    };
+
+    // Internal: performs the actual Supabase upload for a workout payload
+    // Returns { success, insertedId, newLevel, didLevelUp } so the caller can update summaryData
+    const _uploadWorkout = async (payload) => {
+        const { workout, logs, summaryData, visibility } = payload;
+
+        const { data: inserted, error } = await supabase.from('workouts').insert({
+            user_id: user.id,
+            name: workout.name,
+            start_time: workout.startTime,
+            end_time: workout.endTime,
+            duration: workout.duration,
+            volume: workout.volume,
+            distance: workout.distance,
+            visibility,
+            plan_id: workout.planId,
+            plan_day_id: workout.dayId
+        }).select().single();
+
+        if (error) throw error;
+
+        const logsPayload = logs.map(l => ({
+            workout_id: inserted.id,
+            exercise_id: l.exerciseId,
+            sets: JSON.stringify(l.sets)
+        }));
+        await supabase.from('workout_logs').insert(logsPayload);
+
+        // --- UNIFIED POST-WORKOUT PIPELINE ---
+        // Single atomic DB call: streak + missions + PRs + XP — all at once
+        console.log(`[IronCircle] 🚀 Running finish_workout_pipeline for workout ${inserted.id}, base XP = ${summaryData.earnedXP}`);
+        let brokenPRs = [];
+        let streakData = { current_streak: 1, longest_streak: 1, multiplier: 1.0, was_frozen: false, grace_hours: 108 };
+        let newLevel = summaryData.newLevel || 1;
+        let didLevelUp = false;
+        let totalXPWritten = summaryData.earnedXP;
+
+        try {
+            const { data: pipelineResult, error: pipelineError } = await supabase.rpc(
+                'finish_workout_pipeline',
+                {
+                    p_workout_id: inserted.id,
+                    p_base_xp: summaryData.earnedXP
+                }
+            );
+
+            if (pipelineError) {
+                console.error('[IronCircle] ❌ Pipeline error:', pipelineError);
+            } else if (pipelineResult) {
+                console.log('[IronCircle] ✅ Pipeline result:', pipelineResult);
+
+                // Streak
+                if (pipelineResult.streak) {
+                    streakData = pipelineResult.streak;
+                    console.log(`[IronCircle] 🔥 Streak: ${streakData.current_streak} | Multiplier: ${streakData.multiplier}x`);
+                }
+
+                // Broken PRs
+                brokenPRs = Array.isArray(pipelineResult.broken_prs) ? pipelineResult.broken_prs : [];
+                console.log(`[IronCircle] 🏆 ${brokenPRs.length} PR(s):`, brokenPRs);
+
+                // XP
+                const xpResult = pipelineResult.xp || {};
+                if (xpResult.error) {
+                    console.error('[IronCircle] ❌ XP error inside pipeline:', xpResult.error);
+                } else {
+                    newLevel = xpResult.new_level || newLevel;
+                    didLevelUp = xpResult.did_level_up || false;
+                    totalXPWritten = pipelineResult.total_xp || summaryData.earnedXP;
+                    console.log(`[IronCircle] 💰 XP written: ${totalXPWritten} | Level: ${newLevel} | LevelUp: ${didLevelUp}`);
+                }
+
+                // Augment streak data for UI display
+                streakData._bonusXP = pipelineResult.bonus_xp || 0;
+                streakData._totalXP = totalXPWritten;
+
+                // Ops/Missions result
+                const opsResult = pipelineResult.operations;
+                if (opsResult?.completed_count > 0) {
+                    console.log(`[IronCircle] ✅ ${opsResult.completed_count} mission(s) completed:`, opsResult.completed_names);
+                }
+
+                // New achievements
+                const newAchievements = pipelineResult.new_achievements || [];
+                if (newAchievements.length > 0) {
+                    console.log(`[IronCircle] 🎖️ ${newAchievements.length} achievement(s) unlocked:`, newAchievements);
+                    newAchievements.forEach(id => {
+                        // Small delay so toasts don't stack all at once
+                        setTimeout(() => {
+                            toast(`🎖️ Achievement Unlocked!`, 'success');
+                        }, 500);
+                    });
+                }
+            } else {
+                console.warn('[IronCircle] ⚠️ Pipeline returned null — XP might not have been written');
+            }
+
+            // Always refresh the user profile from DB so Me tab shows new XP/level
+            if (refreshUserProfile) {
+                refreshUserProfile().catch(e => console.warn('[IronCircle] Profile refresh failed:', e.message));
+            }
+
+        } catch (pipelineErr) {
+            console.error('[IronCircle] ❌ Pipeline exception:', pipelineErr);
+        }
+
+        return { success: true, insertedId: inserted.id, newLevel, didLevelUp, brokenPRs, streakData };
+    };
+
     const finishWorkout = async ({ visibility = 'public' } = {}) => {
         if (!activeWorkout || !user) return;
-        if (workoutSession) await stopTrackingSession();
+
+        // Safely stop session/service — don't let network errors here break the offline fallback
+        try { 
+            const keepSession = user?.user_metadata?.preferences?.keep_gym_session_active;
+            if (workoutSession && !keepSession) {
+                await stopTrackingSession(); 
+            }
+        } catch (e) { console.warn('[IronCircle] stopTrackingSession failed (ignored):', e.message); }
+        try { foregroundService.stop(); } catch (e) { /* ignore */ }
 
         const endTime = new Date();
         const duration = Math.round((endTime - new Date(activeWorkout.startTime)) / 1000);
@@ -292,104 +519,124 @@ export function useWorkoutStore(user) {
             });
         });
 
-        const xpResult = calculateSessionXP({ duration, volume: totalVol, prs: 0, streak: 1, distance: totalDistance }, { volume: 1 });
+        // --- PR data is computed by the DB RPC after upload ---
+        // Placeholder for summary; real values filled in after upload returns
+        const newRecords = [];
+
+        const xpResult = calculateSessionXP(
+            { duration, volume: totalVol, prs: 0, streak: 1, distance: totalDistance },
+            { volume: 1 }
+        );
 
         const summaryData = {
             earnedXP: xpResult.total,
             newTotalXP: (user.current_xp || 0) + xpResult.total,
+            newLevel: user.level || 1, // Will be updated from server response
+            didLevelUp: false,
             duration,
             volume: totalVol,
             name: activeWorkout.name,
             breakdown: xpResult.breakdown,
-            analysis: {
-                volumeDelta: 0, // Placeholder for now, could act calc later
-                newRecords: [] // Placeholder
-            }
+            analysis: { volumeDelta: 0, newRecords }
         };
 
-        try {
-            const { data: inserted, error } = await supabase.from('workouts').insert({
-                user_id: user.id,
+        // Build the full payload (needed for both online and offline paths)
+        const payload = {
+            workout: {
                 name: activeWorkout.name,
-                start_time: activeWorkout.startTime,
-                end_time: endTime.toISOString(),
+                startTime: activeWorkout.startTime,
+                endTime: endTime.toISOString(),
                 duration,
                 volume: totalVol,
                 distance: totalDistance,
-                visibility,
-                plan_id: activeWorkout.planId,
-                plan_day_id: activeWorkout.dayId
-            }).select().single();
+                planId: activeWorkout.planId,
+                dayId: activeWorkout.dayId,
+            },
+            logs: activeWorkout.logs,
+            summaryData,
+            visibility,
+            savedAt: Date.now()
+        };
 
-            if (error) throw error;
+        // Optimistically clear the active workout immediately
+        setActiveWorkout(null);
+        localStorage.removeItem('iron-circle-active-workout');
 
-            const logsPayload = activeWorkout.logs.map(l => ({
-                workout_id: inserted.id,
-                exercise_id: l.exerciseId,
-                sets: JSON.stringify(l.sets)
-            }));
-            await supabase.from('workout_logs').insert(logsPayload);
+        try {
+            // Race the entire upload against a 10-second timeout
+            const timeoutPromise = new Promise((_, reject) =>
+                // 30s: gives streak RPC + XP RPC enough time on slower connections
+                setTimeout(() => reject(new Error('Network timeout')), 30000)
+            );
 
-            // --- PHASE 4: SOCIAL TRIGGERS ---
-            // 1. Post to Feed
-            await supabase.from('feed_events').insert({
-                user_id: user.id,
-                type: 'workout',
-                data: summaryData
+            const uploadResult = await Promise.race([_uploadWorkout(payload), timeoutPromise]);
+
+            // Enrich broken PRs with exercise names
+            const namedPRs = (uploadResult.brokenPRs || []).map(pr => {
+                const exObj = exercises.find(e => e.id === pr.exercise_id);
+                return { ...pr, exerciseName: exObj?.name || pr.exercise_id };
             });
 
-            // 2. Check & Update Community Goals
-            const { data: myCommunities } = await supabase.from('community_members').select('community_id').eq('user_id', user.id);
-            if (myCommunities && myCommunities.length > 0) {
-                const communityIds = myCommunities.map(c => c.community_id);
-                const { data: activeGoals } = await supabase.from('community_goals')
-                    .select('*')
-                    .in('community_id', communityIds)
-                    .eq('status', 'ACTIVE');
+            // Streak data — multiplier and bonus XP already applied to DB inside _uploadWorkout
+            const streak = uploadResult.streakData || {};
+            const streakMultiplier = streak.was_frozen ? 0 : (streak.multiplier || 1.0);
+            const streakBonusXP = streak._bonusXP || 0;
+            const totalXP = streak._totalXP || summaryData.earnedXP;
 
-                if (activeGoals && activeGoals.length > 0) {
-                    // Calculate totals
-                    let totalDistance = 0;
-                    activeWorkout.logs.forEach(l => {
-                        const ex = exercises.find(e => e.id === l.exerciseId);
-                        if (ex && ex.type === 'cardio') {
-                            // For cardio: Weight = Distance (meters), Reps = Time (min) - convention
-                            l.sets.forEach(s => { if (s.completed) totalDistance += Number(s.weight || 0); });
-                        }
-                    });
-
-                    for (const goal of activeGoals) {
-                        let contribution = 0;
-                        if (goal.metric === 'VOLUME') contribution = totalVol;
-                        else if (goal.metric === 'WORKOUTS') contribution = 1;
-                        else if (goal.metric === 'DISTANCE') contribution = totalDistance;
-
-                        if (contribution > 0) {
-                            await supabase.rpc('contribute_to_goal', {
-                                p_goal_id: goal.id,
-                                p_amount: contribution
-                            });
-                        }
-                    }
-                }
+            // Rebuild breakdown: append streak line since calculateSessionXP ran before we knew the streak
+            const enrichedBreakdown = [...(summaryData.breakdown || [])];
+            if (streak.was_frozen) {
+                enrichedBreakdown.push({ label: `❄️ ${streak.current_streak}-Day Streak (Frozen — 0x bonus)`, value: 0, isFrozen: true });
+            } else if (streakBonusXP > 0) {
+                const tierLabel = streak.current_streak >= 20 ? '1.5x' : streak.current_streak >= 10 ? '1.25x' : '1.1x';
+                enrichedBreakdown.push({ label: `🔥 ${streak.current_streak}-Day Streak (${tierLabel})`, value: streakBonusXP });
+            } else if ((streak.current_streak || 0) > 0) {
+                enrichedBreakdown.push({ label: `${streak.current_streak}-Day Streak (No bonus yet — keep going!)`, value: 0 });
             }
-            // --------------------------------
 
-            setWorkoutSummary(summaryData);
-            setActiveWorkout(null);
-            localStorage.removeItem('iron-circle-active-workout');
+            const finalSummary = {
+                ...summaryData,
+                earnedXP: totalXP,
+                newTotalXP: (user.current_xp || 0) + totalXP,
+                breakdown: enrichedBreakdown,
+                newLevel: uploadResult.newLevel || summaryData.newLevel,
+                didLevelUp: uploadResult.didLevelUp || false,
+                analysis: { volumeDelta: 0, newRecords: namedPRs },
+                streak: {
+                    count: streak.current_streak || 1,
+                    longest: streak.longest_streak || 1,
+                    multiplier: streakMultiplier,
+                    wasFrozen: streak.was_frozen || false,
+                    streakBroken: streak.streak_broken || false,
+                    graceHours: streak.grace_hours || 108,
+                    bonusXP: streakBonusXP
+                }
+            };
+
+            setWorkoutSummary(finalSummary);
             fetchHistory();
-            return { success: true, summary: summaryData };
+            return { success: true, offline: false, summary: finalSummary };
 
         } catch (e) {
-            console.error("Finish failed:", e);
-            toast.error("Failed to save workout");
-            return { success: false };
+            console.warn('[IronCircle] Workout upload failed, saving offline:', e.message);
+
+            // Save full payload for later sync
+            localStorage.setItem(PENDING_KEY, JSON.stringify(payload));
+
+            // Still show summary — data is safe locally
+            setWorkoutSummary({ ...summaryData, savedOffline: true });
+            return { success: true, offline: true, summary: summaryData };
         }
     };
 
+
+
     const cancelWorkout = async () => {
         if (!activeWorkout) return;
+
+        // Stop Android Foreground Service
+        foregroundService.stop();
+
         localStorage.removeItem('iron-circle-active-workout');
         setActiveWorkout(null);
         if (activeWorkout.id) await supabase.from('workouts').delete().eq('id', activeWorkout.id);
@@ -472,7 +719,12 @@ export function useWorkoutStore(user) {
             visibility: template.visibility || 'public',
             exercises: template.exercises
         }).select().single();
-        if (!error && data) setWorkoutTemplates(prev => [...prev, data]);
+        if (!error && data) {
+            setWorkoutTemplates(prev => [...prev, data]);
+            supabase.rpc('check_event_achievements', { p_event_type: 'TEMPLATE_CREATION' }).then(({ data: achievements }) => {
+                if (achievements?.length > 0) achievements.forEach(() => setTimeout(() => toast.success('🎖️ Achievement Unlocked!'), 500));
+            });
+        }
         return data;
     };
 
@@ -538,20 +790,24 @@ export function useWorkoutStore(user) {
             }
         });
 
-        // Streak
-        const sortedDays = [...uniqueDays].sort().reverse();
-        let streak = 0;
-        const today = new Date().toISOString().split('T')[0];
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-        if (sortedDays.includes(today) || sortedDays.includes(yesterday)) {
-            streak = 1;
-            let checkDate = new Date(sortedDays.includes(today) ? today : yesterday);
-            for (let i = 1; i < sortedDays.length; i++) {
-                checkDate.setDate(checkDate.getDate() - 1);
-                if (sortedDays.includes(checkDate.toISOString().split('T')[0])) streak++;
-                else break;
+        // Streak: Use the DB value (update_streak_on_workout RPC) — it knows the dynamic grace period.
+        // Fallback to the old day-count method only if no DB value is available.
+        const streak = user?.current_streak || (() => {
+            const sortedDays = [...uniqueDays].sort().reverse();
+            let s = 0;
+            const today = new Date().toISOString().split('T')[0];
+            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+            if (sortedDays.includes(today) || sortedDays.includes(yesterday)) {
+                s = 1;
+                let checkDate = new Date(sortedDays.includes(today) ? today : yesterday);
+                for (let i = 1; i < sortedDays.length; i++) {
+                    checkDate.setDate(checkDate.getDate() - 1);
+                    if (sortedDays.includes(checkDate.toISOString().split('T')[0])) s++;
+                    else break;
+                }
             }
-        }
+            return s;
+        })();
 
         const totalWorkouts = history.length;
         const totalVolume = history.reduce((acc, s) => acc + (s.volume || 0), 0);
@@ -673,18 +929,40 @@ export function useWorkoutStore(user) {
                 if (logs.length > 0) {
                     await supabase.from('workout_logs').insert(logs.map(l => ({ workout_id: w.id, exercise_id: l.exerciseId, sets: JSON.stringify(l.sets) })));
                 }
+
+                // Increase user XP/Stats for manual addition
+                const xpResult = calculateSessionXP({ duration, volume, prs: 0, streak: 1, distance: 0 }, { volume: 1 });
+                if (xpResult.total > 0) {
+                    await supabase.rpc('increment_user_xp', { amount: xpResult.total });
+                }
+
                 fetchHistory();
                 return true;
             } catch (e) { console.error(e); return false; }
         },
         deleteWorkoutHistory: async (id) => {
+            const workoutToDelete = history.find(w => w.id === id);
             setHistory(prev => prev.filter(w => w.id !== id));
-            await supabase.from('workouts').delete().eq('id', id);
+
+            // Delete from Database & Deduct XP safely via RPC
+            const { error, data } = await supabase.rpc('delete_workout_data', { p_workout_id: id });
+
+            if (error) {
+                console.error("Error wiping workout data", error);
+                // Revert optimistic delete if it fails
+                fetchHistory();
+            } else if (data && !data.success) {
+                console.error("Wipe failed:", data.message);
+                fetchHistory();
+            }
         },
         updateWorkoutHistory: async (id, data) => { }, // Stub
 
         startTrackingSession,
         stopTrackingSession,
+        deleteSession,
+        updateSession,
+        syncPendingWorkout,
         checkInGym: startTrackingSession, // Wrapper Alias
 
         addWorkoutTemplate,

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    IronCircle notification status bar icon.
+    Must be: single colour, white, transparent background.
+    The path is the IronCircle hexagon logo from splash.svg,
+    with the two SVG transforms (translate + scale) pre-applied so
+    the path coordinates sit inside the viewport naturally.
+
+    Original transforms in splash.svg:
+      translate(-157.129, -339.251)  then  scale(0.294834)
+    Applied to bounding box of raw path:
+      Raw X: 289.474 → 2233.81   →  after transform  →  X: 39.3 → 610.0
+      Raw Y: 774.921 → 2990.59   →  after transform  →  Y: 128.7 → 542.0
+    We use viewportWidth=650 viewportHeight=654 to give a square-ish viewport.
+
+    Rather than re-computing every coordinate, we embed the path at its
+    NATIVE coordinate space and set the viewport to that space directly.
+    Android scales the whole thing to 24dp × 24dp automatically.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="1945"
+    android:viewportHeight="2216">
+    <!--
+        Path coordinates are the raw SVG path from splash.svg,
+        offset so the shape starts near (0,0):
+        subtract the min bounding box (289.474, 774.921) from all coordinates.
+    -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+            M1944.34,561.28 L1944.34,1654.39 L972.17,2215.67 L0,1654.39 L0,561.28 L972.17,0 Z
+            M295.55,537.06 L126.8,634.49 L126.8,951.01 L263.16,1029.73 L263.16,712.22 L296,693.26
+            L902.78,1043.58 L902.78,2028.19 L972.17,2068.25 L1041.56,2028.19 L1041.56,1043.58
+            L1648.35,693.26 L1681.18,712.22 L1681.18,1029.73 L1817.54,951.01 L1817.54,634.49
+            L1648.79,537.06 L1161.61,817.82 L972.17,927.2 L782.73,817.82 Z
+            M126.8,1109.83 L126.8,1581.18 L766.43,1950.47 L766.43,1793.02 L263.16,1502.46
+            L263.16,1346 L766.43,1636.56 L766.43,1479.11 Z
+            M1177.92,1950.47 L1817.54,1581.18 L1817.54,1109.83 L1177.92,1479.11 L1177.92,1636.56
+            L1681.18,1346 L1681.18,1502.46 L1177.92,1793.02 Z
+            M1514.3,459.42 L972.17,146.42 L430.04,459.42 L972.17,772.42 Z
+            M972.17,614.97 L702.75,459.42 L972.17,303.87 L1241.59,459.42 Z" />
+</vector>

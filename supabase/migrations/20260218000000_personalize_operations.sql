@@ -3,6 +3,7 @@ ALTER TABLE operations_templates
 ADD COLUMN IF NOT EXISTS focus text[] DEFAULT NULL;
 
 -- 2. MIGRATE PROFILES (Muscle -> Hypertrophy)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS goal TEXT;
 UPDATE profiles 
 SET goal = 'Hypertrophy' 
 WHERE goal = 'Muscle';
@@ -49,7 +50,7 @@ BEGIN
   SELECT COUNT(*) INTO v_count_daily 
   FROM user_operations 
   WHERE user_id = v_user_id 
-    AND expires_at = v_tomorrow_start 
+    AND expires_at >= v_tomorrow_start 
     AND created_at >= v_today_start;
 
   IF v_count_daily = 0 THEN
@@ -71,7 +72,7 @@ BEGIN
   SELECT COUNT(*) INTO v_count_weekly
   FROM user_operations
   WHERE user_id = v_user_id
-    AND expires_at = v_next_week_start
+    AND expires_at >= v_next_week_start
     AND created_at >= v_week_start;
 
   IF v_count_weekly = 0 THEN

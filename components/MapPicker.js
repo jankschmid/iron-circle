@@ -31,6 +31,18 @@ const MapPicker = ({ initialLat, initialLng, onLocationSelect }) => {
         }
     }, [position, onLocationSelect]);
 
+    // Sync external coordinate changes (e.g. from Geocoding)
+    useEffect(() => {
+        if (initialLat && initialLng) {
+            setPosition(prev => {
+                if (prev.lat !== initialLat || prev.lng !== initialLng) {
+                    return { lat: initialLat, lng: initialLng };
+                }
+                return prev;
+            });
+        }
+    }, [initialLat, initialLng]);
+
     return (
         <div style={{ height: '300px', width: '100%', borderRadius: '12px', overflow: 'hidden', border: '2px solid var(--border)' }}>
             <MapPickerMap position={position} setPosition={setPosition} hasInitial={hasInitial} />

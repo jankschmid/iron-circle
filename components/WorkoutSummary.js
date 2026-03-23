@@ -141,30 +141,43 @@ export default function WorkoutSummary({ data, onContinue }) {
                     </div>
 
                     {/* PR Celebration List */}
-                    {data.analysis && data.analysis.newRecords && data.analysis.newRecords.length > 0 && (
+                    {data.analysis?.newRecords?.length > 0 && (
                         <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                            {data.analysis.newRecords.map((rec, idx) => (
-                                <motion.div
-                                    key={idx}
-                                    initial={{ x: -20, opacity: 0 }}
-                                    animate={{ x: 0, opacity: 1 }}
-                                    transition={{ delay: 0.2 + (idx * 0.1) }}
-                                    style={{
-                                        background: 'linear-gradient(to right, rgba(251, 191, 36, 0.1), transparent)',
-                                        borderLeft: '4px solid #fbbf24',
-                                        padding: '12px',
-                                        marginBottom: '8px',
-                                        borderRadius: '4px'
-                                    }}
-                                >
-                                    <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#fbbf24' }}>🏆 NEW RECORD</div>
-                                    <div style={{ fontSize: '1rem', color: '#fff' }}>
-                                        {/* We need exercise name, let's assume we can fetch or pass it. For now, ID */}
-                                        {/* Ideally the store passed the name. Let's fallback to "Exercise" if missing */}
-                                        Exercise Logged: {rec.value}kg <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>(Prev: {rec.previous}kg)</span>
-                                    </div>
-                                </motion.div>
-                            ))}
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
+                                Personal Records Broken 🏆
+                            </div>
+                            {data.analysis.newRecords.map((rec, idx) => {
+                                const prMeta = {
+                                    WEIGHT: { icon: '🏋️', label: 'Max Weight', fmt: v => `${v}kg` },
+                                    E1RM: { icon: '💪', label: 'Estimated 1RM', fmt: v => `${v}kg` },
+                                    VOLUME: { icon: '📦', label: 'Session Volume', fmt: v => `${v}kg` },
+                                }[rec.type] || { icon: '⚡', label: rec.type, fmt: v => v };
+                                return (
+                                    <motion.div
+                                        key={idx}
+                                        initial={{ x: -20, opacity: 0 }}
+                                        animate={{ x: 0, opacity: 1 }}
+                                        transition={{ delay: 0.2 + (idx * 0.1) }}
+                                        style={{
+                                            background: 'linear-gradient(to right, rgba(251,191,36,0.12), transparent)',
+                                            borderLeft: '4px solid #fbbf24',
+                                            padding: '10px 12px',
+                                            marginBottom: '8px',
+                                            borderRadius: '4px'
+                                        }}
+                                    >
+                                        <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#fbbf24' }}>
+                                            {prMeta.icon} {prMeta.label} PR
+                                        </div>
+                                        <div style={{ fontSize: '0.95rem', color: '#fff', margin: '2px 0' }}>
+                                            {rec.exerciseName || rec.exercise_id}
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            {prMeta.fmt(rec.old_value || rec.previous)} → <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>{prMeta.fmt(rec.new_value || rec.value)}</span>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
                         </div>
                     )}
 
@@ -229,10 +242,66 @@ export default function WorkoutSummary({ data, onContinue }) {
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '8px', textTransform: 'uppercase' }}>XP Breakdown</div>
                             {data.breakdown.map((item, idx) => (
                                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.9rem' }}>
-                                    <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
-                                    <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>+{item.value}</span>
+                                    <span style={{ color: item.isFrozen ? '#60a5fa' : 'var(--text-muted)' }}>{item.label}</span>
+                                    <span style={{ color: item.isFrozen ? '#60a5fa' : 'var(--success)', fontWeight: 'bold' }}>
+                                        {item.isFrozen ? '❄️ 0' : `+${item.value}`}
+                                    </span>
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {/* Streak Card */}
+                    {data.streak && (
+                        <div style={{
+                            marginBottom: '24px',
+                            background: data.streak.wasFrozen
+                                ? 'rgba(96,165,250,0.08)'
+                                : data.streak.count >= 5
+                                    ? 'rgba(251,191,36,0.08)'
+                                    : 'rgba(255,255,255,0.04)',
+                            border: `1px solid ${data.streak.wasFrozen ? '#60a5fa44' : data.streak.count >= 5 ? '#fbbf2444' : 'var(--border)'}`,
+                            borderRadius: '12px',
+                            padding: '16px',
+                            textAlign: 'left'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>
+                                    {data.streak.wasFrozen ? '❄️' : data.streak.count >= 20 ? '🔥' : data.streak.count >= 5 ? '🔥' : '💪'}
+                                    {' '}{data.streak.count}-Day Streak
+                                </div>
+                                <div style={{
+                                    background: data.streak.wasFrozen ? '#60a5fa22' : 'var(--surface-highlight)',
+                                    color: data.streak.wasFrozen ? '#60a5fa' : data.streak.multiplier >= 1.5 ? '#fbbf24' : 'var(--text-muted)',
+                                    padding: '4px 10px',
+                                    borderRadius: '100px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 'bold'
+                                }}>
+                                    {data.streak.wasFrozen ? '0x (Frozen)' : `${data.streak.multiplier}x`}
+                                </div>
+                            </div>
+
+                            {data.streak.wasFrozen && (
+                                <div style={{ fontSize: '0.82rem', color: '#60a5fa', marginBottom: '6px' }}>
+                                    ❄️ Streak was frozen — no XP multiplier this session. Streak protected!
+                                </div>
+                            )}
+                            {data.streak.streakBroken && !data.streak.wasFrozen && (
+                                <div style={{ fontSize: '0.82rem', color: 'var(--warning)', marginBottom: '6px' }}>
+                                    ⚠️ Previous streak ended. A new one begins today!
+                                </div>
+                            )}
+                            {data.streak.bonusXP > 0 && (
+                                <div style={{ fontSize: '0.85rem', color: '#fbbf24' }}>
+                                    +{data.streak.bonusXP} XP streak bonus
+                                </div>
+                            )}
+                            {data.streak.longest > 1 && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                                    Longest streak: {data.streak.longest} days
+                                </div>
+                            )}
                         </div>
                     )}
 
