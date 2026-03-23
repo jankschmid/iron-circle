@@ -1525,6 +1525,11 @@ function TrackerContent() {
                                     })()}
                                 </span>
                             </div>
+                            {distanceToGym !== null && distanceToGym < 9000 && (
+                                <div style={{ marginTop: '12px', color: 'var(--text-dim)', fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                                    {t('DISTANCE')}: {Math.round(distanceToGym)}m
+                                </div>
+                            )}
                         </>
                     ) : (
                         <>

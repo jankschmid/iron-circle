@@ -12,7 +12,6 @@ const nextConfig = {
         unoptimized: true
     },
     experimental: {
-        // leaving experimental empty if not needed
     },
 };
 

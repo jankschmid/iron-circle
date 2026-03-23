@@ -496,7 +496,12 @@ export function useWorkoutStore(user, refreshUserProfile) {
         if (!activeWorkout || !user) return;
 
         // Safely stop session/service — don't let network errors here break the offline fallback
-        try { if (workoutSession) await stopTrackingSession(); } catch (e) { console.warn('[IronCircle] stopTrackingSession failed (ignored):', e.message); }
+        try { 
+            const keepSession = user?.user_metadata?.preferences?.keep_gym_session_active;
+            if (workoutSession && !keepSession) {
+                await stopTrackingSession(); 
+            }
+        } catch (e) { console.warn('[IronCircle] stopTrackingSession failed (ignored):', e.message); }
         try { foregroundService.stop(); } catch (e) { /* ignore */ }
 
         const endTime = new Date();

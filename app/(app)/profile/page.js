@@ -760,6 +760,31 @@ export default function ProfilePage() {
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('Friends')}</div>
                     </div>
                 </div>
+
+                {/* --- In-App Upgrades & Feedback CTAs --- */}
+                <div style={{ marginTop: '32px', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
+                    <Link href="/feedback" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', textDecoration: 'none', color: 'var(--foreground)', transition: 'all 0.2s', ':focus': { outline: 'none' } }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>⭐</div>
+                            <div>
+                                <div style={{ fontWeight: '800', fontSize: '0.95rem' }}>{t('Rate IronCircle')}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('Join the Wall of Fame')}</div>
+                            </div>
+                        </div>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>→</span>
+                    </Link>
+
+                    <Link href="/upgrade" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: 'linear-gradient(135deg, rgba(250,255,0,0.08) 0%, rgba(200,200,0,0.02) 100%)', borderRadius: '16px', border: '1px solid rgba(250,255,0,0.3)', textDecoration: 'none', color: 'var(--foreground)', boxShadow: '0 4px 20px rgba(250,255,0,0.05)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(250,255,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>👑</div>
+                            <div>
+                                <div style={{ fontWeight: '800', fontSize: '0.95rem', color: 'var(--primary)', textShadow: '0 0 10px rgba(250,255,0,0.3)' }}>{t('Upgrade to Pro')}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'rgba(250,255,0,0.6)' }}>{t('Unlock Predictive Engine')}</div>
+                            </div>
+                        </div>
+                        <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>→</span>
+                    </Link>
+                </div>
             </div>
 
             {/* TABS INITIALIZATION */}

@@ -6,7 +6,7 @@ import ExerciseLogger from './ExerciseLogger';
 import BottomNav from './BottomNav';
 import ExercisePicker from './ExercisePicker';
 import ConfirmationModal from './ConfirmationModal';
-import { getSmartSuggestion } from '@/lib/algorithms';
+import { calculateSmartProgression } from '@/lib/algorithms';
 import { motion } from 'framer-motion';
 
 import Link from 'next/link'; // Added for Safety
@@ -340,17 +340,21 @@ export default function WorkoutActive() {
                                                     const enabled = activeAssignment?.settings?.allow_algo ?? (user?.user_metadata?.preferences?.smart_suggestions ?? true);
                                                     if (!enabled) return null;
 
-                                                    // Pass current log's target goal to algo
+                                                    // Pass current log's target goal and user's rep range settings to algo
                                                     const algoContext = {
                                                         ...activeAssignment,
                                                         targetGoal: log.targetGoal, // Passed from Store > Template
-                                                        exerciseDef: exerciseDef
+                                                        exerciseDef: exerciseDef,
+                                                        userRepRange: {
+                                                            min: user?.rep_range_min,
+                                                            max: user?.rep_range_max
+                                                        }
                                                     };
 
                                                     const currentCompletedSets = log.sets.filter(s => s.completed);
                                                     const setsArray = currentCompletedSets.length > 0 ? currentCompletedSets : lastSets;
 
-                                                    const s = getSmartSuggestion(setsArray, algoContext);
+                                                    const s = calculateSmartProgression(setsArray, algoContext);
                                                     if (s) return s;
                                                     return null;
                                                 })();
@@ -365,6 +369,7 @@ export default function WorkoutActive() {
                                                         type={exerciseDef?.type || 'Strength'}
                                                         onLog={(data) => logSet(log.exerciseId, setIndex, data)}
                                                         suggestion={suggestion}
+                                                        isTopSet={setIndex === log.sets.length - 1}
                                                     // strictMode could be passed here if we want to lock inputs, but we decided to just lock structure for now
                                                     />
                                                 );
