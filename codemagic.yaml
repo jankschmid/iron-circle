@@ -41,7 +41,7 @@ workflows:
 
       - name: Build IPA
         script: |
-          xcode-project use-profiles
+          xcode-project use-profiles --bundle-id com.ironcircle.app --type app_store
           xcode-project build-ipa \
             --workspace ios/App/App.xcworkspace \
             --scheme App
