@@ -14,7 +14,6 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.ironcircle.app
-        team_id: 9CFN4WT7NM
       node: 20.11.0
       xcode: latest
       cocoapods: default
@@ -42,10 +41,16 @@ workflows:
 
       - name: Build IPA
         script: |
-          xcode-project use-profiles --bundle-id com.ironcircle.app --type app_store
+          # Versuch 1: Profile basierend auf Bundle-ID finden/erstellen
+          xcode-project use-profiles --bundle-id com.ironcircle.app --type app_store --team-id 9CFN4WT7NM
+          
+          # Falls das oben fehlschlägt, versuchen wir es mit manuellem Cert-Check
+          # xcode-project list-profiles # (Optionaler Debug-Befehl)
+
           xcode-project build-ipa \
             --workspace ios/App/App.xcworkspace \
-            --scheme App
+            --scheme App \
+            --bundle-id com.ironcircle.app
 
     artifacts:
       - build/ios/ipa/*.ipa
