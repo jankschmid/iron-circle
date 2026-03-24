@@ -41,12 +41,23 @@ workflows:
 
       - name: Build IPA
         script: |
-          # Automate App Store Encryption Compliance
-          # This prevents the "App Encryption Documentation" popup in App Store Connect
+          # Automate App Store Encryption Compliance & Privacy Strings
+          # This prevents the "App Encryption Documentation" popup and satisfies missing location purpose strings
           PLIST_PATH=$(find ios -name "Info.plist" | grep "App/Info.plist" | head -n 1)
           if [ -n "$PLIST_PATH" ]; then
+            # Encryption Compliance
             /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST_PATH" || \
             /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST_PATH"
+
+            # Location Privacy Strings (requested by Apple)
+            DESC_WHEN_IN_USE="IronCircle benötigt deinen Standort, um Workouts in deinem Fitnessstudio automatisch zu tracken."
+            DESC_ALWAYS="IronCircle benötigt Zugriff auf deinen Standort im Hintergrund, um dein Training im Studio zuverlässig zu erfassen, auch wenn dein Handy in der Tasche ist."
+            
+            /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string '$DESC_WHEN_IN_USE'" "$PLIST_PATH" || \
+            /usr/libexec/PlistBuddy -c "Set :NSLocationWhenInUseUsageDescription '$DESC_WHEN_IN_USE'" "$PLIST_PATH"
+            
+            /usr/libexec/PlistBuddy -c "Add :NSLocationAlwaysAndWhenInUseUsageDescription string '$DESC_ALWAYS'" "$PLIST_PATH" || \
+            /usr/libexec/PlistBuddy -c "Set :NSLocationAlwaysAndWhenInUseUsageDescription '$DESC_ALWAYS'" "$PLIST_PATH"
           fi
 
           # Fetch and install provisioning profiles
