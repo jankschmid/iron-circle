@@ -58,6 +58,9 @@ workflows:
             
             /usr/libexec/PlistBuddy -c "Add :NSLocationAlwaysAndWhenInUseUsageDescription string '$DESC_ALWAYS'" "$PLIST_PATH" || \
             /usr/libexec/PlistBuddy -c "Set :NSLocationAlwaysAndWhenInUseUsageDescription '$DESC_ALWAYS'" "$PLIST_PATH"
+
+            # Build Number Automation (uniqueness for App Store Connect)
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST_PATH"
           fi
 
           # Fetch and install provisioning profiles
