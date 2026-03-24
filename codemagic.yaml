@@ -8,7 +8,7 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: "App Store Connect" # Name der Integration in Codemagic Einstellungen (meist Standard)
+      app_store_connect: "iron-circle-apple" # Match with Codemagic UI integration name
 
     environment:
       ios_signing:
