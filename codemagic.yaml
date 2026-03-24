@@ -14,6 +14,7 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.ironcircle.app
+        team_id: 9CFN4WT7NM
       node: 20.11.0
       xcode: latest
       cocoapods: default
