@@ -41,16 +41,10 @@ workflows:
 
       - name: Build IPA
         script: |
-          # Versuch 1: Profile basierend auf Bundle-ID finden/erstellen
           xcode-project use-profiles --bundle-id com.ironcircle.app --type app_store
-          
-          # Falls das oben fehlschlägt, versuchen wir es mit manuellem Cert-Check
-          # xcode-project list-profiles # (Optionaler Debug-Befehl)
-
           xcode-project build-ipa \
             --workspace ios/App/App.xcworkspace \
-            --scheme App \
-            --bundle-id com.ironcircle.app
+            --scheme App
 
     artifacts:
       - build/ios/ipa/*.ipa
