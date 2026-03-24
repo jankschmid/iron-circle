@@ -46,10 +46,10 @@ export default function BentoB2C() {
                         </p>
                     </div>
                     
-                    {/* Phone sliding in from bottom */}
+                    {/* Phone sliding in from bottom - Showing Slideshow */}
                     <div className="relative z-10 flex-1 mt-auto flex justify-center items-end">
                         <div className="absolute inset-x-0 bottom-[-10%] group-hover:bottom-[0%] transition-all duration-700 ease-out flex justify-center drop-shadow-2xl">
-                            <PhoneMockup className="scale-[0.80] sm:scale-90 lg:scale-[0.85] origin-bottom" />
+                            <MockupSlideshow size="md" className="sm:scale-95 origin-bottom" />
                         </div>
                     </div>
                 </motion.div>
@@ -78,7 +78,7 @@ export default function BentoB2C() {
                     {/* Phone peeking from right side */}
                     <div className="relative z-10 md:w-1/2 h-full flex items-center justify-end">
                         <div className="translate-x-[10%] translate-y-[30%] group-hover:translate-x-[0%] group-hover:translate-y-[20%] transition-all duration-700 ease-out rotate-[-5deg] group-hover:rotate-0">
-                            <PhoneMockup />
+                            <PhoneMockup size="md" mockupSrc="/assets/mockups/mockup_01.png" />
                         </div>
                     </div>
                 </motion.div>
@@ -109,7 +109,7 @@ export default function BentoB2C() {
                     {/* Phone sliding up from bottom right */}
                     <div className="relative z-10 md:w-1/2 h-full flex justify-end items-end overflow-hidden pt-10">
                         <div className="translate-y-[40%] group-hover:translate-y-[20%] transition-all duration-700 ease-out rotate-[5deg] group-hover:rotate-0">
-                            <PhoneMockup className="scale-90" />
+                            <PhoneMockup size="md" className="scale-90" mockupSrc="/assets/mockups/mockup_01.png" />
                         </div>
                     </div>
                 </motion.div>

@@ -62,10 +62,23 @@ export const PhoneMockup = ({ children, mockupSrc, size = 'md', className = "" }
 /**
  * MockupSlideshow
  * Cycles through mockup images at a given interval.
- * Usage: <MockupSlideshow images={["/assets/mockups/mockup_01.png", "/assets/mockups/mockup_02.png"]} />
+ * Automatically scans /public/assets/mockups/ via the /api/mockups endpoint.
  */
-export const MockupSlideshow = ({ images = [], interval = 3000, size = 'md', className = '' }) => {
+export const MockupSlideshow = ({ interval = 3000, size = 'md', className = '' }) => {
+    const [images, setImages] = useState([]);
     const [current, setCurrent] = useState(0);
+
+    useEffect(() => {
+        // Fetch the list of images found by the API
+        fetch('/api/mockups')
+            .then(res => res.json())
+            .then(data => {
+                if (data.images && data.images.length > 0) {
+                    setImages(data.images);
+                }
+            })
+            .catch(err => console.error('Failed to fetch mockups:', err));
+    }, []);
 
     useEffect(() => {
         if (images.length <= 1) return;
