@@ -27,21 +27,21 @@ workflows:
 
       - name: Capacitor sync iOS
         script: |
-          npx cap add ios || true
+          # Ensure platform exists and is synced
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
           npx cap sync ios
 
       - name: Build IPA
         script: |
-          # Versuch 1: Profile basierend auf Bundle-ID finden/erstellen
-          xcode-project use-profiles --bundle-id com.ironcircle.app --type app_store --team-id 9CFN4WT7NM
+          # Fetch and install provisioning profiles
+          xcode-project use-profiles
           
-          # Falls das oben fehlschlägt, versuchen wir es mit manuellem Cert-Check
-          # xcode-project list-profiles # (Optionaler Debug-Befehl)
-
+          # Build the IPA file
           xcode-project build-ipa \
             --workspace ios/App/App.xcworkspace \
-            --scheme App \
-            --bundle-id com.ironcircle.app
+            --scheme App
 
     artifacts:
       - build/ios/ipa/*.ipa
