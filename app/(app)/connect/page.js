@@ -12,7 +12,7 @@ import { useTranslation } from '@/context/TranslationContext';
 function ConnectPageContent() {
     const { t } = useTranslation();
     const searchParams = useSearchParams();
-    const [activeTab, setActiveTab] = useState('feed'); // 'feed' | 'circle' | 'groups' | 'chat'
+    const [activeTab, setActiveTab] = useState('circle'); // Default to circle (Friends) for better UX
 
     useEffect(() => {
         const tab = searchParams.get('tab');

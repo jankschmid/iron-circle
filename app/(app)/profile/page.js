@@ -774,6 +774,45 @@ export default function ProfilePage() {
                         <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>→</span>
                     </Link>
 
+                    <button 
+                        onClick={() => {
+                            if (navigator.share) {
+                                navigator.share({
+                                    title: 'IronCircle',
+                                    text: `Komm in meinen IronCircle! Trainiere mit mir und tracke deine Fortschritte.`,
+                                    url: 'https://testflight.apple.com/join/6761037897' 
+                                }).catch(err => console.log('Share failed', err));
+                            } else {
+                                navigator.clipboard.writeText('https://testflight.apple.com/join/6761037897');
+                                alert(t('Link copied to clipboard!'));
+                            }
+                        }}
+                        style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'space-between', 
+                            padding: '16px 20px', 
+                            background: 'var(--primary)', 
+                            borderRadius: '16px', 
+                            border: 'none', 
+                            textDecoration: 'none', 
+                            color: '#000', 
+                            transition: 'all 0.2s', 
+                            width: '100%',
+                            cursor: 'pointer',
+                            marginBottom: '12px'
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🤝</div>
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ fontWeight: '800', fontSize: '0.95rem' }}>{t('Invite Friends')}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'rgba(0,0,0,0.6)' }}>{t('Build your IronCircle')}</div>
+                            </div>
+                        </div>
+                        <span style={{ color: '#000', fontWeight: 'bold' }}>+</span>
+                    </button>
+
                     <Link href="/upgrade" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: 'linear-gradient(135deg, rgba(250,255,0,0.08) 0%, rgba(200,200,0,0.02) 100%)', borderRadius: '16px', border: '1px solid rgba(250,255,0,0.3)', textDecoration: 'none', color: 'var(--foreground)', boxShadow: '0 4px 20px rgba(250,255,0,0.05)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                             <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(250,255,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>👑</div>

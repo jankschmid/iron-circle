@@ -160,6 +160,54 @@ export default function Home() {
                 <>
                     <LiveStatus />
                     <section style={{ marginTop: '16px' }}>
+                        <button 
+                            onClick={() => {
+                                if (navigator.share) {
+                                    navigator.share({
+                                        title: 'IronCircle',
+                                        text: `Komm in meinen IronCircle! Trainiere mit mir und tracke deine Fortschritte.`,
+                                        url: 'https://testflight.apple.com/join/6761037897'
+                                    }).catch(err => console.log('Share failed', err));
+                                } else {
+                                    navigator.clipboard.writeText('https://testflight.apple.com/join/6761037897');
+                                    alert(t('Link copied to clipboard!'));
+                                }
+                            }}
+                            style={{
+                                width: '100%',
+                                background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dim) 100%)',
+                                border: 'none',
+                                padding: '20px',
+                                borderRadius: 'var(--radius-lg)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '16px',
+                                cursor: 'pointer',
+                                color: '#000'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <div style={{
+                                    width: '48px',
+                                    height: '48px',
+                                    borderRadius: '50%',
+                                    background: 'rgba(0,0,0,0.1)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.5rem'
+                                }}>🤝</div>
+                                <div style={{ textAlign: 'left' }}>
+                                    <h3 style={{ fontSize: '1rem', marginBottom: '4px', fontWeight: '800' }}>{t('Invite Friends')}</h3>
+                                    <p style={{ fontSize: '0.8rem', opacity: 0.8 }}>{t('Grow your circle & train together')}</p>
+                                </div>
+                            </div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>+</div>
+                        </button>
+                    </section>
+
+                    <section style={{ marginTop: '16px' }}>
                         <Link href="/tracker" style={{ textDecoration: 'none', color: 'inherit' }}>
                             <div style={{
                                 background: 'var(--surface)',
