@@ -1,0 +1,107 @@
+workflows:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # iOS → App Store Connect → TestFlight
+  # Requires: App Store Connect API Key configured in Codemagic Team settings
+  # ─────────────────────────────────────────────────────────────────────────────
+  ios-release:
+    name: IronCircle iOS → TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.ironcircle.app
+      node: 20.11.0
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install dependencies
+        script: npm install --legacy-peer-deps
+
+      - name: Build Next.js (static export)
+        script: npm run build
+
+      - name: Add iOS platform (if not present)
+        script: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
+      - name: Capacitor sync iOS
+        script: npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          cd ios/App
+          pod install
+
+      - name: Build IPA
+        script: |
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --workspace ios/App/App.xcworkspace \
+            --scheme App
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration          # Uses the API key from Codemagic Team settings
+        submit_to_testflight: true
+
+      email:
+        recipients:
+          - you@example.com        # ← Deine E-Mail eintragen
+        notify:
+          success: true
+          failure: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Android → APK + AAB
+  # Requires: Android Keystore added in Codemagic Team settings → Code signing
+  # ─────────────────────────────────────────────────────────────────────────────
+  android-release:
+    name: IronCircle Android → APK + AAB
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    environment:
+      android_signing:
+        - ironcircle_keystore      # ← Name des Keystores in Codemagic eintragen
+      node: 20.11.0
+      java: 17
+
+    scripts:
+      - name: Install dependencies
+        script: npm install --legacy-peer-deps
+
+      - name: Build Next.js (static export)
+        script: npm run build
+
+      - name: Capacitor sync Android
+        script: npx cap sync android
+
+      - name: Set Gradle permissions
+        script: chmod +x android/gradlew
+
+      - name: Build Release APK + AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease assembleRelease
+
+    artifacts:
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
+      - android/app/build/outputs/mapping/release/mapping.txt
+
+    publishing:
+      email:
+        recipients:
+          - you@example.com        # ← Deine E-Mail eintragen
+        notify:
+          success: true
+          failure: true
