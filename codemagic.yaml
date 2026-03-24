@@ -14,7 +14,7 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.ironcircle.app
-      node: 20.11.0
+      node: 22.14.0
       xcode: latest
       cocoapods: default
 
@@ -80,7 +80,7 @@ workflows:
     environment:
       android_signing:
         - ironcircle_keystore      # ← Name des Keystores in Codemagic eintragen
-      node: 20.11.0
+      node: 22.14.0
       java: 17
 
     scripts:
