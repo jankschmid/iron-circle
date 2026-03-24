@@ -1,11 +1,24 @@
-import { useStore } from '@/lib/store';
 import { useTranslation } from '@/context/TranslationContext';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import DynamicMuscleMap from './muscles/DynamicMuscleMap';
 
 export default function StatsTab() {
     const { t } = useTranslation();
-    const { getMonthlyStats, user } = useStore();
+    const { getMonthlyStats, getWeeklyMuscleHeat, user } = useStore();
     const { weeklyVolume, muscleSplit } = getMonthlyStats();
+    
+    const [muscleView, setMuscleView] = useState('front');
+    const weeklyHeat = getWeeklyMuscleHeat();
+
+    // Auto-toggle front/rear every 3.5s
+    useEffect(() => {
+        if (Object.keys(weeklyHeat).length === 0) return;
+        const interval = setInterval(() => {
+            setMuscleView(v => v === 'front' ? 'rear' : 'front');
+        }, 3500);
+        return () => clearInterval(interval);
+    }, [weeklyHeat]);
 
     const maxVolume = Math.max(...weeklyVolume, 1);
 
@@ -43,6 +56,71 @@ export default function StatsTab() {
                         </div>
                     ))}
                 </div>
+            </div>
+
+            {/* Weekly Muscle Heatmap */}
+            <div style={{
+                background: 'var(--surface)',
+                padding: '20px',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--border)',
+                marginBottom: '24px',
+                position: 'relative',
+                overflow: 'hidden'
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                        🔥 {t('Weekly Heatmap')}
+                    </h3>
+                    <div style={{ display: 'flex', gap: '4px', background: 'var(--surface-highlight)', padding: '2px', borderRadius: '100px' }}>
+                        {['front', 'rear'].map(v => (
+                            <button
+                                key={v}
+                                onClick={() => setMuscleView(v)}
+                                style={{
+                                    padding: '4px 12px',
+                                    borderRadius: '100px',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 'bold',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    background: muscleView === v ? 'var(--primary)' : 'transparent',
+                                    color: muscleView === v ? '#000' : 'var(--text-muted)',
+                                    transition: 'all 0.3s'
+                                }}
+                            >
+                                {v.toUpperCase()}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {Object.keys(weeklyHeat).length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px 20px', fontSize: '0.9rem' }}>
+                        {t('Log a workout to see your heat map!')}
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', justifyContent: 'center', height: '240px', padding: '10px 0' }}>
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={muscleView}
+                                initial={{ opacity: 0, scale: 0.9, rotateY: muscleView === 'front' ? -45 : 45 }}
+                                animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, rotateY: muscleView === 'front' ? 45 : -45 }}
+                                transition={{ duration: 0.6, ease: 'circOut' }}
+                                style={{ transformStyle: 'preserve-3d' }}
+                            >
+                                <DynamicMuscleMap
+                                    activeMuscles={weeklyHeat}
+                                    view={muscleView}
+                                    animate={true}
+                                    width={120}
+                                    height={220}
+                                />
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+                )}
             </div>
 
             {/* Muscle Split */}

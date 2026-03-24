@@ -6,6 +6,7 @@ import { EXERCISES } from '@/lib/data';
 import { useToast } from '@/components/ToastProvider';
 import { calculateSessionXP } from '@/lib/gamification';
 import { foregroundService } from '@/lib/foregroundService';
+import { calculateWorkoutImpact } from '@/lib/muscleEngine/calculateWorkoutImpact';
 
 const supabase = createClient();
 
@@ -850,6 +851,52 @@ export function useWorkoutStore(user, refreshUserProfile) {
         return { weeklyVolume, muscleSplit: splitArray };
     };
 
+    /**
+     * getWeeklyMuscleHeat
+     * Aggregates the impact of all workouts in the last 7 days.
+     */
+    const getWeeklyMuscleHeat = () => {
+        if (!history || history.length === 0) return {};
+        const now = new Date();
+        const startOfWeek = new Date();
+        startOfWeek.setDate(now.getDate() - 7);
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const totalHeat = {};
+        let sessionCount = 0;
+
+        history.forEach(session => {
+            const date = new Date(session.endTime);
+            if (date >= startOfWeek) {
+                sessionCount++;
+                const impact = calculateWorkoutImpact(session);
+                for (const [muscle, value] of Object.entries(impact)) {
+                    totalHeat[muscle] = (totalHeat[muscle] || 0) + value;
+                }
+            }
+        });
+
+        // Normalize: if someone works out 5 times, a 1.0 (max) should feel significant.
+        // We'll divide by sessionCount (if > 0) or just cap at 1.0.
+        // Actually, for a weekly view, it's nice to see cumulative "load".
+        // But for the SVG colors (0.0–1.0), we normalize.
+        const normalized = {};
+        for (const [muscle, value] of Object.entries(totalHeat)) {
+            // If a muscle has 3.0 total volume over a week, it's definitely red/glowing.
+            normalized[muscle] = Math.min(1.0, value / (sessionCount > 0 ? 1.5 : 1)); 
+        }
+
+        return normalized;
+    };
+
+    /**
+     * getWorkoutHeat
+     * Get 0.0–1.0 heat object for a specific workout session (for thumbnails)
+     */
+    const getWorkoutHeat = (session) => {
+        return calculateWorkoutImpact(session);
+    };
+
     const getPersonalBests = () => {
         const bests = {};
         if (!history) return [];
@@ -980,6 +1027,8 @@ export function useWorkoutStore(user, refreshUserProfile) {
 
         getWeeklyStats,
         getMonthlyStats,
+        getWeeklyMuscleHeat,
+        getWorkoutHeat,
         getPersonalBests,
         getExercisePR,
         getExerciseHistory,

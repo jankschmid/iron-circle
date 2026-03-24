@@ -4,9 +4,20 @@ import { useStore } from '@/lib/store';
 import Link from 'next/link';
 import { useState } from 'react';
 import { EXERCISES } from '@/lib/data';
+import DynamicMuscleMap from '@/components/muscles/DynamicMuscleMap';
+
 
 export default function HistoryPage() {
-    const { history, createManualWorkout, deleteWorkoutHistory, workoutTemplates, friends, sendMessage, user } = useStore();
+    const { 
+        history, 
+        createManualWorkout, 
+        deleteWorkoutHistory, 
+        workoutTemplates, 
+        friends, 
+        sendMessage, 
+        user,
+        getWorkoutHeat 
+    } = useStore();
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [manualWorkout, setManualWorkout] = useState({
@@ -171,16 +182,39 @@ export default function HistoryPage() {
                         {/* Clickable info area */}
                         <Link
                             href={`/workout/history/view?id=${session.id}`}
-                            style={{ display: 'block', padding: '16px', textDecoration: 'none', color: 'inherit' }}
+                            style={{ display: 'flex', gap: '16px', padding: '16px', textDecoration: 'none', color: 'inherit' }}
                         >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <span style={{ fontWeight: '600', fontSize: '1.1rem' }}>{session.name}</span>
-                                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{formatDate(session.endTime || session.startTime)}</span>
+                            {/* Muscle Thumbnail */}
+                            <div style={{
+                                width: '60px',
+                                height: '80px',
+                                background: 'var(--surface-highlight)',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                overflow: 'hidden',
+                                border: '1px solid var(--border)'
+                            }}>
+                                <DynamicMuscleMap
+                                    activeMuscles={session.logs ? getWorkoutHeat(session) : {}}
+                                    view={session.name?.toLowerCase().includes('back') || session.name?.toLowerCase().includes('pull') ? 'rear' : 'front'}
+                                    width={45}
+                                    height={70}
+                                />
                             </div>
-                            <div style={{ display: 'flex', gap: '16px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                                <span>⏱ {formatDuration(session.duration || 0)}</span>
-                                <span>🏋️ {Math.round(session.volume || 0)} kg</span>
-                                {session.visibility === 'private' && <span style={{ color: 'var(--warning)', marginLeft: 'auto' }}>🔒 Private</span>}
+
+                            <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ fontWeight: '600', fontSize: '1.1rem' }}>{session.name}</span>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{formatDate(session.endTime || session.startTime)}</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '16px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                    <span>⏱ {formatDuration(session.duration || 0)}</span>
+                                    <span>🏋️ {Math.round(session.volume || 0)} kg</span>
+                                    {session.visibility === 'private' && <span style={{ color: 'var(--warning)', marginLeft: 'auto' }}>🔒 Private</span>}
+                                </div>
                             </div>
                         </Link>
 
