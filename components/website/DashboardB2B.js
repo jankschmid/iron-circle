@@ -1,7 +1,7 @@
 "use client";
 import { motion } from 'framer-motion';
 import { Monitor, Brain, BarChart3, ArrowRight } from 'lucide-react';
-import { TVMockup } from './Mockups';
+import { TVMockup, TVMockupSlideshow } from './Mockups';
 
 export default function DashboardB2B() {
     return (
@@ -57,7 +57,7 @@ export default function DashboardB2B() {
                     
                     <div className="relative z-10 lg:w-2/3 h-full flex justify-center items-center">
                         <div className="group-hover:scale-105 transition-transform duration-700 ease-out shadow-[0_0_50px_rgba(0,0,0,0.8)] rounded-xl w-full">
-                            <TVMockup />
+                            <TVMockupSlideshow />
                         </div>
                     </div>
                 </motion.div>
