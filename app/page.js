@@ -24,6 +24,7 @@ import FAQ from '@/components/website/FAQ';
 import WallOfFame from '@/components/website/WallOfFame';
 import CTA from '@/components/website/CTA';
 import Footer from '@/components/website/Footer';
+import MuscleShowcase from '@/components/website/MuscleShowcase';
 
 // --- Landing Page Component ---
 function LandingPage() {
@@ -51,6 +52,7 @@ function LandingPage() {
                 <TrustBanner />
                 <BentoB2C />
                 <DashboardB2B />
+                <MuscleShowcase />
                 <HowItWorks />
                 <Pricing />
                 <FAQ />
