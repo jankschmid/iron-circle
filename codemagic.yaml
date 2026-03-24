@@ -27,11 +27,17 @@ workflows:
 
       - name: Capacitor sync iOS
         script: |
-          # Ensure platform exists and is synced
-          if [ ! -d "ios" ]; then
-            npx cap add ios
+          # Ensure Next.js export exists
+          if [ ! -d "out" ]; then
+            npm run build
           fi
+          
+          # Add and sync iOS platform
+          npx cap add ios || true
           npx cap sync ios
+          
+          # Debug: List the ios directory structure
+          find ios -name "*.xcworkspace" || echo "No xcworkspace found"
 
       - name: Build IPA
         script: |
@@ -39,8 +45,16 @@ workflows:
           xcode-project use-profiles
           
           # Build the IPA file
+          # We use a wildcard for the workspace to be safer if paths vary
+          WORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
+          if [ -z "$WORKSPACE" ]; then
+            echo "Error: No .xcworkspace found. Listing ios directory:"
+            ls -R ios
+            exit 1
+          fi
+          
           xcode-project build-ipa \
-            --workspace ios/App/App.xcworkspace \
+            --workspace "$WORKSPACE" \
             --scheme App
 
     artifacts:
