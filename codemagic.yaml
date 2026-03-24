@@ -55,7 +55,7 @@ workflows:
 
       email:
         recipients:
-          - you@example.com        # ← Deine E-Mail eintragen
+          - janschmid.office@gmail.com       # ← Deine E-Mail eintragen
         notify:
           success: true
           failure: true

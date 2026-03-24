@@ -66,7 +66,7 @@ export default function Hero({ yHeroText, opacityHeroText, yFloating1, yFloating
                         transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
                         className="flex flex-col sm:flex-row gap-5"
                     >
-                        <Link href="/login" className="group relative flex items-center justify-center gap-2 px-8 py-4 bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 text-white text-center font-bold text-lg rounded-xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-md">
+                        <Link href="/login" className="group relative flex items-center justify-center gap-2 px-8 py-4 bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 text-white text-center font-bold text-lg rounded-xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-md overflow-hidden">
                             <div className="absolute inset-0 bg-white/20 translate-y-[100%] group-hover:translate-y-[0%] transition-transform duration-300" />
                             <span className="relative z-10 flex items-center gap-2">Join as Athlete <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></span>
                         </Link>

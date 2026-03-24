@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-// import Confetti from 'react-confetti'; // Lazy load this
 import dynamic from 'next/dynamic';
 import { useTranslation } from '@/context/TranslationContext';
+import DynamicMuscleMap from '@/components/muscles/DynamicMuscleMap';
+import { calculateWorkoutImpact } from '@/lib/muscleEngine/calculateWorkoutImpact';
 
 const Confetti = dynamic(() => import('react-confetti'), { ssr: false });
 
@@ -12,6 +13,9 @@ export default function WorkoutSummary({ data, onContinue }) {
     const { t } = useTranslation();
     const [showConfetti, setShowConfetti] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [muscleView, setMuscleView] = useState('front');
+    const [muscleHeat, setMuscleHeat] = useState({});
+    const [showMuscles, setShowMuscles] = useState(false);
 
     // Unpack data
     const {
@@ -26,13 +30,28 @@ export default function WorkoutSummary({ data, onContinue }) {
 
     useEffect(() => {
         if (didLevelUp) setShowConfetti(true);
-        // Animate progress bar (mock calculation for now, assuming 1000 XP per level for simplicity or use real math if we had it)
-        // Let's assume Level N requires N * 1000 XP total? Or linear?
-        // Let's just visualize the LAST chunk.
-        // For visual, we can just fill it to 100%.
         const timer = setTimeout(() => setProgress(didLevelUp ? 100 : 60), 500);
         return () => clearTimeout(timer);
     }, [didLevelUp]);
+
+    // Calculate muscle heatmap from session exercises
+    useEffect(() => {
+        if (!data?.exercises?.length) return;
+        const heat = calculateWorkoutImpact({ exercises: data.exercises });
+        setMuscleHeat(heat);
+        // Staggered entrance: reveal map after a short delay
+        const t1 = setTimeout(() => setShowMuscles(true), 800);
+        return () => clearTimeout(t1);
+    }, [data]);
+
+    // Auto-toggle front/rear every 3s once map is shown
+    useEffect(() => {
+        if (!showMuscles || Object.keys(muscleHeat).length === 0) return;
+        const interval = setInterval(() => {
+            setMuscleView(v => v === 'front' ? 'rear' : 'front');
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [showMuscles, muscleHeat]);
 
     return (
         <div style={{
@@ -210,6 +229,61 @@ export default function WorkoutSummary({ data, onContinue }) {
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Target</div>
                             </div>
                         </div>
+                    )}
+
+                    {/* Muscle Heatmap */}
+                    {Object.keys(muscleHeat).length > 0 && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={showMuscles ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
+                            transition={{ duration: 0.7, ease: 'easeOut' }}
+                            style={{ marginBottom: '24px', textAlign: 'left' }}
+                        >
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>Muscle Impact</span>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    {['front', 'rear'].map(v => (
+                                        <button
+                                            key={v}
+                                            onClick={() => setMuscleView(v)}
+                                            style={{
+                                                padding: '2px 10px',
+                                                borderRadius: '100px',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 'bold',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                background: muscleView === v ? 'var(--primary)' : 'var(--surface-highlight)',
+                                                color: muscleView === v ? '#000' : 'var(--text-muted)',
+                                                transition: 'all 0.3s'
+                                            }}
+                                        >
+                                            {v.toUpperCase()}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                <AnimatePresence mode="wait">
+                                    <motion.div
+                                        key={muscleView}
+                                        initial={{ opacity: 0, x: muscleView === 'front' ? -20 : 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: muscleView === 'front' ? 20 : -20 }}
+                                        transition={{ duration: 0.4, ease: 'easeOut' }}
+                                    >
+                                        <DynamicMuscleMap
+                                            activeMuscles={muscleHeat}
+                                            view={muscleView}
+                                            animate={true}
+                                            width={120}
+                                            height={266}
+                                        />
+                                    </motion.div>
+                                </AnimatePresence>
+                            </div>
+                        </motion.div>
                     )}
 
                     {/* Stats Grid */}
