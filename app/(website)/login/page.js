@@ -25,13 +25,18 @@ export default function LoginPage() {
     useEffect(() => {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        const trimmedKey = key ? key.trim() : null;
+        const trimmedUrl = url ? url.trim() : null;
         setDebugInfo({
             platform: Capacitor.getPlatform(),
             isNative: Capacitor.isNativePlatform(),
-            supabaseUrl: url ? `${url.substring(0, 30)}...` : '❌ UNDEFINED',
-            supabaseKeyPrefix: key ? `${key.substring(0, 12)}...` : '❌ UNDEFINED',
-            supabaseUrlFull: url || 'NOT SET',
-            supabaseKeyLength: key ? key.length : 0,
+            supabaseUrl: trimmedUrl ? `${trimmedUrl.substring(0, 35)}...` : '❌ UNDEFINED',
+            supabaseUrlValid: trimmedUrl ? trimmedUrl.includes('.supabase.co') : false,
+            supabaseKeyPrefix: trimmedKey ? `${trimmedKey.substring(0, 12)}...` : '❌ UNDEFINED',
+            supabaseKeySuffix: trimmedKey ? `...${trimmedKey.slice(-4)}` : '❌',
+            supabaseUrlFull: trimmedUrl || 'NOT SET',
+            supabaseKeyLength: trimmedKey ? trimmedKey.length : 0,
+            supabaseKeyRawLength: key ? key.length : 0, // if different → whitespace issue
             buildTime: new Date().toISOString(),
         });
     }, []);
@@ -200,8 +205,10 @@ export default function LoginPage() {
                     }}>
                         <div style={{ color: '#FFD600', marginBottom: '8px', fontWeight: 'bold' }}>🔍 Debug Info</div>
                         <div><span style={{ color: '#666' }}>Platform:</span> <span style={{ color: debugInfo.isNative ? '#4CAF50' : '#FF9800' }}>{debugInfo.platform} {debugInfo.isNative ? '(Native ✓)' : '(Web)'}</span></div>
-                        <div><span style={{ color: '#666' }}>Supabase URL:</span> <span style={{ color: debugInfo.supabaseUrlFull === 'NOT SET' ? '#f44336' : '#4CAF50' }}>{debugInfo.supabaseUrl}</span></div>
-                        <div><span style={{ color: '#666' }}>Anon Key:</span> <span style={{ color: debugInfo.supabaseKeyLength === 0 ? '#f44336' : '#4CAF50' }}>{debugInfo.supabaseKeyPrefix} ({debugInfo.supabaseKeyLength} chars)</span></div>
+                        <div><span style={{ color: '#666' }}>Supabase URL:</span> <span style={{ color: debugInfo.supabaseUrlFull === 'NOT SET' ? '#f44336' : (debugInfo.supabaseUrlValid ? '#4CAF50' : '#FF9800') }}>{debugInfo.supabaseUrl} {debugInfo.supabaseUrlValid ? '✓' : '⚠ not .supabase.co'}</span></div>
+                        <div><span style={{ color: '#666' }}>Anon Key start:</span> <span style={{ color: debugInfo.supabaseKeyLength === 0 ? '#f44336' : '#4CAF50' }}>{debugInfo.supabaseKeyPrefix}</span></div>
+                        <div><span style={{ color: '#666' }}>Anon Key end:</span> <span style={{ color: debugInfo.supabaseKeyLength === 0 ? '#f44336' : '#4CAF50' }}>{debugInfo.supabaseKeySuffix}</span></div>
+                        <div><span style={{ color: '#666' }}>Key length:</span> <span style={{ color: debugInfo.supabaseKeyLength < 100 ? '#f44336' : '#4CAF50' }}>{debugInfo.supabaseKeyLength} chars (trimmed) / {debugInfo.supabaseKeyRawLength} raw {debugInfo.supabaseKeyLength !== debugInfo.supabaseKeyRawLength ? '⚠ WHITESPACE!' : '✓'}</span></div>
                         <div><span style={{ color: '#666' }}>Build time:</span> {debugInfo.buildTime}</div>
                         {debugInfo.lastError && (
                             <>
