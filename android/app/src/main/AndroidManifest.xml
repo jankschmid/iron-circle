@@ -29,12 +29,15 @@
         </provider>
 
         <!-- Custom Foreground Service Registration -->
-        <service 
-            android:name=".IronCircleWorkoutService" 
-            android:enabled="true" 
-            android:exported="false" 
+        <service
+            android:name=".IronCircleWorkoutService"
+            android:enabled="true"
+            android:exported="false"
             android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Workout and Gym Tracking"/>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Workout and Gym Tracking"
+            />
         </service>
     </application>
 
