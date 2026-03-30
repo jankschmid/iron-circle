@@ -85,6 +85,12 @@ export default function ProfilePage() {
                         >
                             {t('Log Out & Reset')}
                         </button>
+                        <Link 
+                            href="/debug/env" 
+                            style={{ textAlign: 'center', color: '#555', fontSize: '0.7rem', marginTop: '10px', textDecoration: 'none' }}
+                        >
+                            Developer: System Debug
+                        </Link>
                     </div>
                 </div>
             );
@@ -597,6 +603,12 @@ export default function ProfilePage() {
                             >
                                 Sync Level
                             </button>
+                            <Link
+                                href="/debug/env"
+                                style={{ padding: '8px', background: '#444', color: '#fff', textAlign: 'center', borderRadius: '4px', fontSize: '0.7rem', cursor: 'pointer', gridColumn: 'span 2', textDecoration: 'none' }}
+                            >
+                                🔍 Env Debug
+                            </Link>
                         </div>
                     </div>
                 )}

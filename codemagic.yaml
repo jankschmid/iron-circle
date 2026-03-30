@@ -140,7 +140,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - you@example.com        # ← Deine E-Mail eintragen
+          - janschmid.office@gmail.com
         notify:
           success: true
           failure: true
