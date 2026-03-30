@@ -11,6 +11,8 @@ workflows:
       app_store_connect: "iron-circle-apple" # Match with Codemagic UI integration name
 
     environment:
+      groups:
+        - production_keys
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.ironcircle.app
@@ -105,6 +107,8 @@ workflows:
     instance_type: linux_x2
 
     environment:
+      groups:
+        - production_keys
       android_signing:
         - ironcircle_keystore      # ← Name des Keystores in Codemagic eintragen
       node: 22.14.0

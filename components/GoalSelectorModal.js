@@ -54,7 +54,8 @@ export default function GoalSelectorModal() {
             position: 'fixed', inset: 0, zIndex: 9999,
             background: 'rgba(0,0,0,0.85)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '20px'
+            padding: 'calc(var(--safe-top, 24px) + 20px) 20px calc(var(--safe-bottom, 24px) + 20px)',
+            overflowY: 'auto'
         }}>
             <div style={{
                 background: 'var(--surface)',

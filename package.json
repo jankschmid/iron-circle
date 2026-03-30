@@ -39,6 +39,7 @@
     "react-hot-toast": "^2.6.0",
     "react-leaflet": "^5.0.0",
     "react-qr-code": "^2.0.18",
+    "resend": "^6.9.4",
     "tailwindcss": "^3.4.19"
   },
   "devDependencies": {

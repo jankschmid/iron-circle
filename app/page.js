@@ -5,12 +5,14 @@ import { useState, useEffect } from 'react';
 import BottomNav from '@/components/BottomNav';
 import LiveStatus from '@/components/LiveStatus';
 import OperationsDashboard from '@/components/OperationsDashboard';
+import NextWorkoutWidget from '@/components/NextWorkoutWidget';
 import GoalSelectorModal from '@/components/GoalSelectorModal'; 
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/context/TranslationContext';
 import { useScroll, useTransform } from 'framer-motion';
+import { Capacitor } from '@capacitor/core';
 
 // Modular Website Components
 import Header from '@/components/website/Header';
@@ -72,6 +74,16 @@ export default function Home() {
     const router = useRouter();
     const supabase = createClient();
     const [isLongLoading, setIsLongLoading] = useState(false);
+    const [isNativeBypass, setIsNativeBypass] = useState(false);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+            if (!isLoading && !user) {
+                setIsNativeBypass(true);
+                router.replace('/login');
+            }
+        }
+    }, [isLoading, user, router]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -100,7 +112,7 @@ export default function Home() {
         }
     };
 
-    if (isLoading) {
+    if (isLoading || isNativeBypass) {
         return (
             <div style={{
                 minHeight: '100vh',
@@ -246,28 +258,8 @@ export default function Home() {
                         <OperationsDashboard userId={user.id} />
                     </section>
 
-                    <section style={{ marginTop: '32px' }}>
-                        <h3 style={{ fontSize: '1.2rem', marginBottom: '12px' }}>{t('Weekly Volume')}</h3>
-                        <div style={{
-                            background: 'var(--surface)',
-                            padding: '20px',
-                            borderRadius: 'var(--radius-md)',
-                            height: '150px',
-                            display: 'flex',
-                            alignItems: 'flex-end',
-                            justifyContent: 'space-between',
-                            gap: '8px'
-                        }}>
-                            {volumeByDay.map((h, i) => (
-                                <div key={i} style={{
-                                    width: '100%',
-                                    height: `${(h / (Math.max(...volumeByDay) || 1)) * 100}%`,
-                                    background: i === new Date().getDay() - 1 ? 'var(--primary)' : 'var(--border)',
-                                    borderRadius: '4px 4px 0 0',
-                                    opacity: 0.8
-                                }} />
-                            ))}
-                        </div>
+                    <section style={{ marginTop: '24px', marginBottom: '24px' }}>
+                        <NextWorkoutWidget />
                     </section>
                 </>
             )}

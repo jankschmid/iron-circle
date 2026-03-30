@@ -47,7 +47,7 @@ export default function Pricing() {
                             </li>
                         ))}
                     </ul>
-                    <Link href="/login" className="mt-auto w-full text-center py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors">Start for Free</Link>
+                    <Link href="/login" className="mt-auto w-full text-center py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-colors">Kostenlos starten</Link>
                 </motion.div>
 
                 {/* Tier 2: Advanced (Middle) */}
@@ -88,7 +88,7 @@ export default function Pricing() {
                     
                     <h4 className="text-xl text-white font-bold mb-2 flex items-center justify-between">
                         Pro Athlete
-                        <span className="text-[10px] uppercase tracking-widest bg-brand/10 text-brand px-2 py-1 rounded-md font-bold">Popular</span>
+                        <span className="text-[10px] uppercase tracking-widest bg-brand/10 text-brand px-2 py-1 rounded-md font-bold">Beliebt</span>
                     </h4>
                     <div className="flex items-baseline gap-2 mb-6">
                         <span className="text-5xl font-black text-white">€3.99</span>
@@ -109,7 +109,7 @@ export default function Pricing() {
                             </li>
                         ))}
                     </ul>
-                    <Link href="/login" className="mt-auto w-full text-center py-4 bg-gradient-to-r from-brand to-brand-dark text-black font-extrabold rounded-xl hover:shadow-[0_0_15px_rgba(250,255,0,0.3)] hover:-translate-y-1 transition-all duration-300">Upgrade to Pro</Link>
+                    <Link href="/login" className="mt-auto w-full text-center py-4 bg-gradient-to-r from-brand to-brand-dark text-black font-extrabold rounded-xl hover:shadow-[0_0_15px_rgba(250,255,0,0.3)] hover:-translate-y-1 transition-all duration-300">Auf Pro upgraden</Link>
                 </motion.div>
             </div>
 

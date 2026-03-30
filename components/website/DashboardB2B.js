@@ -13,12 +13,12 @@ export default function DashboardB2B() {
                 className="mb-16 text-right flex flex-col items-end"
             >
                 <h3 className="text-zinc-500 text-sm font-black tracking-[0.2em] uppercase mb-4 flex items-center justify-end gap-3">
-                    Facility (B2B)
+                    Studio (B2B)
                     <div className="w-2 h-2 bg-zinc-600 rounded-full" /> 
                 </h3>
                 <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tight leading-[1.1]">
-                    GYM OPERATING SYSTEM. <br/>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-l from-brand to-brand-dark">Gamify Your Floor.</span>
+                    STUDIO BETRIEBSSYSTEM. <br/>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-l from-brand to-brand-dark">Gamify Deine Trainingsfläche.</span>
                 </h2>
             </motion.div>
 
@@ -41,16 +41,16 @@ export default function DashboardB2B() {
                         </div>
                         <h4 className="text-3xl text-white font-extrabold tracking-tight mb-4">Live TV Leaderboards</h4>
                         <p className="text-lg text-zinc-400 font-light leading-relaxed mb-8">
-                            Stream workouts live onto your gym televisions. Build an instant, hyper-connected community on the gym floor und motiviere deine Mitglieder visuell.
+                            Streame Workouts live auf deine Studio-Fernseher. Baue eine vernetzte Community direkt auf der Trainingsfläche auf und motiviere deine Mitglieder visuell.
                         </p>
                         <ul className="space-y-3">
                             <li className="flex items-center gap-3 text-zinc-300 font-medium">
                                 <div className="w-5 h-5 rounded-full border border-brand/50 flex items-center justify-center"><ArrowRight className="w-3 h-3 text-brand"/></div>
-                                Real-Time Rankings
+                                Echtzeit-Rankings
                             </li>
                             <li className="flex items-center gap-3 text-zinc-300 font-medium">
                                 <div className="w-5 h-5 rounded-full border border-brand/50 flex items-center justify-center"><ArrowRight className="w-3 h-3 text-brand"/></div>
-                                Squad Battles via Screen
+                                Squad-Battles via Screen
                             </li>
                         </ul>
                     </div>
@@ -79,7 +79,7 @@ export default function DashboardB2B() {
                                 <h4 className="text-2xl text-white font-bold tracking-tight">Predictive Churn Radar</h4>
                             </div>
                             <p className="text-zinc-400 font-light leading-relaxed mb-6">
-                                Our algorithm flags members at risk of canceling <span className="text-white font-semibold">weeks</span> before they quit. Engage them instantly via push notifications.
+                                Unser Algorithmus erkennt abwanderungsgefährdete Mitglieder, <span className="text-white font-semibold">Wochen</span> bevor sie kündigen. Reagiere sofort per Push-Benachrichtigung.
                             </p>
                         </div>
                         <div className="w-full h-2 rounded-full bg-zinc-900 border border-white/5 overflow-hidden">
@@ -101,7 +101,7 @@ export default function DashboardB2B() {
                                 <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-brand group-hover:scale-110 transition-transform duration-500 shadow-inner">
                                     <BarChart3 className="w-6 h-6" />
                                 </div>
-                                <h4 className="text-2xl text-white font-bold tracking-tight">Central Analytics</h4>
+                                <h4 className="text-2xl text-white font-bold tracking-tight">Zentrale Analytics</h4>
                             </div>
                             <p className="text-zinc-400 font-light leading-relaxed">
                                 Detaillierte Statistiken über Stoßzeiten, demografische Verteilungen und Gerät-Beliebtheit deines Gyms, inklusive Export.

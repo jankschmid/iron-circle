@@ -207,7 +207,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
 
                     {isPush && !weight && suggestion && (
                         <div onClick={applySuggestion} style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0ea5e9', fontWeight: 'bold', fontSize: '0.9rem', background: 'rgba(14, 165, 233, 0.1)', pointerEvents: 'none' }}>
-                            {suggestion.weight}
+                            {typeof suggestion.weight === 'object' ? String(suggestion.weight.weight || '') : String(suggestion.weight)}
                         </div>
                     )}
                 </div>
@@ -225,7 +225,7 @@ export default function ExerciseLogger({ exerciseId, setId, previousData, onLog,
                     />
                     {isPush && !reps && suggestion && (
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0ea5e9', fontWeight: 'bold', fontSize: '0.9rem', background: 'rgba(14, 165, 233, 0.1)', pointerEvents: 'none' }}>
-                            {suggestion.reps}
+                            {typeof suggestion.reps === 'object' ? String(suggestion.reps.reps || '') : String(suggestion.reps)}
                         </div>
                     )}
                 </div>

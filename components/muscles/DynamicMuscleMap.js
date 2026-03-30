@@ -1,48 +1,32 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import { getSvgIdsForMuscle } from '@/lib/muscleEngine/muscleMapper';
 
 // --- Color helpers ---
 const INACTIVE_COLOR = '#757575';
-const NON_MUSCLE_COLOR = '#434343';
+const MID_COLOR = '#d97706';
+const ACTIVE_COLOR = '#faff00';
 
-/**
- * Interpolate between two hex colors.
- * @param {number} t - 0.0 (from) to 1.0 (to)
- */
-function lerpColor(from, to, t) {
-    const fromR = parseInt(from.slice(1, 3), 16);
-    const fromG = parseInt(from.slice(3, 5), 16);
-    const fromB = parseInt(from.slice(5, 7), 16);
-    const toR = parseInt(to.slice(1, 3), 16);
-    const toG = parseInt(to.slice(3, 5), 16);
-    const toB = parseInt(to.slice(5, 7), 16);
-    const r = Math.round(fromR + (toR - fromR) * t);
-    const g = Math.round(fromG + (toG - fromG) * t);
-    const b = Math.round(fromB + (toB - fromB) * t);
-    return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+function lerpHex(from, to, t) {
+    const p = (hex, i) => parseInt(hex.slice(i, i + 2), 16);
+    const r = c => Math.round(c).toString(16).padStart(2, '0');
+    return `#${r(p(from,1)+(p(to,1)-p(from,1))*t)}${r(p(from,3)+(p(to,3)-p(from,3))*t)}${r(p(from,5)+(p(to,5)-p(from,5))*t)}`;
 }
 
-/**
- * Get the fill color for a muscle based on its intensity (0–1).
- * Gradient: Inactive (#757575) → Mid (#d97706) → High (#faff00)
- */
 function getMuscleColor(intensity) {
     if (intensity <= 0) return INACTIVE_COLOR;
-    if (intensity < 0.5) return lerpColor(INACTIVE_COLOR, '#d97706', intensity * 2);
-    return lerpColor('#d97706', '#faff00', (intensity - 0.5) * 2);
+    if (intensity < 0.5) return lerpHex(INACTIVE_COLOR, MID_COLOR, intensity * 2);
+    return lerpHex(MID_COLOR, ACTIVE_COLOR, (intensity - 0.5) * 2);
 }
 
 /**
  * DynamicMuscleMap
  * 
- * @param {Object} activeMuscles - { svgPathId: 0.0–1.0 }
- * @param {'front'|'rear'} view - Which side to display
- * @param {boolean} animate - Whether to stagger entrance animations
- * @param {string} className - Extra classes for the wrapper
- * @param {number} width - Width of the SVG
- * @param {number} height - Height of the SVG
+ * Safely fetches the SVG template as a string and patches all `fill` and `filter` styles
+ * dynamically via RegExp. This completely bypasses the `<object>` tag restrictions 
+ * found inside Native WebViews and allows flawless Framer Motion integration.
  */
 export default function DynamicMuscleMap({
     activeMuscles = {},
@@ -52,138 +36,100 @@ export default function DynamicMuscleMap({
     width = 97,
     height = 216,
 }) {
-    const containerRef = useRef(null);
-    const [glowIds, setGlowIds] = useState([]);
+    const [svg, setSvg] = useState('');
 
-    // Figure out which muscles are at PR level (1.0)
     useEffect(() => {
-        const prs = Object.entries(activeMuscles)
-            .filter(([, v]) => v >= 1.0)
-            .map(([id]) => id);
-        setGlowIds(prs);
-    }, [activeMuscles]);
+        const path = view === 'front'
+            ? '/assets/muscles/muscles_front.svg'
+            : '/assets/muscles/muscles_rear.svg';
+            
+        // Uses the public folder absolute fetch path
+        fetch(path)
+            .then(r => r.text())
+            .then(setSvg)
+            .catch(e => console.error("Error loading SVG:", e));
+    }, [view]);
 
-    // Apply styles to SVG paths after render
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
+    const getPatchedSVG = useCallback(() => {
+        if (!svg) return '';
+        let out = svg;
 
-        // Style non-muscle elements
-        const nonMuscleEls = container.querySelectorAll('[id="no_muscles_front"], [id="no_muscles_rear"], [id="body_front"], [id="body_rear"]');
-        nonMuscleEls.forEach(el => {
-            el.style.fill = NON_MUSCLE_COLOR;
+        // 1. Disable Non-Muscle bodies
+        // The default raw SVG might have inline style="fill:xxx" already.
+        const nonMuscles = ['no_muscles_front', 'no_muscles_rear', 'body_front', 'body_rear'];
+        nonMuscles.forEach(id => {
+            out = out.replace(
+                new RegExp(`(id="${id}"[^>]*?style=")([^"]*?)(")`, 'g'),
+                `$1fill:#434343;$3`
+            );
         });
 
-        // Style all named muscle paths
-        const allPaths = container.querySelectorAll('[id]');
-        allPaths.forEach(el => {
-            const muscleId = el.id;
-            if (!muscleId || muscleId.startsWith('body_') || muscleId.startsWith('no_muscles') || muscleId.startsWith('muscles_')) return;
-            
-            const intensity = activeMuscles[muscleId] ?? 0;
+        // 2. Patch Active / Inactive Muscles
+        // We know exactly what muscle IDs are.
+        // First we set all known muscle IDs to INACTIVE
+        const allKeys = Object.keys(activeMuscles).length > 0 
+            ? Object.keys(activeMuscles)
+            : []; // We will just apply active ones directly to override
+
+        for (const [logicalId, rawIntensity] of Object.entries(activeMuscles)) {
+            // Cap visual intensity between 0 and 1
+            const intensity = Math.min(1.0, Math.max(0, rawIntensity));
             const color = getMuscleColor(intensity);
             
-            el.style.fill = color;
-            el.style.transition = 'fill 0.6s ease, filter 0.6s ease, opacity 0.6s ease';
-
-            // PR glow effect
-            if (intensity >= 1.0) {
-                el.style.filter = 'drop-shadow(0 0 6px #faff00) drop-shadow(0 0 12px #faff00)';
-                el.style.animation = 'muscleGlow 1.5s ease-in-out infinite alternate';
-            } else if (intensity > 0) {
-                el.style.filter = 'none';
-                el.style.animation = 'none';
-            } else {
-                el.style.filter = 'none';
-                el.style.animation = 'none';
-                el.style.opacity = '0.5';
-            }
-
-            // Lower opacity for inactive muscles to make active ones pop
+            // Generate Style Payload
+            let stylePayload = `fill:${color}; transition: all 0.5s ease-out;`;
+            
             if (intensity > 0) {
-                el.style.opacity = '1';
+                stylePayload += ' opacity: 1;';
+            } else {
+                stylePayload += ' opacity: 0.5;';
             }
-        });
-    }, [activeMuscles, view]);
 
-    const svgSrc = view === 'front' 
-        ? '/assets/muscles/muscles_front.svg' 
-        : '/assets/muscles/muscles_rear.svg';
+            // Glow / Highlight Effect
+            if (intensity >= 0.95) {
+                // Drop shadow inline filter
+                stylePayload += ` filter: drop-shadow(0 0 6px ${ACTIVE_COLOR});`;
+            }
+
+            // Replace existing style group for all matching SVG IDs
+            const svgIds = getSvgIdsForMuscle(logicalId);
+            svgIds.forEach(id => {
+                out = out.replace(
+                    new RegExp(`(id="${id}"[^>]*?style=")([^"]*?)(")`, 'g'),
+                    `$1${stylePayload}$3`
+                );
+            });
+        }
+
+        // Return patched HTML string
+        return out;
+    }, [svg, activeMuscles]);
+
+    if (!svg) {
+        return (
+            <div 
+                className={`flex items-center justify-center ${className}`}
+                style={{ width: `${width}px`, height: `${height}px` }}
+            >
+                <div className="w-8 h-8 rounded-full bg-surface-highlight animate-pulse" />
+            </div>
+        );
+    }
 
     return (
-        <>
-            <style>{`
-                @keyframes muscleGlow {
-                    from { filter: drop-shadow(0 0 4px #faff00) drop-shadow(0 0 8px #faff00); }
-                    to   { filter: drop-shadow(0 0 10px #faff00) drop-shadow(0 0 20px #faff00); }
-                }
-            `}</style>
-
-            <motion.div
-                ref={containerRef}
-                className={`muscle-map-wrapper ${className}`}
-                initial={animate ? { opacity: 0 } : false}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5 }}
-                style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-                <object
-                    data={svgSrc}
-                    type="image/svg+xml"
-                    ref={containerRef}
-                    style={{
-                        width: `${width}px`,
-                        height: `${height}px`,
-                        maxWidth: '100%',
-                        maxHeight: '100%',
-                    }}
-                    onLoad={(e) => {
-                        // Access SVG document inside <object>
-                        const svgDoc = e.target.contentDocument;
-                        if (!svgDoc) return;
-                        
-                        // Apply colors to all muscle paths in the inline SVG
-                        const allPaths = svgDoc.querySelectorAll('[id]');
-                        allPaths.forEach(el => {
-                            const muscleId = el.id;
-                            if (!muscleId || muscleId.startsWith('body_') || muscleId.startsWith('no_muscles') || muscleId.startsWith('muscles_')) {
-                                if (muscleId?.startsWith('body_') || muscleId?.startsWith('no_muscles')) {
-                                    el.style.fill = NON_MUSCLE_COLOR;
-                                }
-                                return;
-                            }
-                            
-                            const intensity = activeMuscles[muscleId] ?? 0;
-                            const color = getMuscleColor(intensity);
-                            
-                            el.style.fill = color;
-                            el.style.transition = 'fill 0.6s ease, filter 0.6s ease';
-                            el.style.opacity = intensity > 0 ? '1' : '0.5';
-
-                            if (intensity >= 1.0) {
-                                el.style.animation = 'muscleGlow 1.5s ease-in-out infinite alternate';
-                            }
-                        });
-
-                        // Inject keyframes into SVG document
-                        const styleEl = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'style');
-                        styleEl.textContent = `
-                            @keyframes muscleGlow {
-                                from { filter: drop-shadow(0 0 4px #faff00); }
-                                to   { filter: drop-shadow(0 0 12px #faff00); }
-                            }
-                        `;
-                        svgDoc.documentElement.appendChild(styleEl);
-                    }}
-                />
-            </motion.div>
-        </>
+        <motion.div
+            className={`muscle-map-wrapper flex items-center justify-center ${className}`}
+            initial={animate ? { opacity: 0, scale: 0.95 } : false}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            style={{ width: `${width}px`, height: `${height}px` }}
+            dangerouslySetInnerHTML={{ __html: getPatchedSVG() }}
+        />
     );
 }
 
 /**
- * InlineMuscleMap - uses img tag for simpler embedding without JS manipulation.
- * Use this for static/read-only thumbnails (history cards).
+ * StaticMuscleThumbnail - uses image tag for fast read-only rendering without state parsing.
  */
 export function StaticMuscleThumbnail({ view = 'front', className = '' }) {
     const svgSrc = view === 'front' 

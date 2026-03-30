@@ -14,11 +14,11 @@ export default function BentoB2C() {
             >
                 <h3 className="text-brand text-sm font-black tracking-[0.2em] uppercase mb-4 flex items-center gap-3">
                     <div className="w-2 h-2 bg-brand rounded-full animate-pulse shadow-[0_0_10px_rgba(250,255,0,1)]" /> 
-                    B2C (Athletes)
+                    B2C (Athleten)
                 </h3>
                 <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tight leading-[1.1]">
                     PRÄZISION & PROGRESSION. <br/>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-zinc-400 to-zinc-600">The Ultimate Tracker.</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-zinc-400 to-zinc-600">Der ultimative Tracker.</span>
                 </h2>
             </motion.div>
 
@@ -39,10 +39,10 @@ export default function BentoB2C() {
                             <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-center text-brand shadow-inner group-hover:scale-110 transition-transform duration-500">
                                 <LineChart className="w-6 h-6" />
                             </div>
-                            <h4 className="text-2xl text-white font-bold tracking-tight">Smart Overload</h4>
+                            <h4 className="text-2xl text-white font-bold tracking-tight">Smarte Progression</h4>
                         </div>
                         <p className="text-zinc-400 leading-relaxed font-light">
-                            Der Engine lernt deine Limits und berechnet die perfekte Steigerung auf Basis deiner Tagesform (RIR & RPE).
+                            Die Engine lernt deine Limits und berechnet die perfekte Steigerung auf Basis deiner Tagesform (RIR & RPE).
                         </p>
                     </div>
                     

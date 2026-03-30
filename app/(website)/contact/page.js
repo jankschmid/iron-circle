@@ -11,12 +11,19 @@ export default function ContactPage() {
         e.preventDefault();
         setStatus('loading');
         
-        // Simulate a network request for the UI experience.
-        // In reality, this would be: await supabase.from('contact_messages').insert([formData])
-        setTimeout(() => {
+        try {
+            const res = await fetch('/api/contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            if (!res.ok) throw new Error('Network error');
             setStatus('success');
             setFormData({ name: '', email: '', message: '' });
-        }, 1500);
+        } catch (error) {
+            console.error(error);
+            setStatus('error');
+        }
     };
 
     return (
@@ -112,6 +119,12 @@ export default function ContactPage() {
                                         {status !== 'loading' && <Send className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />}
                                     </span>
                                 </button>
+                                
+                                {status === 'error' && (
+                                    <p className="text-red-500 text-sm text-center font-medium mt-4">
+                                        Es gab einen Fehler. Bitte versuche es noch einmal oder schreibe direkt an info@iron-circle.app.
+                                    </p>
+                                )}
                             </form>
                         )}
                     </div>

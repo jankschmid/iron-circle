@@ -47,8 +47,8 @@ export default function Hero({ yHeroText, opacityHeroText, yFloating1, yFloating
                         transition={{ duration: 0.7, ease: "easeOut" }}
                         className="text-5xl lg:text-[5.5rem] font-extrabold text-white leading-[1.05] mb-6 tracking-tight drop-shadow-sm"
                     >
-                        Level Up Your Training.<br/>
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-dark block mt-2 drop-shadow-[0_0_25px_rgba(250,255,0,0.3)]">Empower Your Gym.</span>
+                        Level Up Dein Training.<br/>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-dark block mt-2 drop-shadow-[0_0_25px_rgba(250,255,0,0.3)]">Stärke Dein Studio.</span>
                     </motion.h1>
                     
                     <motion.p 
@@ -57,7 +57,7 @@ export default function Hero({ yHeroText, opacityHeroText, yFloating1, yFloating
                         transition={{ duration: 0.7, delay: 0.15, ease: "easeOut" }}
                         className="text-lg lg:text-xl text-zinc-400 max-w-lg mb-12 leading-relaxed font-light"
                     >
-                        The ultimate smart progression tracker for athletes to achieve mastery, wrapped in a gamification ecosystem for gyms to destroy churn.
+                        Der ultimative smarte Progression-Tracker für Athleten, eingebettet in ein Gamification-Ökosystem für Studios, um Mitglieder langfristig zu binden.
                     </motion.p>
                     
                     <motion.div 
@@ -68,11 +68,11 @@ export default function Hero({ yHeroText, opacityHeroText, yFloating1, yFloating
                     >
                         <Link href="/login" className="group relative flex items-center justify-center gap-2 px-8 py-4 bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 text-white text-center font-bold text-lg rounded-xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-md overflow-hidden">
                             <div className="absolute inset-0 bg-white/20 translate-y-[100%] group-hover:translate-y-[0%] transition-transform duration-300" />
-                            <span className="relative z-10 flex items-center gap-2">Join as Athlete <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></span>
+                            <span className="relative z-10 flex items-center gap-2">Als Athlet beitreten <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></span>
                         </Link>
                         <SmartDownloadButton variant="secondary" />
                         <a href="#b2b" className="flex items-center justify-center gap-2 px-8 py-4 bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 text-white text-center font-bold text-lg rounded-xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-md">
-                            Gym Demo
+                            Studio Demo
                         </a>
                     </motion.div>
                 </motion.div>

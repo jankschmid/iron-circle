@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase';
 export default function WallOfFame() {
     const [reviews, setReviews] = useState([
         { quote: "Die Mastery-Phase ist ein Game-Changer. Ich habe aufgehört Ego-Lifts zu machen und mein Bankdrücken endlich sauber um 15kg gesteigert.", name: "Julian W.", role: "Powerlifter", delay: 0 },
-        { quote: "Die Live-Leaderboards im Gym haben unser komplettes Floor-Ambiente verändert. Die Leute pushen sich gegenseitig wie nie zuvor.", name: "Sarah M.", role: "Gym Owner", delay: 0.1 },
+        { quote: "Die Live-Leaderboards im Gym haben unser komplettes Floor-Ambiente verändert. Die Leute pushen sich gegenseitig wie nie zuvor.", name: "Sarah M.", role: "Studiobesitzer", delay: 0.1 },
         { quote: "Ich tracke seit 4 Jahren, aber kein Algorithmus war so präzise darin, mein Volumen auf Basis meiner Tagesform (RPE) anzupassen.", name: "Dennis K.", role: "Bodybuilder", delay: 0.2 },
     ]);
 
@@ -25,7 +25,7 @@ export default function WallOfFame() {
                 setReviews(data.map((r, i) => ({
                     quote: r.comment,
                     name: r.name,
-                    role: r.role || 'Athlete',
+                    role: r.role || 'Athlet',
                     rating: r.rating || 5,
                     delay: i * 0.1
                 })));

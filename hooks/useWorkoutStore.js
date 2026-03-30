@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { EXERCISES } from '@/lib/data';
 import { useToast } from '@/components/ToastProvider';
-import { calculateSessionXP } from '@/lib/gamification';
+import { calculateSessionXP, calculateLevel } from '@/lib/gamification';
 import { foregroundService } from '@/lib/foregroundService';
 import { calculateWorkoutImpact } from '@/lib/muscleEngine/calculateWorkoutImpact';
+import { Storage } from '@/lib/storage';
 
 const supabase = createClient();
 
@@ -25,43 +26,46 @@ export function useWorkoutStore(user, refreshUserProfile) {
     useEffect(() => {
         if (typeof window === 'undefined') return;
         if (activeWorkout) {
-            localStorage.setItem('iron-circle-active-workout', JSON.stringify(activeWorkout));
+            Storage.set('iron-circle-active-workout', JSON.stringify(activeWorkout));
         }
     }, [activeWorkout]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const saved = localStorage.getItem('iron-circle-active-workout');
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                const valid = parsed.startTime && (new Date() - new Date(parsed.startTime) < 24 * 60 * 60 * 1000);
-                if (valid && !activeWorkout) {
-                    setActiveWorkout(parsed);
+        const loadBackup = async () => {
+            const saved = await Storage.get('iron-circle-active-workout');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    const valid = parsed.startTime && (new Date() - new Date(parsed.startTime) < 24 * 60 * 60 * 1000);
+                    if (valid && !activeWorkout) {
+                        setActiveWorkout(parsed);
 
-                    // Resume Foreground Service Timer and Progress
-                    let tSets = 0, dSets = 0;
-                    if (parsed.logs) {
-                        parsed.logs.forEach(l => {
-                            tSets += l.sets?.length || 0;
-                            dSets += l.sets?.filter(s => s.completed)?.length || 0;
+                        // Resume Foreground Service Timer and Progress
+                        let tSets = 0, dSets = 0;
+                        if (parsed.logs) {
+                            parsed.logs.forEach(l => {
+                                tSets += l.sets?.length || 0;
+                                dSets += l.sets?.filter(s => s.completed)?.length || 0;
+                            });
+                        }
+                        foregroundService.startWorkoutTracking({
+                            workoutName: parsed.name,
+                            doneSets: dSets,
+                            totalSets: tSets,
+                            startTimeMs: new Date(parsed.startTime).getTime()
                         });
-                    }
-                    foregroundService.startWorkoutTracking({
-                        workoutName: parsed.name,
-                        doneSets: dSets,
-                        totalSets: tSets,
-                        startTimeMs: new Date(parsed.startTime).getTime()
-                    });
 
-                    toast.success('Session restored from local backup');
-                } else if (!valid) {
-                    localStorage.removeItem('iron-circle-active-workout');
+                        toast.success('Session restored from local backup');
+                    } else if (!valid) {
+                        await Storage.remove('iron-circle-active-workout');
+                    }
+                } catch (e) {
+                    await Storage.remove('iron-circle-active-workout');
                 }
-            } catch (e) {
-                localStorage.removeItem('iron-circle-active-workout');
             }
-        }
+        };
+        loadBackup();
     }, []);
 
     useEffect(() => {
@@ -131,32 +135,69 @@ export function useWorkoutStore(user, refreshUserProfile) {
 
     const fetchHistory = async () => {
         if (!user) return;
-        const { data } = await supabase
-            .from('workouts')
-            .select(`
-                id, name, start_time, end_time, volume, duration, visibility,
-                logs:workout_logs ( exercise_id, sets )
-            `)
-            .eq('user_id', user.id)
-            .not('end_time', 'is', null)
-            .order('end_time', { ascending: false });
 
-        if (data) {
-            const formatted = data.map(w => ({
-                id: w.id,
-                name: w.name,
-                startTime: w.start_time,
-                endTime: w.end_time,
-                volume: w.volume,
-                duration: w.duration,
-                status: w.status,
-                visibility: w.visibility,
-                logs: w.logs.map(l => ({
-                    exerciseId: l.exercise_id,
-                    sets: typeof l.sets === 'string' ? JSON.parse(l.sets) : l.sets
-                }))
-            }));
-            setHistory(formatted);
+        // 1. Optimistic Offline Cache Load
+        const cached = await Storage.get('iron-circle-history');
+        if (cached) {
+            try { setHistory(JSON.parse(cached)); } catch (e) {}
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('workouts')
+                .select(`
+                    id, name, start_time, end_time, volume, duration, visibility,
+                    logs:workout_logs ( exercise_id, sets )
+                `)
+                .eq('user_id', user.id)
+                .not('end_time', 'is', null)
+                .order('end_time', { ascending: false });
+
+            if (data && !error) {
+                const formatted = data.map(w => ({
+                    id: w.id,
+                    name: w.name,
+                    startTime: w.start_time,
+                    endTime: w.end_time,
+                    volume: w.volume,
+                    duration: w.duration,
+                    status: w.status,
+                    visibility: w.visibility,
+                    logs: w.logs.map(l => ({
+                        exerciseId: l.exercise_id,
+                        sets: typeof l.sets === 'string' ? JSON.parse(l.sets) : l.sets
+                    }))
+                }));
+
+                // 2. Combine with Pending Offline Queue
+                const rawQueue = await Storage.get(PENDING_KEY);
+                let pendingHistory = [];
+                if (rawQueue) {
+                    try {
+                        const queue = JSON.parse(rawQueue);
+                        if (Array.isArray(queue)) {
+                            pendingHistory = queue.map(q => ({
+                                id: 'pending-' + q.savedAt,
+                                name: q.workout.name,
+                                startTime: q.workout.startTime,
+                                endTime: q.workout.endTime,
+                                volume: q.workout.volume,
+                                duration: q.workout.duration,
+                                status: 'completed',
+                                visibility: q.visibility,
+                                logs: q.logs,
+                                isPendingSync: true
+                            }));
+                        }
+                    } catch (e) {}
+                }
+
+                const merged = [...pendingHistory, ...formatted].sort((a,b) => new Date(b.endTime) - new Date(a.endTime));
+                setHistory(merged);
+                Storage.set('iron-circle-history', JSON.stringify(merged)); // Fire and forget
+            }
+        } catch (e) {
+            console.warn('[IronCircle] fetchHistory network issue, relying on cache.', e.message);
         }
     };
 
@@ -364,24 +405,43 @@ export function useWorkoutStore(user, refreshUserProfile) {
         }));
     };
 
-    // --- OFFLINE SYNC ---
-    const PENDING_KEY = 'iron-circle-pending-workout';
+    // --- OFFLINE SYNC QUEUE ---
+    const PENDING_KEY = 'iron-circle-offline-queue';
 
     const syncPendingWorkout = async () => {
         if (!user?.id) return;
-        const raw = localStorage.getItem(PENDING_KEY);
+        const raw = await Storage.get(PENDING_KEY);
         if (!raw) return;
         try {
-            const pending = JSON.parse(raw);
-            console.log('[IronCircle] Syncing pending offline workout...');
-            const result = await _uploadWorkout(pending);
-            if (result.success) {
-                localStorage.removeItem(PENDING_KEY);
-                fetchHistory();
-                console.log('[IronCircle] ✅ Offline workout synced successfully');
+            const queue = JSON.parse(raw);
+            if (!Array.isArray(queue) || queue.length === 0) return;
+            
+            console.log(`[IronCircle] Syncing ${queue.length} pending offline workout(s)...`);
+            let allSuccess = true;
+            
+            for (let i = 0; i < queue.length; i++) {
+                const pending = queue[i];
+                try {
+                    const result = await _uploadWorkout(pending);
+                    if (result.success) {
+                        queue.splice(i, 1);
+                        i--; // adjust index because array shortened
+                    }
+                } catch (err) {
+                    allSuccess = false;
+                    break; // Stop and try the rest later when network is truly back
+                }
             }
+            
+            if (queue.length === 0) {
+                await Storage.remove(PENDING_KEY);
+                console.log('[IronCircle] ✅ All offline workouts synced successfully');
+            } else {
+                await Storage.set(PENDING_KEY, JSON.stringify(queue));
+            }
+            fetchHistory();
         } catch (e) {
-            console.warn('[IronCircle] Sync failed, will retry later:', e.message);
+            console.warn('[IronCircle] Sync queue processing failed:', e.message);
         }
     };
 
@@ -561,7 +621,7 @@ export function useWorkoutStore(user, refreshUserProfile) {
 
         // Optimistically clear the active workout immediately
         setActiveWorkout(null);
-        localStorage.removeItem('iron-circle-active-workout');
+        Storage.remove('iron-circle-active-workout'); // non-blocking clear
 
         try {
             // Race the entire upload against a 10-second timeout
@@ -619,14 +679,32 @@ export function useWorkoutStore(user, refreshUserProfile) {
             return { success: true, offline: false, summary: finalSummary };
 
         } catch (e) {
-            console.warn('[IronCircle] Workout upload failed, saving offline:', e.message);
+            console.warn('[IronCircle] Workout upload failed, saving offline to Queue:', e.message);
 
-            // Save full payload for later sync
-            localStorage.setItem(PENDING_KEY, JSON.stringify(payload));
+            // Save full payload to Queue
+            const raw = await Storage.get(PENDING_KEY);
+            let queue = [];
+            if (raw) {
+                try { queue = JSON.parse(raw); } catch (e) {}
+            }
+            queue.push(payload);
+            await Storage.set(PENDING_KEY, JSON.stringify(queue));
+
+            // Offline Level Projection logic
+            const projectedNewTotalXP = (user.current_xp || 0) + summaryData.earnedXP;
+            const projectedNewLevel = calculateLevel(projectedNewTotalXP);
+
+            const offlineSummary = { 
+                ...summaryData, 
+                newTotalXP: projectedNewTotalXP,
+                newLevel: projectedNewLevel,
+                didLevelUp: projectedNewLevel > (user.level || 1),
+                savedOffline: true 
+            };
 
             // Still show summary — data is safe locally
-            setWorkoutSummary({ ...summaryData, savedOffline: true });
-            return { success: true, offline: true, summary: summaryData };
+            setWorkoutSummary(offlineSummary);
+            return { success: true, offline: true, summary: offlineSummary };
         }
     };
 
@@ -638,7 +716,7 @@ export function useWorkoutStore(user, refreshUserProfile) {
         // Stop Android Foreground Service
         foregroundService.stop();
 
-        localStorage.removeItem('iron-circle-active-workout');
+        await Storage.remove('iron-circle-active-workout');
         setActiveWorkout(null);
         if (activeWorkout.id) await supabase.from('workouts').delete().eq('id', activeWorkout.id);
     };
@@ -854,6 +932,7 @@ export function useWorkoutStore(user, refreshUserProfile) {
     /**
      * getWeeklyMuscleHeat
      * Aggregates the impact of all workouts in the last 7 days.
+     * Incorporates mathematical time-decay logic from the engine.
      */
     const getWeeklyMuscleHeat = () => {
         if (!history || history.length === 0) return {};
@@ -863,27 +942,23 @@ export function useWorkoutStore(user, refreshUserProfile) {
         startOfWeek.setHours(0, 0, 0, 0);
 
         const totalHeat = {};
-        let sessionCount = 0;
 
         history.forEach(session => {
             const date = new Date(session.endTime);
             if (date >= startOfWeek) {
-                sessionCount++;
-                const impact = calculateWorkoutImpact(session);
+                // Pass session, the exercises registry, and current time for decay calculation
+                const impact = calculateWorkoutImpact(session, exercises, now.getTime());
                 for (const [muscle, value] of Object.entries(impact)) {
                     totalHeat[muscle] = (totalHeat[muscle] || 0) + value;
                 }
             }
         });
 
-        // Normalize: if someone works out 5 times, a 1.0 (max) should feel significant.
-        // We'll divide by sessionCount (if > 0) or just cap at 1.0.
-        // Actually, for a weekly view, it's nice to see cumulative "load".
-        // But for the SVG colors (0.0–1.0), we normalize.
         const normalized = {};
         for (const [muscle, value] of Object.entries(totalHeat)) {
-            // If a muscle has 3.0 total volume over a week, it's definitely red/glowing.
-            normalized[muscle] = Math.min(1.0, value / (sessionCount > 0 ? 1.5 : 1)); 
+            // Cap at 1.0. With decay, any highly stimulated muscle recently will glow,
+            // while an older one needs overlapping sessions to glow bright.
+            normalized[muscle] = Math.min(1.0, value); 
         }
 
         return normalized;
@@ -892,9 +967,10 @@ export function useWorkoutStore(user, refreshUserProfile) {
     /**
      * getWorkoutHeat
      * Get 0.0–1.0 heat object for a specific workout session (for thumbnails)
+     * We don't use decay here (pass session.endTime as nowTime) so the thumbnail always shows the heat *at the time of the workout*.
      */
     const getWorkoutHeat = (session) => {
-        return calculateWorkoutImpact(session);
+        return calculateWorkoutImpact(session, exercises, new Date(session.endTime).getTime());
     };
 
     const getPersonalBests = () => {

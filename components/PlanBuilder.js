@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/lib/store';
 
 export default function PlanBuilder({ existingPlan, onClose }) {
-    const { templates, fetchTemplates, savePlan, addWorkoutTemplate } = useStore();
+    const { workoutTemplates: templates, fetchTemplates, savePlan, addWorkoutTemplate } = useStore();
     const [name, setName] = useState(existingPlan?.name || '');
     const [description, setDescription] = useState(existingPlan?.description || '');
     const [days, setDays] = useState(existingPlan?.days || [{ id: 'temp-1', day_order: 1, template_id: null, label: 'Day 1' }]);
@@ -215,7 +215,7 @@ export default function PlanBuilder({ existingPlan, onClose }) {
                                             </span>
                                             <div style={{ fontWeight: 'bold', fontSize: '1rem', color: day.template_id ? 'white' : 'var(--text-muted)' }}>
                                                 {day.template_id ?
-                                                    (templates.find(t => t.id === day.template_id)?.name || 'Loading...')
+                                                    ((templates || []).find(t => t.id === day.template_id)?.name || 'Loading...')
                                                     : (isFlex ? 'Use specific routine' : 'Rest Day 💤')}
                                             </div>
                                         </div>

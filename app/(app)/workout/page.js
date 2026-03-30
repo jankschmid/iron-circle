@@ -9,6 +9,7 @@ import BottomNav from '@/components/BottomNav';
 import PlanManager from '@/components/PlanManager';
 import TemplateSelector from '@/components/TemplateSelector';
 import QuickLogModal from '@/components/QuickLogModal';
+import DayDetailsModal from '@/components/DayDetailsModal';
 import { AnimatePresence } from 'framer-motion';
 import { useTranslation } from '@/context/TranslationContext';
 import dynamic from 'next/dynamic';
@@ -23,6 +24,7 @@ export default function WorkoutPage() {
     const [view, setView] = useState('plan'); // 'plan' | 'library' | 'stats'
     const [showPlans, setShowPlans] = useState(false);
     const [activeRestDay, setActiveRestDay] = useState(null);
+    const [previewDay, setPreviewDay] = useState(null);
 
     // Fetch active plans on mount and when user loads
     useEffect(() => {
@@ -99,16 +101,19 @@ export default function WorkoutPage() {
                                 {(activePlan.type === 'flex') ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
                                         {activePlan.days.map((day, index) => (
-                                            <div key={day.id || index} style={{
-                                                background: 'var(--surface)',
-                                                padding: '16px',
-                                                borderRadius: '16px',
-                                                border: '1px solid var(--border)',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                justifyContent: 'space-between',
-                                                position: 'relative'
-                                            }}>
+                                                <div key={day.id || index} 
+                                                    onClick={() => day.template_id && setPreviewDay(day)}
+                                                    style={{
+                                                    background: 'var(--surface)',
+                                                    padding: '16px',
+                                                    borderRadius: '16px',
+                                                    border: '1px solid var(--border)',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    justifyContent: 'space-between',
+                                                    position: 'relative',
+                                                    cursor: day.template_id ? 'pointer' : 'default'
+                                                }}>
                                                 <div style={{ marginBottom: '12px' }}>
                                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
                                                         {t('Routine')} {index + 1}
@@ -120,7 +125,7 @@ export default function WorkoutPage() {
 
                                                 {day.template_id ? (
                                                     <button
-                                                        onClick={() => startWorkout(day.template_id, activePlan.id, day.id)}
+                                                        onClick={() => setPreviewDay(day)}
                                                         style={{
                                                             width: '100%',
                                                             padding: '10px 0',
@@ -185,7 +190,12 @@ export default function WorkoutPage() {
                                                 const isMissed = !day.isCompleted && day.index < lastCompletedIndex;
 
                                                 return (
-                                                    <div key={day.id} style={{
+                                                    <div key={day.id} 
+                                                        onClick={() => {
+                                                            if (day.template_id) setPreviewDay({ ...day, forceRestart: day.isCompleted });
+                                                            else setActiveRestDay(day);
+                                                        }}
+                                                        style={{
                                                         background: 'var(--surface)',
                                                         padding: '16px',
                                                         borderRadius: '16px',
@@ -195,7 +205,8 @@ export default function WorkoutPage() {
                                                         flexDirection: 'column',
                                                         justifyContent: 'space-between',
                                                         position: 'relative',
-                                                        overflow: 'hidden'
+                                                        overflow: 'hidden',
+                                                        cursor: 'pointer'
                                                     }}>
                                                         {day.isCompleted && (
                                                             <div style={{
@@ -252,7 +263,7 @@ export default function WorkoutPage() {
                                                                         ✓ {t('Done')}
                                                                     </button>
                                                                     <button
-                                                                        onClick={() => startWorkout(day.template_id, activePlan.id, day.id)}
+                                                                        onClick={() => setPreviewDay({ ...day, forceRestart: true })}
                                                                         title="Do again"
                                                                         style={{
                                                                             padding: '10px',
@@ -267,7 +278,7 @@ export default function WorkoutPage() {
                                                                 </div>
                                                             ) : (
                                                                 <button
-                                                                    onClick={() => startWorkout(day.template_id, activePlan.id, day.id)}
+                                                                    onClick={() => setPreviewDay(day)}
                                                                     style={{
                                                                         width: '100%',
                                                                         padding: '10px 0',
@@ -373,6 +384,14 @@ export default function WorkoutPage() {
             </div>
 
             {showPlans && <PlanManager onClose={() => setShowPlans(false)} />}
+            {previewDay && (
+                <DayDetailsModal
+                    templateId={previewDay.template_id}
+                    activePlanId={activePlan?.id}
+                    dayId={previewDay.id}
+                    onClose={() => setPreviewDay(null)}
+                />
+            )}
             {activeRestDay && (
                 <QuickLogModal
                     onClose={() => setActiveRestDay(null)}

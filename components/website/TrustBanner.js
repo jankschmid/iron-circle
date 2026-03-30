@@ -19,12 +19,12 @@ export default function TrustBanner() {
                 >
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Dumbbell className="w-6 h-6 text-zinc-600"/> ELITE POWERLIFTING</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Target className="w-6 h-6 text-zinc-600"/> HYPERTROPHY LABS</div>
-                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Users className="w-6 h-6 text-zinc-600"/> 10K+ ATHLETES</div>
-                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Monitor className="w-6 h-6 text-zinc-600"/> 50+ GYMS</div>
+                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Users className="w-6 h-6 text-zinc-600"/> 10K+ ATHLETEN</div>
+                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Monitor className="w-6 h-6 text-zinc-600"/> 50+ STUDIOS</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Dumbbell className="w-6 h-6 text-zinc-600"/> PREMIER PERFORMANCE</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Target className="w-6 h-6 text-zinc-600"/> IRON FORGE</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Users className="w-6 h-6 text-zinc-600"/> STRONGMAN COLLECTIVE</div>
-                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Monitor className="w-6 h-6 text-zinc-600"/> GLOBAL LEADERBOARDS</div>
+                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Monitor className="w-6 h-6 text-zinc-600"/> GLOBALE LEADERBOARDS</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Dumbbell className="w-6 h-6 text-zinc-600"/> OLYMPIC WEIGHTLIFTING</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Target className="w-6 h-6 text-zinc-600"/> SQUAD BATTLES</div>
                 </motion.div>
@@ -37,12 +37,12 @@ export default function TrustBanner() {
                 >
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Dumbbell className="w-6 h-6 text-zinc-600"/> ELITE POWERLIFTING</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Target className="w-6 h-6 text-zinc-600"/> HYPERTROPHY LABS</div>
-                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Users className="w-6 h-6 text-zinc-600"/> 10K+ ATHLETES</div>
-                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Monitor className="w-6 h-6 text-zinc-600"/> 50+ GYMS</div>
+                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Users className="w-6 h-6 text-zinc-600"/> 10K+ ATHLETEN</div>
+                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Monitor className="w-6 h-6 text-zinc-600"/> 50+ STUDIOS</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Dumbbell className="w-6 h-6 text-zinc-600"/> PREMIER PERFORMANCE</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Target className="w-6 h-6 text-zinc-600"/> IRON FORGE</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Users className="w-6 h-6 text-zinc-600"/> STRONGMAN COLLECTIVE</div>
-                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Monitor className="w-6 h-6 text-zinc-600"/> GLOBAL LEADERBOARDS</div>
+                    <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Monitor className="w-6 h-6 text-zinc-600"/> GLOBALE LEADERBOARDS</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Dumbbell className="w-6 h-6 text-zinc-600"/> OLYMPIC WEIGHTLIFTING</div>
                     <div className="flex items-center gap-3 font-extrabold text-xl tracking-widest uppercase text-zinc-500"><Target className="w-6 h-6 text-zinc-600"/> SQUAD BATTLES</div>
                 </motion.div>

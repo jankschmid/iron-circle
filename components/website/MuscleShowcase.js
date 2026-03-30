@@ -58,7 +58,7 @@ function MuscleMapSVG({ activeMuscles, view }) {
 
     return (
         <div
-            className="w-full h-full flex items-center justify-center py-6"
+            className="w-full h-full flex items-center justify-center pt-14 pb-8 scale-[0.88] origin-center"
             dangerouslySetInnerHTML={{ __html: patched() }}
         />
     );

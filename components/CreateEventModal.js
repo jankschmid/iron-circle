@@ -73,7 +73,8 @@ export default function CreateEventModal({ isOpen, onClose, onSave, initialData 
     return (
         <div style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 'calc(var(--safe-top, 24px) + 20px) 20px calc(var(--safe-bottom, 24px) + 20px)'
         }} onClick={onClose}>
             <div style={{
                 background: 'var(--surface)', width: '100%', maxWidth: '600px',
