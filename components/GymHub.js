@@ -521,21 +521,45 @@ export function GymChallenges({ challenges }) {
     const { user, joinChallenge, createChallengeTeam } = useStore();
     const supabase = createClient();
     const [myChallenges, setMyChallenges] = useState({});
+    const [mySubmissions, setMySubmissions] = useState({}); // challengeId → [submissions]
+    const [submissionsLoaded, setSubmissionsLoaded] = useState(false);
 
-    const [showSubmitModal, setShowSubmitModal] = useState(null); // challengeId
-    const [showTeamModal, setShowTeamModal] = useState(null); // challenge obj
+    const [showSubmitModal, setShowSubmitModal] = useState(null);
+    const [showTeamModal, setShowTeamModal] = useState(null);
+
+    const fetchAll = async () => {
+        if (!user) return;
+
+        // Participation
+        const { data: partData } = await supabase
+            .from('challenge_participants')
+            .select('challenge_id, status, progress')
+            .eq('user_id', user.id);
+        if (partData) {
+            const map = {};
+            partData.forEach(r => map[r.challenge_id] = r);
+            setMyChallenges(map);
+        }
+
+        // My submissions
+        const { data: subData } = await supabase
+            .from('challenge_submissions')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+        if (subData) {
+            const subMap = {};
+            subData.forEach(s => {
+                if (!subMap[s.challenge_id]) subMap[s.challenge_id] = [];
+                subMap[s.challenge_id].push(s);
+            });
+            setMySubmissions(subMap);
+        }
+        setSubmissionsLoaded(true);
+    };
 
     useEffect(() => {
-        if (!user) return;
-        const fetchParticipation = async () => {
-            const { data } = await supabase.from('challenge_participants').select('challenge_id, status, progress').eq('user_id', user.id);
-            if (data) {
-                const map = {};
-                data.forEach(r => map[r.challenge_id] = r);
-                setMyChallenges(map);
-            }
-        };
-        fetchParticipation();
+        fetchAll();
     }, [user, challenges]);
 
     const handleJoin = async (id) => {
@@ -543,6 +567,11 @@ export function GymChallenges({ challenges }) {
         if (success) {
             setMyChallenges(prev => ({ ...prev, [id]: { status: 'active', progress: 0 } }));
         }
+    };
+
+    const handleSubmitSuccess = () => {
+        setShowSubmitModal(null);
+        fetchAll(); // refresh submissions + progress
     };
 
     if (!challenges || challenges.length === 0) {
@@ -554,10 +583,31 @@ export function GymChallenges({ challenges }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {challenges.map(c => {
                     const joined = myChallenges[c.id];
+                    const subs = mySubmissions[c.id] || [];
+                    const hasSubmitted = subs.length > 0;
+                    const canSubmitAgain = c.allow_multiple_submissions || !hasSubmitted;
+                    const latestSub = subs[0]; // most recent
+
                     return (
-                        <div key={c.id} style={{ background: 'var(--surface)', borderRadius: '16px', padding: '16px', border: '1px solid var(--border)' }}>
-                            <h3 style={{ margin: '0 0 8px 0' }}>{c.title}</h3>
-                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '16px' }}>{c.description}</p>
+                        <div key={c.id} style={{
+                            background: 'var(--surface)', borderRadius: '16px', padding: '16px',
+                            border: hasSubmitted ? '1px solid rgba(250,255,0,0.2)' : '1px solid var(--border)'
+                        }}>
+                            {/* Header */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                <h3 style={{ margin: 0, flex: 1 }}>{c.title}</h3>
+                                {c.allow_multiple_submissions ? (
+                                    <span style={{ fontSize: '0.65rem', background: 'rgba(0,210,255,0.1)', color: '#00d2ff', padding: '2px 8px', borderRadius: '100px', fontWeight: 'bold', flexShrink: 0, marginLeft: '8px' }}>
+                                        🔁 {t('Multi')}
+                                    </span>
+                                ) : (
+                                    <span style={{ fontSize: '0.65rem', background: 'rgba(255,200,0,0.1)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '100px', fontWeight: 'bold', flexShrink: 0, marginLeft: '8px' }}>
+                                        1× {t('Only')}
+                                    </span>
+                                )}
+                            </div>
+
+                            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: 1.5 }}>{c.description}</p>
 
                             {c.computed_status === 'Upcoming' && (
                                 <div style={{ display: 'inline-block', background: '#00d2ff22', color: '#00d2ff', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '12px' }}>
@@ -565,22 +615,75 @@ export function GymChallenges({ challenges }) {
                                 </div>
                             )}
 
-                            {joined ? (
-                                <div style={{ background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px' }}>
+                            {joined && (
+                                <div style={{ background: 'var(--surface-highlight)', padding: '12px', borderRadius: '8px', marginBottom: hasSubmitted ? '12px' : '0' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
                                         <span>{t('Progress')}</span>
-                                        <span>{joined.progress || 0} / {c.target_value || 100}</span>
+                                        <span>{joined.progress || 0}{c.goal_type ? ` ${c.goal_type}` : ''} / {c.target_value || '?'}</span>
                                     </div>
-                                    <div style={{ height: '8px', background: '#333', borderRadius: '4px', overflow: 'hidden' }}>
-                                        <div style={{ width: `${Math.min(100, ((joined.progress || 0) / (c.target_value || 1) * 100))}%`, height: '100%', background: 'var(--primary)' }} />
+                                    <div style={{ height: '6px', background: '#333', borderRadius: '100px', overflow: 'hidden' }}>
+                                        <div style={{
+                                            width: `${Math.min(100, ((joined.progress || 0) / (c.target_value || 1) * 100))}%`,
+                                            height: '100%',
+                                            background: 'var(--primary)',
+                                            borderRadius: '100px'
+                                        }} />
                                     </div>
+                                </div>
+                            )}
+
+                            {/* My Submissions */}
+                            {hasSubmitted && (
+                                <div style={{ background: 'rgba(250,255,0,0.04)', border: '1px solid rgba(250,255,0,0.12)', borderRadius: '10px', padding: '12px', marginBottom: '10px' }}>
+                                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--primary)', fontWeight: 'bold', marginBottom: '8px' }}>
+                                        {subs.length === 1 ? '✓ ' + t('Your Submission') : `✓ ${subs.length} ${t('Submissions')}`}
+                                    </div>
+                                    {subs.slice(0, 3).map((s, i) => (
+                                        <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '4px 0', borderBottom: i < Math.min(subs.length, 3) - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                                            <span style={{ color: 'var(--foreground)', fontWeight: '600' }}>
+                                                {s.value} {c.goal_type || ''}
+                                                {s.note && <span style={{ color: 'var(--text-muted)', fontWeight: 'normal', marginLeft: '6px' }}>— {s.note}</span>}
+                                            </span>
+                                            <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                                                {new Date(s.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                {s.status === 'verified' && ' ✓'}
+                                                {s.status === 'rejected' && ' ✗'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {subs.length > 3 && (
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+                                            +{subs.length - 3} {t('more')}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            {joined ? (
+                                canSubmitAgain ? (
                                     <button
                                         onClick={() => setShowSubmitModal(c)}
-                                        style={{ width: '100%', marginTop: '12px', padding: '8px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                                        style={{
+                                            width: '100%', padding: '10px',
+                                            background: hasSubmitted ? 'transparent' : 'var(--primary)',
+                                            color: hasSubmitted ? 'var(--primary)' : '#000',
+                                            border: hasSubmitted ? '1px solid var(--primary)' : 'none',
+                                            borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer'
+                                        }}
                                     >
-                                        {t('Submit Result')}
+                                        {hasSubmitted ? `+ ${t('Submit Again')}` : t('Submit Result')}
                                     </button>
-                                </div>
+                                ) : (
+                                    <div style={{
+                                        textAlign: 'center', padding: '10px',
+                                        background: 'rgba(255,255,255,0.04)',
+                                        borderRadius: '8px', fontSize: '0.85rem',
+                                        color: 'var(--text-muted)', border: '1px solid var(--border)'
+                                    }}>
+                                        ✓ {t('Submission locked — single entry only')}
+                                    </div>
+                                )
                             ) : c.computed_status === 'Active' ? (
                                 <button
                                     onClick={() => setShowTeamModal(c)}
@@ -597,6 +700,7 @@ export function GymChallenges({ challenges }) {
                 <SubmitResultModal
                     challenge={showSubmitModal}
                     onClose={() => setShowSubmitModal(null)}
+                    onSuccess={handleSubmitSuccess}
                 />
             )}
 
@@ -710,39 +814,42 @@ const modalOverlayStyle = { position: 'fixed', inset: 0, background: 'rgba(0,0,0
 const modalContentStyle = { background: 'var(--surface)', width: '100%', maxWidth: '400px', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)' };
 const primaryButtonStyle = { width: '100%', padding: '12px', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' };
 
-function SubmitResultModal({ challenge, onClose }) {
+function SubmitResultModal({ challenge, onClose, onSuccess }) {
     const { t } = useTranslation();
     const supabase = createClient();
     const [value, setValue] = useState('');
-    const [proof, setProof] = useState('');
     const [note, setNote] = useState('');
     const [loading, setLoading] = useState(false);
-
     const toast = useToast();
 
     const handleSubmit = async () => {
-        if (!value) return toast.error(t("Please enter a value"));
+        if (!value) return toast.error(t('Please enter a value'));
         setLoading(true);
 
         try {
             const { data, error } = await supabase.rpc('submit_challenge_result', {
                 p_challenge_id: challenge.id,
                 p_value: parseFloat(value),
-                p_proof_url: proof || null,
                 p_note: note || null
             });
 
             if (error) throw error;
 
-            if (data.success) {
-                toast.success(t("Result Submitted!"));
+            if (data?.already_submitted) {
+                toast.error(t('You already submitted a result for this challenge.'));
                 onClose();
+                return;
+            }
+
+            if (data?.success) {
+                toast.success(t('Result Submitted! 🏆'));
+                onSuccess?.();
             } else {
-                toast.error(`${t("Submission failed")}: ${data.message}`);
+                toast.error(`${t('Submission failed')}: ${data?.message}`);
             }
         } catch (err) {
             console.error(err);
-            toast.error(`${t("Error")}: ${err.message}`);
+            toast.error(`${t('Error')}: ${err.message}`);
         } finally {
             setLoading(false);
         }
@@ -750,48 +857,70 @@ function SubmitResultModal({ challenge, onClose }) {
 
     return (
         <div style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 200,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200,
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0'
         }} onClick={onClose}>
-            <div style={{
-                background: 'var(--surface)', width: '100%', maxWidth: '400px',
-                borderRadius: '16px', padding: '24px', border: '1px solid var(--border)'
-            }} onClick={e => e.stopPropagation()}>
-                <h3 style={{ margin: '0 0 16px 0' }}>{t('Submit Result')}</h3>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>{challenge.title}</p>
+            <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25 }}
+                style={{
+                    background: 'var(--surface)', width: '100%', maxWidth: '500px',
+                    borderRadius: '20px 20px 0 0', padding: '28px 24px 40px',
+                    border: '1px solid var(--border)'
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Handle bar */}
+                <div style={{ width: '40px', height: '4px', background: 'var(--border)', borderRadius: '2px', margin: '0 auto 20px' }} />
 
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Value')} (e.g. kg, reps)</label>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '1.2rem' }}>{t('Submit Result')}</h3>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '24px', fontSize: '0.9rem' }}>
+                    {challenge.title}
+                    {!challenge.allow_multiple_submissions && (
+                        <span style={{ display: 'block', marginTop: '4px', fontSize: '0.8rem', color: '#f59e0b' }}>
+                            ⚠ {t('Single submission only')}
+                        </span>
+                    )}
+                </p>
+
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>
+                    {challenge.goal_type ? `${t('Value')} (${challenge.goal_type})` : t('Value')}
+                </label>
                 <input
                     type="number"
-                    value={value} onChange={e => setValue(e.target.value)}
+                    value={value}
+                    onChange={e => setValue(e.target.value)}
                     placeholder="0"
-                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', marginBottom: '16px' }}
+                    autoFocus
+                    style={{ width: '100%', padding: '16px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: '#fff', marginBottom: '16px', fontSize: '1.1rem', textAlign: 'center' }}
                 />
 
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Proof URL')} ({t('Optional')})</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>
+                    {t('Note')} <span style={{ color: 'var(--text-muted)', fontWeight: 'normal' }}>({t('Optional')})</span>
+                </label>
                 <input
                     type="text"
-                    value={proof} onChange={e => setProof(e.target.value)}
-                    placeholder="https://..."
-                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', marginBottom: '16px' }}
-                />
-
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>{t('Note')}</label>
-                <textarea
-                    value={note} onChange={e => setNote(e.target.value)}
-                    placeholder={t('Notes (Optional)')}
-                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px', color: '#fff', marginBottom: '24px', resize: 'vertical' }}
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    placeholder={t('e.g. Personal best, felt strong today...')}
+                    style={{ width: '100%', padding: '12px', background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '12px', color: '#fff', marginBottom: '24px' }}
                 />
 
                 <div style={{ display: 'flex', gap: '12px' }}>
-                    <button onClick={onClose} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '8px', cursor: 'pointer' }}>
+                    <button onClick={onClose} style={{ flex: 1, padding: '14px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', borderRadius: '12px', cursor: 'pointer', fontWeight: '600' }}>
                         {t('Cancel')}
                     </button>
-                    <button onClick={handleSubmit} disabled={loading} style={{ flex: 1, padding: '12px', background: 'var(--primary)', border: 'none', color: '#000', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                        {loading ? t('Saving...') : t('Submit')}
+                    <button
+                        onClick={handleSubmit}
+                        disabled={loading || !value}
+                        style={{ flex: 2, padding: '14px', background: value ? 'var(--primary)' : 'var(--surface-highlight)', border: 'none', color: value ? '#000' : 'var(--text-muted)', borderRadius: '12px', fontWeight: 'bold', cursor: value ? 'pointer' : 'default', fontSize: '1rem' }}
+                    >
+                        {loading ? t('Saving...') : `🏆 ${t('Submit')}`}
                     </button>
                 </div>
-            </div>
+            </motion.div>
         </div>
     );
 }

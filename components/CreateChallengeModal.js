@@ -18,6 +18,7 @@ export default function CreateChallengeModal({ isOpen, onClose, onSave, initialD
     const [xp2nd, setXp2nd] = useState(500);
     const [xpParticipation, setXpParticipation] = useState(200);
     const [adminDefinedTeams, setAdminDefinedTeams] = useState([{ name: 'Red Team' }, { name: 'Blue Team' }]);
+    const [allowMultipleSubmissions, setAllowMultipleSubmissions] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const PRESET_UNITS = ['none', 'reps', 'kg', 'lbs', 'hours', 'minutes', 'km', 'miles', 'calories', 'custom'];
@@ -56,6 +57,7 @@ export default function CreateChallengeModal({ isOpen, onClose, onSave, initialD
                 setXp1st(initialData.xp_reward_1st || 1000);
                 setXp2nd(initialData.xp_reward_2nd || 500);
                 setXpParticipation(initialData.xp_reward_participation || 200);
+                setAllowMultipleSubmissions(initialData.allow_multiple_submissions || false);
                 // Currently, we don't pass teams in initialData from the parent, but if we do in the future:
                 if (initialData.teams && initialData.teams.length > 0) {
                     setAdminDefinedTeams(initialData.teams.map(t => ({ name: t.team_name || t.name })));
@@ -81,6 +83,7 @@ export default function CreateChallengeModal({ isOpen, onClose, onSave, initialD
                 setXp1st(1000);
                 setXp2nd(500);
                 setXpParticipation(200);
+                setAllowMultipleSubmissions(false);
                 setAdminDefinedTeams([{ name: 'Red Team' }, { name: 'Blue Team' }]);
             }
         }
@@ -112,10 +115,11 @@ export default function CreateChallengeModal({ isOpen, onClose, onSave, initialD
                 goal_type: finalUnit,
                 xp_reward_1st: parseInt(xp1st) || 1000,
                 xp_reward_2nd: parseInt(xp2nd) || 500,
-                xp_reward_3rd: parseInt(xp2nd) || 500, // Sync 3rd with 2nd
+                xp_reward_3rd: parseInt(xp2nd) || 500,
                 xp_reward_participation: parseInt(xpParticipation) || 200,
-                is_published: true, // auto publish by default
-                admin_teams: teamsToSave // Pass this to the parent to handle insertions
+                allow_multiple_submissions: allowMultipleSubmissions,
+                is_published: true,
+                admin_teams: teamsToSave
             });
             onClose();
         } catch (err) {
@@ -288,6 +292,44 @@ export default function CreateChallengeModal({ isOpen, onClose, onSave, initialD
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* SECTION 3b: SUBMISSION RULES */}
+                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                        <div>
+                            <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                                🔁 {t('Allow Multiple Submissions')}
+                            </div>
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                                {allowMultipleSubmissions
+                                    ? t('Athletes can submit results multiple times (e.g. daily logging, cumulative totals).')
+                                    : t('Each athlete can only submit once (e.g. 1RM attempt, single best score).')}
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setAllowMultipleSubmissions(v => !v)}
+                            style={{
+                                flexShrink: 0,
+                                width: '52px', height: '28px',
+                                borderRadius: '100px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: allowMultipleSubmissions ? 'var(--primary)' : 'var(--surface-highlight)',
+                                position: 'relative',
+                                transition: 'background 0.25s'
+                            }}
+                        >
+                            <div style={{
+                                position: 'absolute',
+                                top: '3px',
+                                left: allowMultipleSubmissions ? '26px' : '3px',
+                                width: '22px', height: '22px',
+                                borderRadius: '50%',
+                                background: allowMultipleSubmissions ? '#000' : '#888',
+                                transition: 'left 0.25s'
+                            }} />
+                        </button>
                     </div>
 
                     {/* SECTION 4: GAMIFICATION */}
