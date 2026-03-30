@@ -1,4 +1,6 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
-    "files.autoSave": "afterDelay"
+    "files.autoSave": "afterDelay",
+    "deno.enablePaths": ["supabase/functions"],
+    "deno.unstable": ["kv"]
 }

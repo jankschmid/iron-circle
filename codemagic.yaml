@@ -24,6 +24,13 @@ workflows:
       - name: Install dependencies
         script: npm install --legacy-peer-deps
 
+      - name: Create .env.local from Codemagic secrets
+        script: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" >> .env.local
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY" >> .env.local
+          echo ".env.local created:"
+          cat .env.local
+
       - name: Build Next.js (static export)
         script: npm run build
 
@@ -117,6 +124,11 @@ workflows:
     scripts:
       - name: Install dependencies
         script: npm install --legacy-peer-deps
+
+      - name: Create .env.local from Codemagic secrets
+        script: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" >> .env.local
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY" >> .env.local
 
       - name: Build Next.js (static export)
         script: npm run build
