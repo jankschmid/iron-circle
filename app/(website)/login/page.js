@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase'
 import { useStore } from '@/lib/store'
 import { useTranslation } from '@/context/TranslationContext'
 import LanguageSelector from '@/components/ui/LanguageSelector'
-import { Capacitor } from '@capacitor/core'
 
 export default function LoginPage() {
     const { t } = useTranslation()
@@ -15,38 +14,15 @@ export default function LoginPage() {
     const [password, setPassword] = useState('')
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
-    const [debugInfo, setDebugInfo] = useState(null)
-    const [showDebug, setShowDebug] = useState(false)
     const router = useRouter()
     const [supabase] = useState(() => createClient())
-    const { user } = useStore ? useStore() : { user: null };
+    const { user } = useStore ? useStore() : { user: null }
 
-    // Collect debug info on mount
-    useEffect(() => {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        const trimmedKey = key ? key.trim() : null;
-        const trimmedUrl = url ? url.trim() : null;
-        setDebugInfo({
-            platform: Capacitor.getPlatform(),
-            isNative: Capacitor.isNativePlatform(),
-            supabaseUrl: trimmedUrl ? `${trimmedUrl.substring(0, 35)}...` : '❌ UNDEFINED',
-            supabaseUrlValid: trimmedUrl ? trimmedUrl.includes('.supabase.co') : false,
-            supabaseKeyPrefix: trimmedKey ? `${trimmedKey.substring(0, 12)}...` : '❌ UNDEFINED',
-            supabaseKeySuffix: trimmedKey ? `...${trimmedKey.slice(-4)}` : '❌',
-            supabaseUrlFull: trimmedUrl || 'NOT SET',
-            supabaseKeyLength: trimmedKey ? trimmedKey.length : 0,
-            supabaseKeyRawLength: key ? key.length : 0, // if different → whitespace issue
-            buildTime: new Date().toISOString(),
-        });
-    }, []);
-
-    // Redirect if already logged in
     useEffect(() => {
         if (user) {
-            router.replace('/');
+            router.replace('/')
         }
-    }, [user, router]);
+    }, [user, router])
 
     const handleLogin = async (e) => {
         e.preventDefault()
@@ -54,47 +30,33 @@ export default function LoginPage() {
         setError(null)
 
         try {
-            const loginPromise = supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-
+            const loginPromise = supabase.auth.signInWithPassword({ email, password })
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Connection timed out. Please check your internet or try again.')), 30000)
-            );
+            )
 
-            const result = await Promise.race([loginPromise, timeoutPromise]);
-            const { error: authError, data } = result;
+            const { error: authError } = await Promise.race([loginPromise, timeoutPromise])
 
             if (authError) {
-                // Show full debug on error
-                setShowDebug(true);
-                setDebugInfo(prev => ({
-                    ...prev,
-                    lastError: authError.message,
-                    lastErrorCode: authError.status,
-                    lastErrorFull: JSON.stringify(authError, null, 2),
-                }));
                 let msg = authError.message
                 if (msg.includes('Invalid login credentials')) msg = 'Incorrect email or password'
                 if (msg.includes('Email not confirmed')) msg = 'Please verify your email address'
-                throw new Error(msg);
+                throw new Error(msg)
             }
 
-            const params = new URLSearchParams(window.location.search);
-            const next = params.get('next');
-            router.push(next ? decodeURIComponent(next) : '/');
+            const params = new URLSearchParams(window.location.search)
+            const next = params.get('next')
+            router.push(next ? decodeURIComponent(next) : '/')
 
         } catch (err) {
-            setError(err.message || "Failed to sign in. Please try again.");
-            setLoading(false);
+            setError(err.message || 'Failed to sign in. Please try again.')
+            setLoading(false)
         }
     }
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '16px', position: 'relative' }}>
 
-            {/* Language Selector (Top Right) */}
             <div style={{ position: 'absolute', top: '16px', right: '16px' }}>
                 <LanguageSelector position="bottom-right" />
             </div>
@@ -170,57 +132,6 @@ export default function LoginPage() {
                     </Link>
                 </p>
             </div>
-
-            {/* ── DEBUG PANEL ── */}
-            <div style={{ width: '100%', maxWidth: '400px', marginTop: '16px' }}>
-                <button
-                    onClick={() => setShowDebug(v => !v)}
-                    style={{
-                        width: '100%',
-                        padding: '10px',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '8px',
-                        color: 'rgba(255,255,255,0.4)',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer',
-                        letterSpacing: '0.05em'
-                    }}
-                >
-                    {showDebug ? '▲ Hide Debug Info' : '▼ Show Debug Info'}
-                </button>
-
-                {showDebug && debugInfo && (
-                    <div style={{
-                        marginTop: '8px',
-                        padding: '16px',
-                        background: '#0a0a0a',
-                        border: '1px solid #333',
-                        borderRadius: '8px',
-                        fontSize: '0.7rem',
-                        fontFamily: 'monospace',
-                        color: '#aaa',
-                        lineHeight: '1.8',
-                        wordBreak: 'break-all'
-                    }}>
-                        <div style={{ color: '#FFD600', marginBottom: '8px', fontWeight: 'bold' }}>🔍 Debug Info</div>
-                        <div><span style={{ color: '#666' }}>Platform:</span> <span style={{ color: debugInfo.isNative ? '#4CAF50' : '#FF9800' }}>{debugInfo.platform} {debugInfo.isNative ? '(Native ✓)' : '(Web)'}</span></div>
-                        <div><span style={{ color: '#666' }}>Supabase URL:</span> <span style={{ color: debugInfo.supabaseUrlFull === 'NOT SET' ? '#f44336' : (debugInfo.supabaseUrlValid ? '#4CAF50' : '#FF9800') }}>{debugInfo.supabaseUrl} {debugInfo.supabaseUrlValid ? '✓' : '⚠ not .supabase.co'}</span></div>
-                        <div><span style={{ color: '#666' }}>Anon Key start:</span> <span style={{ color: debugInfo.supabaseKeyLength === 0 ? '#f44336' : '#4CAF50' }}>{debugInfo.supabaseKeyPrefix}</span></div>
-                        <div><span style={{ color: '#666' }}>Anon Key end:</span> <span style={{ color: debugInfo.supabaseKeyLength === 0 ? '#f44336' : '#4CAF50' }}>{debugInfo.supabaseKeySuffix}</span></div>
-                        <div><span style={{ color: '#666' }}>Key length:</span> <span style={{ color: debugInfo.supabaseKeyLength < 100 ? '#f44336' : '#4CAF50' }}>{debugInfo.supabaseKeyLength} chars (trimmed) / {debugInfo.supabaseKeyRawLength} raw {debugInfo.supabaseKeyLength !== debugInfo.supabaseKeyRawLength ? '⚠ WHITESPACE!' : '✓'}</span></div>
-                        <div><span style={{ color: '#666' }}>Build time:</span> {debugInfo.buildTime}</div>
-                        {debugInfo.lastError && (
-                            <>
-                                <div style={{ borderTop: '1px solid #333', marginTop: '8px', paddingTop: '8px', color: '#f44336' }}>Last Error: {debugInfo.lastError}</div>
-                                {debugInfo.lastErrorCode && <div><span style={{ color: '#666' }}>Status:</span> {debugInfo.lastErrorCode}</div>}
-                                <pre style={{ marginTop: '8px', color: '#888', whiteSpace: 'pre-wrap', fontSize: '0.65rem' }}>{debugInfo.lastErrorFull}</pre>
-                            </>
-                        )}
-                    </div>
-                )}
-            </div>
         </div>
     )
 }
-
