@@ -24,7 +24,7 @@ export default function BottomNav() {
     const navItems = [
         { path: '/', label: t('Home'), icon: '🏠' },
         { path: '/workout', label: t('Workout'), icon: '💪' },
-        ...(user?.gymId ? [{ path: `/community?gymId=${user.gymId}`, label: t('Gym'), icon: '🏟️' }] : []),
+        { path: user?.gymId ? `/community?gymId=${user.gymId}` : '/tracker', label: t('Gym'), icon: '🏟️' },
         { path: '/connect', label: t('Connect'), icon: '🌍' },
         { path: '/profile', label: t('Me'), icon: '👤' },
     ];
