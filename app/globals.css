@@ -51,6 +51,7 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  overflow-x: hidden;
   
   /* Native App Optimization */
   -webkit-tap-highlight-color: transparent;
@@ -156,6 +157,9 @@ button {
 
 /* Responsive sidebar toggle */
 @media (max-width: 768px) {
+  .portal-layout {
+    flex-direction: column;
+  }
   .portal-sidebar {
     position: fixed;
     transform: translateX(-100%);
@@ -172,7 +176,7 @@ button {
     display: flex !important;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
+    padding: calc(16px + var(--safe-top)) 16px 16px 16px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     position: sticky;

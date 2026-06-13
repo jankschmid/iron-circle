@@ -24,7 +24,9 @@ export default function LoginPage() {
             if (params.get('next')) return; // handled by handleLogin
 
             // Route based on roles
-            if (user.gyms && user.gyms.some(g => g.role === 'admin' || g.role === 'owner')) {
+            if (user.is_super_admin) {
+                router.replace('/admin/master');
+            } else if (user.gyms && user.gyms.some(g => g.role === 'admin' || g.role === 'owner')) {
                 router.replace('/gym/admin');
             } else if (user.gyms && user.gyms.some(g => g.role === 'trainer')) {
                 router.replace('/trainer/dashboard');
@@ -72,7 +74,7 @@ export default function LoginPage() {
     return (
         <div style={{ minHeight: '100vh', background: 'var(--background)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '16px', position: 'relative' }}>
 
-            <div style={{ position: 'absolute', top: '16px', right: '16px' }}>
+            <div style={{ position: 'absolute', top: 'calc(16px + var(--safe-top))', right: '16px' }}>
                 <LanguageSelector position="bottom-right" />
             </div>
 

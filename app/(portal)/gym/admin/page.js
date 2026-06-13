@@ -29,8 +29,8 @@ import NavBtn from './components/NavBtn';
 function GymAdminPage() {
     const { t } = useTranslation();
     const searchParams = useSearchParams();
-    const gymId = searchParams.get('id');
     const { user } = useStore();
+    const gymId = searchParams.get('id') || (user?.gyms?.[0]?.gym_id);
     // Fix: Singleton client
     const [supabase] = useState(() => createClient());
     const router = useRouter();

@@ -54,11 +54,14 @@ export default function PortalLayout({ children }) {
                 {/* CSS handles this */}
             </div>
 
-            <div className="mobile-topbar" style={{ display: 'none' }}>
-                <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
-                    {isTrainer ? 'Coach Portal' : isGym ? 'Gym Portal' : 'Portal'}
+            <div className="mobile-topbar" style={{ display: 'none', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                    <img src="/assets/logo/Iron-Circle_Logo_Two_Color.svg" alt="Logo" style={{ width: '28px', height: '28px', flexShrink: 0 }} />
+                    <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {isTrainer ? 'Coach Portal' : isGym ? 'Gym Portal' : 'Portal'}
+                    </div>
                 </div>
-                <button onClick={toggleSidebar} style={{ fontSize: '1.5rem', background: 'none', border: 'none', color: 'var(--text-main)' }}>
+                <button onClick={toggleSidebar} style={{ fontSize: '1.5rem', background: 'none', border: 'none', color: 'var(--text-main)', padding: '4px', marginLeft: '16px', flexShrink: 0 }}>
                     ☰
                 </button>
             </div>
@@ -101,7 +104,7 @@ export default function PortalLayout({ children }) {
                 </nav>
 
                 <div style={{ padding: '24px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <Link href="/portal/settings" style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-main)', textDecoration: 'none' }}>
+                    <Link href="/profile/settings" style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-main)', textDecoration: 'none' }}>
                         <span>👤</span>
                         <span>My Profile & Settings</span>
                     </Link>

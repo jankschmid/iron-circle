@@ -1,6 +1,9 @@
 "use client";
 
 import { useScroll, useTransform } from 'framer-motion';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Capacitor } from '@capacitor/core';
 
 // Modular Website Components
 import Header from '@/components/website/Header';
@@ -17,6 +20,14 @@ import Footer from '@/components/website/Footer';
 import MuscleShowcase from '@/components/website/MuscleShowcase';
 
 export default function LandingPage() {
+    const router = useRouter();
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+            router.replace('/login');
+        }
+    }, [router]);
+
     const { scrollYProgress } = useScroll();
     
     const yHeroText = useTransform(scrollYProgress, [0, 0.5], [0, 100]);
