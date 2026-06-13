@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import dynamic from 'next/dynamic';
+import PushListener from '@/components/PushListener';
 
 // Dynamic import keeps PermissionGate JS out of the initial bundle
 const PermissionGate = dynamic(() => import('@/components/PermissionGate'), { ssr: false });
@@ -47,7 +48,7 @@ export default function AppShell({ children }) {
     return (
         <>
             {children}
-            {showGate && <PermissionGate onContinue={handleDone} />}
+            {showGate ? <PermissionGate onContinue={handleDone} /> : <PushListener />}
         </>
     );
 }

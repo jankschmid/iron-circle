@@ -3,21 +3,26 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Send, CheckCircle2, MessageSquare } from 'lucide-react';
 
+import { createClient } from '@/lib/supabase';
+
 export default function ContactPage() {
     const [status, setStatus] = useState('idle'); // idle, loading, success
     const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+    const supabase = createClient();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setStatus('loading');
         
         try {
-            const res = await fetch('/api/contact', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            if (!res.ok) throw new Error('Network error');
+            const { error } = await supabase.from('contact_messages').insert([{
+                name: formData.name,
+                email: formData.email,
+                message: formData.message
+            }]);
+            
+            if (error) throw error;
+            
             setStatus('success');
             setFormData({ name: '', email: '', message: '' });
         } catch (error) {

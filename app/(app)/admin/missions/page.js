@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import PaginationControl from '@/components/ui/PaginationControl';
+import MissionEditorModal from '@/components/MissionEditorModal';
 
-export default function MissionControlPage() {
+export default function MissionControlComponent() {
     const { user } = useStore();
     const [supabase] = useState(() => createClient());
     const router = useRouter();
@@ -14,10 +16,22 @@ export default function MissionControlPage() {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const [isCreatingMission, setIsCreatingMission] = useState(false);
+    const [editingMissionId, setEditingMissionId] = useState(null);
+
+    const [currentPage, setCurrentPage] = useState(0);
+    const [totalCount, setTotalCount] = useState(0);
+    const pageSize = 12;
+
+    useEffect(() => {
+        if (!user) return;
+        setCurrentPage(0); // Reset page on tab change
+    }, [user, activeTab]);
+
     useEffect(() => {
         if (!user) return;
         fetchTemplates();
-    }, [user, activeTab]);
+    }, [user, activeTab, currentPage]);
 
     const fetchTemplates = async () => {
         setLoading(true);
@@ -25,20 +39,23 @@ export default function MissionControlPage() {
 
         if (activeTab === 'SOLO') {
             query = supabase.from('operations_templates')
-                .select('*')
-                .order('created_at', { ascending: false });
+                .select('*', { count: 'exact' })
+                .order('created_at', { ascending: false })
+                .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
         } else {
             query = supabase.from('community_goal_templates')
-                .select('*')
-                .order('created_at', { ascending: false });
+                .select('*', { count: 'exact' })
+                .order('created_at', { ascending: false })
+                .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
         }
 
-        const { data, error } = await query;
+        const { data, count, error } = await query;
         if (error) {
             console.error("Fetch Error:", error);
             alert("Error fetching templates: " + error.message);
         } else {
             setTemplates(data || []);
+            setTotalCount(count || 0);
         }
         setLoading(false);
     };
@@ -60,41 +77,10 @@ export default function MissionControlPage() {
     if (!user) return <div style={{ padding: '50px', textAlign: 'center' }}>Loading Mission Control...</div>;
 
     return (
-        <div style={{ minHeight: '100vh', background: '#111', color: '#fff', fontFamily: 'Inter', padding: 'env(safe-area-inset-top, 40px) 20px 40px 20px' }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-                {/* Header */}
-                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '40px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <button
-                            onClick={() => router.push('/admin/master')}
-                            style={{ background: 'none', border: '1px solid #444', color: '#888', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer' }}
-                        >
-                            ←
-                        </button>
-                        <h1 style={{ fontSize: '2rem', fontWeight: '900', margin: 0 }}>MISSION <span style={{ color: '#FFC800' }}>CONTROL</span></h1>
-                    </div>
-                    <button
-                        onClick={() => router.push('/admin/missions/create')}
-                        style={{
-                            background: '#FFC800',
-                            color: '#000',
-                            border: 'none',
-                            padding: '10px 24px',
-                            borderRadius: '8px',
-                            fontWeight: 'bold',
-                            fontSize: '1rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px'
-                        }}
-                    >
-                        + Create New Mission
-                    </button>
-                </header>
-
+        <div style={{ width: '100%' }}>
                 {/* Tabs */}
-                <div style={{ display: 'flex', gap: '2px', marginBottom: '24px', background: '#222', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                    <div style={{ display: 'flex', gap: '2px', background: '#222', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
                     <button
                         onClick={() => setActiveTab('SOLO')}
                         style={{
@@ -124,6 +110,13 @@ export default function MissionControlPage() {
                         }}
                     >
                         Community Goals
+                    </button>
+                </div>
+                <button
+                        onClick={() => setIsCreatingMission(true)}
+                        style={{ background: '#FFC800', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                        + New Mission
                     </button>
                 </div>
 
@@ -188,7 +181,7 @@ export default function MissionControlPage() {
                                                 </td>
                                                 <td style={{ padding: '16px', textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                                                     <button
-                                                        onClick={() => router.push(`/admin/missions/create?scope=${activeTab}&id=${t.id}`)}
+                                                        onClick={() => setEditingMissionId(t.id)}
                                                         style={{
                                                             background: '#333',
                                                             border: '1px solid #555',
@@ -263,7 +256,7 @@ export default function MissionControlPage() {
 
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             <button
-                                                onClick={() => router.push(`/admin/missions/create?scope=${activeTab}&id=${t.id}`)}
+                                                onClick={() => setEditingMissionId(t.id)}
                                                 style={{
                                                     flex: 1,
                                                     background: '#333',
@@ -300,6 +293,13 @@ export default function MissionControlPage() {
                             )}
                         </div>
 
+                        <PaginationControl 
+                            currentPage={currentPage} 
+                            totalCount={totalCount} 
+                            pageSize={pageSize} 
+                            onPageChange={(page) => setCurrentPage(page)} 
+                        />
+
                         <style jsx>{`
                             @media (max-width: 768px) {
                                 .desktop-view { display: none !important; }
@@ -308,7 +308,29 @@ export default function MissionControlPage() {
                         `}</style>
                     </>
                 )}
-            </div>
+
+                {/* Modals */}
+                {isCreatingMission && (
+                    <MissionEditorModal
+                        defaultScope={activeTab}
+                        onClose={() => setIsCreatingMission(false)}
+                        onSave={() => {
+                            setIsCreatingMission(false);
+                            fetchTemplates();
+                        }}
+                    />
+                )}
+                {editingMissionId && (
+                    <MissionEditorModal
+                        missionId={editingMissionId}
+                        defaultScope={activeTab}
+                        onClose={() => setEditingMissionId(null)}
+                        onSave={() => {
+                            setEditingMissionId(null);
+                            fetchTemplates();
+                        }}
+                    />
+                )}
         </div>
     );
 }

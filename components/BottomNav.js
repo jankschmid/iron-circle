@@ -13,16 +13,16 @@ export default function BottomNav() {
     const { user, unreadCount } = useStore();
 
     const isActive = (path) => {
-        if (path === '/' && pathname === '/') return true;
+        if (path === '/dashboard' && pathname === '/dashboard') return true;
         // Handle query params in checking active state? tough.
         // Just check prefix.
         if (path.startsWith('/community') && pathname.startsWith('/community')) return true;
-        if (path !== '/' && pathname.startsWith(path)) return true;
+        if (path !== '/dashboard' && pathname.startsWith(path)) return true;
         return false;
     };
 
     const navItems = [
-        { path: '/', label: t('Home'), icon: '🏠' },
+        { path: '/dashboard', label: t('Home'), icon: '🏠' },
         { path: '/workout', label: t('Workout'), icon: '💪' },
         { path: user?.gymId ? `/community?gymId=${user.gymId}` : '/tracker', label: t('Gym'), icon: '🏟️' },
         { path: '/connect', label: t('Connect'), icon: '🌍' },

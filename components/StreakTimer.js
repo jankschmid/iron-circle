@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { Timer, Snowflake, Flame } from 'lucide-react';
+import { getStreakInfo } from '@/lib/streak';
 
 export default function StreakTimer() {
     const { user } = useStore();
@@ -13,52 +14,38 @@ export default function StreakTimer() {
     useEffect(() => {
         if (!user) return;
 
-        // If no past workout, there's no active streak timer needed, or it's implicitly "safe"
-        if (!user.last_workout_date && user.current_streak === 0) {
-            setTimeLeft('Ready to start!');
-            return;
-        }
-
-        if (user.streak_status === 'frozen') {
-            return; // Handled in render
-        }
-
-        // 1. Calculate Grace Period Math (Matches Database)
-        const yearlyGoal = user.yearly_workout_goal || 104;
-        const w = Math.max(yearlyGoal / 52, 1);
-        const graceHours = (7 / w) * 24 + 24;
-
-        // 2. Calculate Exact Deadline Date
-        const lastWorkout = new Date(user.last_workout_date);
-        const deadlineDate = new Date(lastWorkout.getTime() + graceHours * 3600 * 1000);
-
-        // 3. Tick every second
-        const interval = setInterval(() => {
-            const now = new Date();
-            const diffMs = deadlineDate - now;
-
-            if (diffMs <= 0) {
-                setIsBroken(true);
-                setTimeLeft('00h 00m 00s');
-                clearInterval(interval);
+        const tick = () => {
+            const info = getStreakInfo(user);
+            
+            if (info.isFrozen) return;
+            
+            if (info.isReadyToStart) {
+                setTimeLeft('Ready to start!');
                 return;
             }
+
+            if (info.isLost) {
+                setIsBroken(true);
+                setTimeLeft('00h 00m 00s');
+                return;
+            }
+
+            const now = new Date();
+            const diffMs = info.deadlineDate - now;
 
             const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
             const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
 
-            // Set Urgency (e.g. less than 12 hours)
-            if (totalHours < 12) setIsUrgent(true);
-            else setIsUrgent(false);
+            setIsUrgent(totalHours < 12);
 
             setTimeLeft(
                 `${totalHours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`
             );
+        };
 
-        }, 1000);
-
-        // Initial exact call
+        tick();
+        const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
     }, [user]);
 

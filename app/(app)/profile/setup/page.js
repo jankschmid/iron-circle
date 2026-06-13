@@ -125,9 +125,9 @@ export default function OnboardingWizard() {
         }
     }, [formData.trainingStyle]);
 
-    // If already set up, bounce to home
+    // If already set up, bounce to dashboard
     useEffect(() => {
-        if (user?.setup_completed) router.replace('/');
+        if (user?.setup_completed) router.replace('/dashboard');
     }, [user?.setup_completed]);
 
     const updateField = (k, v) => setFormData(p => ({ ...p, [k]: v }));
@@ -298,7 +298,7 @@ export default function OnboardingWizard() {
             });
 
             toastSuccess("Welcome to IronCircle! 🔥");
-            window.location.href = '/';
+            window.location.href = '/dashboard';
 
         } catch (err) {
             console.error("Setup error:", err);

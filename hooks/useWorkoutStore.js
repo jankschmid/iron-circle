@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { EXERCISES } from '@/lib/data';
 import { useToast } from '@/components/ToastProvider';
+import { createFeedEvent } from '@/lib/feed';
 import { calculateSessionXP, calculateLevel } from '@/lib/gamification';
 import { foregroundService } from '@/lib/foregroundService';
 import { calculateWorkoutImpact } from '@/lib/muscleEngine/calculateWorkoutImpact';
@@ -676,6 +677,28 @@ export function useWorkoutStore(user, refreshUserProfile) {
 
             setWorkoutSummary(finalSummary);
             fetchHistory();
+            
+            // Generate Feed Events
+            if (uploadResult.insertedId) {
+                createFeedEvent('workout', {
+                    workout_id: uploadResult.insertedId,
+                    name: finalSummary.name,
+                    volume: finalSummary.volume,
+                    duration: finalSummary.duration
+                });
+                
+                if (finalSummary.didLevelUp) {
+                    createFeedEvent('rank_up', { new_level: finalSummary.newLevel });
+                }
+                
+                if (finalSummary.analysis.newRecords?.length > 0) {
+                    createFeedEvent('pr', { 
+                        count: finalSummary.analysis.newRecords.length, 
+                        records: finalSummary.analysis.newRecords 
+                    });
+                }
+            }
+
             return { success: true, offline: false, summary: finalSummary };
 
         } catch (e) {
@@ -817,15 +840,24 @@ export function useWorkoutStore(user, refreshUserProfile) {
         if (!error) setWorkoutTemplates(prev => prev.filter(t => t.id !== id));
     };
 
-    const addCustomExercise = async (name, muscle = 'Other') => {
+    const addCustomExercise = async (name, muscle = 'Other', is_unilateral = false, muscle_engagement = null) => {
         const id = name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now().toString(36);
-        const { error } = await supabase.from('custom_exercises').insert({ id, user_id: user.id, name, muscle });
-        if (!error) setExercises(prev => [...prev, { id, name, muscle, isCustom: true }]);
+        const engagement = muscle_engagement || { [muscle.toLowerCase()]: 1.0 };
+        const { error } = await supabase.from('custom_exercises').insert({ id, user_id: user.id, name, muscle, is_unilateral, muscle_engagement: engagement });
+        if (!error) setExercises(prev => [...prev, { id, name, muscle, isCustom: true, is_unilateral, muscle_engagement: engagement }]);
+        return { id, name, muscle, isCustom: true, is_unilateral, muscle_engagement: engagement };
     };
 
-    const updateCustomExercise = async (id, name, muscle) => {
-        const { error } = await supabase.from('custom_exercises').update({ name, muscle }).eq('id', id);
-        if (!error) setExercises(prev => prev.map(e => e.id === id ? { ...e, name, muscle } : e));
+    const updateCustomExercise = async (id, name, muscle, is_unilateral = false, muscle_engagement = null) => {
+        const payload = { name, muscle, is_unilateral };
+        if (muscle_engagement) payload.muscle_engagement = muscle_engagement;
+
+        const { error } = await supabase.from('custom_exercises').update(payload).eq('id', id);
+        if (!error) {
+            setExercises(prev => prev.map(e => e.id === id ? { ...e, ...payload } : e));
+            return true;
+        }
+        return false;
     };
 
     const deleteCustomExercise = async (id) => {

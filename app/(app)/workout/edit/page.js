@@ -31,6 +31,7 @@ function EditRoutineContent() {
     // Custom Exercise State
     const [customExerciseName, setCustomExerciseName] = useState('');
     const [customMuscle, setCustomMuscle] = useState('Other');
+    const [customIsUnilateral, setCustomIsUnilateral] = useState(false);
     const MUSCLES = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Cardio', 'Other'];
 
     useEffect(() => {
@@ -64,9 +65,9 @@ function EditRoutineContent() {
         setIsLoading(false);
     }, [id, workoutTemplates, exercises]);
 
-    const handleAddCustom = () => {
+    const handleAddCustom = async () => {
         if (!customExerciseName.trim()) return;
-        const newEx = addCustomExercise(customExerciseName, customMuscle);
+        const newEx = await addCustomExercise(customExerciseName, customMuscle, customIsUnilateral);
 
         const exerciseWithDefaults = {
             ...newEx,
@@ -80,6 +81,7 @@ function EditRoutineContent() {
 
         setCustomExerciseName('');
         setCustomMuscle('Other');
+        setCustomIsUnilateral(false);
     };
 
     const handleSave = () => {
@@ -183,7 +185,7 @@ function EditRoutineContent() {
                     <h1 style={{ fontSize: '1.5rem' }}>{t('Select Exercises')}</h1>
                 </header>
 
-                {/* Search & Filter */}
+                {/* Search */}
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
                     <input
                         type="text"
@@ -199,20 +201,52 @@ function EditRoutineContent() {
                             color: 'var(--foreground)'
                         }}
                     />
-                    <select
-                        value={filterMuscle}
-                        onChange={(e) => setFilterMuscle(e.target.value)}
+                </div>
+
+                {/* Muscle Filter - Improved Scroll */}
+                <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    overflowX: 'auto',
+                    paddingBottom: '8px',
+                    marginBottom: '16px',
+                    whiteSpace: 'nowrap',
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'var(--border) transparent'
+                }}>
+                    <button
+                        onClick={() => setFilterMuscle('All')}
                         style={{
-                            padding: '12px',
-                            borderRadius: '8px',
-                            border: '1px solid var(--border)',
-                            background: 'var(--surface)',
-                            color: 'var(--text-main)'
+                            padding: '8px 16px',
+                            borderRadius: '100px',
+                            border: filterMuscle === 'All' ? '1px solid var(--primary)' : '1px solid var(--border)',
+                            background: filterMuscle === 'All' ? 'var(--primary-dim)' : 'var(--surface)',
+                            color: filterMuscle === 'All' ? 'var(--primary)' : 'var(--text-muted)',
+                            display: 'inline-block',
+                            fontSize: '0.9rem',
+                            flexShrink: 0
                         }}
                     >
-                        <option value="All">{t('All Muscles')}</option>
-                        {MUSCLES.map(m => <option key={m} value={m}>{t(m)}</option>)}
-                    </select>
+                        {t('All')}
+                    </button>
+                    {MUSCLES.map(muscle => (
+                        <button
+                            key={muscle}
+                            onClick={() => setFilterMuscle(muscle)}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '100px',
+                                border: filterMuscle === muscle ? '1px solid var(--primary)' : '1px solid var(--border)',
+                                background: filterMuscle === muscle ? 'var(--primary-dim)' : 'var(--surface)',
+                                color: filterMuscle === muscle ? 'var(--primary)' : 'var(--text-muted)',
+                                display: 'inline-block',
+                                fontSize: '0.9rem',
+                                flexShrink: 0
+                            }}
+                        >
+                            {t(muscle)}
+                        </button>
+                    ))}
                 </div>
 
                 <div style={{ display: 'grid', gap: '12px', paddingBottom: '100px' }}>
@@ -252,6 +286,23 @@ function EditRoutineContent() {
                                 >
                                     {MUSCLES.map(m => <option key={m} value={m}>{t(m)}</option>)}
                                 </select>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                    type="checkbox"
+                                    id="edit-unilateral-toggle"
+                                    checked={customIsUnilateral}
+                                    onChange={(e) => setCustomIsUnilateral(e.target.checked)}
+                                    style={{
+                                        width: '18px',
+                                        height: '18px',
+                                        accentColor: 'var(--primary)',
+                                        cursor: 'pointer'
+                                    }}
+                                />
+                                <label htmlFor="edit-unilateral-toggle" style={{ color: 'var(--text-muted)', fontSize: '0.9rem', cursor: 'pointer' }}>
+                                    {t('Unilateral Exercise (Left/Right)')}
+                                </label>
                             </div>
                             <button
                                 onClick={handleAddCustom}

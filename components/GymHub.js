@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createFeedEvent } from '@/lib/feed';
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
 import { useTranslation } from '@/context/TranslationContext';
@@ -562,8 +563,8 @@ export function GymChallenges({ challenges }) {
         fetchAll();
     }, [user, challenges]);
 
-    const handleJoin = async (id) => {
-        const success = await joinChallenge(id);
+    const handleJoin = async (id, teamId, title) => {
+        const success = await joinChallenge(id, teamId, title);
         if (success) {
             setMyChallenges(prev => ({ ...prev, [id]: { status: 'active', progress: 0 } }));
         }
@@ -710,7 +711,7 @@ export function GymChallenges({ challenges }) {
                     onClose={() => setShowTeamModal(null)}
                     onJoin={(teamId) => {
                         setShowTeamModal(null);
-                        handleJoin(showTeamModal.id, teamId);
+                        handleJoin(showTeamModal.id, teamId, showTeamModal.title);
                     }}
                     supabase={supabase}
                     user={user}
@@ -843,6 +844,12 @@ function SubmitResultModal({ challenge, onClose, onSuccess }) {
 
             if (data?.success) {
                 toast.success(t('Result Submitted! 🏆'));
+                createFeedEvent('challenge_submit', { 
+                    challenge_id: challenge.id, 
+                    challenge_title: challenge.title, 
+                    value: parseFloat(value), 
+                    unit: challenge.goal_type 
+                });
                 onSuccess?.();
             } else {
                 toast.error(`${t('Submission failed')}: ${data?.message}`);

@@ -14,17 +14,18 @@ export default function FeedTab() {
     const { t } = useTranslation();
     const [feed, setFeed] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [scope, setScope] = useState('squad');
 
     const loadFeed = async () => {
         setLoading(true);
-        const data = await fetchFeed(); // Uses RPC get_squad_feed
+        const data = await fetchFeed(0, 20, scope); // Uses RPC get_squad_feed with scope
         setFeed(data || []);
         setLoading(false);
     };
 
     useEffect(() => {
         if (user) loadFeed();
-    }, [user]);
+    }, [user, scope]);
 
     const handleFistbump = async (eventId, hasFistbumped) => {
         // Optimistic Update
@@ -59,6 +60,8 @@ export default function FeedTab() {
         let borderColor = 'var(--border)';
         if (isPrestige) borderColor = '#FFD700'; // Gold
         if (isPR) borderColor = 'var(--primary)'; // Neon/Iron
+        if (event.type === 'challenge_joined') borderColor = 'var(--brand-yellow)';
+        if (event.type.startsWith('challenge_submit') || event.type === 'challenge_verified') borderColor = 'var(--primary)';
 
         return (
             <motion.div
@@ -117,8 +120,25 @@ export default function FeedTab() {
                     {event.type === 'rank_up' && (
                         <div style={{ textAlign: 'center', padding: '10px 0' }}>
                             <div style={{ fontSize: '2.5rem' }}>🏅</div>
-                            <h3 style={{ fontSize: '1.4rem', color: '#FFD700', fontWeight: '900', textTransform: 'uppercase' }}>Rank {event.data.newRank}</h3>
+                            <h3 style={{ fontSize: '1.4rem', color: '#FFD700', fontWeight: '900', textTransform: 'uppercase' }}>Rank {event.data.newRank || event.data.new_level}</h3>
                             <p style={{ color: 'var(--text-muted)' }}>"The legend grows..."</p>
+                        </div>
+                    )}
+
+                    {event.type === 'challenge_joined' && (
+                        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                            <div style={{ fontSize: '2rem' }}>⚔️</div>
+                            <h3 style={{ fontSize: '1.2rem', color: 'var(--brand-yellow)', fontWeight: '900' }}>{t('JOINED CHALLENGE')}</h3>
+                            <div style={{ fontSize: '1.1rem', marginTop: '4px' }}>{event.data.challenge_title}</div>
+                        </div>
+                    )}
+
+                    {(event.type === 'challenge_submit' || event.type === 'challenge_verified') && (
+                        <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                            <div style={{ fontSize: '2rem' }}>🎯</div>
+                            <h3 style={{ fontSize: '1.2rem', color: 'var(--primary)', fontWeight: '900' }}>{t('SUBMITTED RESULT')}</h3>
+                            <div style={{ fontSize: '1.1rem', marginTop: '4px', color: 'var(--text-muted)' }}>{event.data.challenge_title}</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginTop: '8px' }}>{event.data.value} {event.data.unit}</div>
                         </div>
                     )}
                 </div>
@@ -157,31 +177,49 @@ export default function FeedTab() {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Feed Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', marginTop: '16px' }}>
                 <h2 style={{ fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--text-muted)' }}>ACTIVITY LOG</h2>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>FRIENDS ONLY</div>
             </div>
-
-            {feed.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🕸️</div>
-                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{t('Silence on the wire')}</p>
-                    <p style={{ marginBottom: '16px' }}>{t('No active signals from your team.')}</p>
-                    <Link href="/social/add" style={{
-                        background: 'var(--primary)',
-                        color: 'black',
-                        padding: '12px 24px',
-                        borderRadius: '100px',
-                        textDecoration: 'none',
-                        fontWeight: 'bold',
-                        display: 'inline-block'
-                    }}>
-                        {t('Find Friends')}
-                    </Link>
-                </div>
-            ) : (
-                feed.map(event => <EventCard key={event.event_id} event={event} />)
-            )}
+            
+            {/* Scope Segment Control */}
+            <div style={{ display: 'flex', background: 'var(--surface)', padding: '4px', borderRadius: '12px', margin: '0 20px', border: '1px solid var(--border)' }}>
+                {['squad', 'gym'].map(s => (
+                    <button
+                        key={s}
+                        onClick={() => setScope(s)}
+                        style={{
+                            flex: 1, padding: '8px 0', border: 'none', background: scope === s ? 'var(--primary)' : 'transparent',
+                            color: scope === s ? '#000' : 'var(--text-muted)',
+                            borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', textTransform: 'uppercase', fontSize: '0.8rem'
+                        }}
+                    >
+                        {s === 'gym' ? t('My Gym') : t('Squad')}
+                    </button>
+                ))}
+            </div>
+            
+            <div style={{ padding: '0 20px' }}>
+                {feed.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🕸️</div>
+                        <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{t('Silence on the wire')}</p>
+                        <p style={{ marginBottom: '16px' }}>{t('No active signals from your team.')}</p>
+                        <Link href="/social/add" style={{
+                            background: 'var(--primary)',
+                            color: 'black',
+                            padding: '12px 24px',
+                            borderRadius: '100px',
+                            textDecoration: 'none',
+                            fontWeight: 'bold',
+                            display: 'inline-block'
+                        }}>
+                            {t('Find Friends')}
+                        </Link>
+                    </div>
+                ) : (
+                    feed.map(event => <EventCard key={event.event_id} event={event} />)
+                )}
+            </div>
         </div>
     );
 }

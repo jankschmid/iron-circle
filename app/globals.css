@@ -10,7 +10,7 @@
   --border: #27272a;
 
   --primary: #FAFF00;     /* Iron/Gold Yellow EXACT */
-  --primary-dim: #fef08a; 
+  --primary-dim: rgba(250, 255, 0, 0.15); 
   --accent: #EAB308;      
 
   --text-main: #fafafa;
@@ -117,4 +117,69 @@ textarea {
 
 button {
   cursor: pointer;
+}
+
+/* =========================================
+   B2B Portal Layout (Desktop-First)
+========================================= */
+.portal-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.portal-sidebar {
+  width: 260px;
+  background-color: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 50;
+}
+
+.portal-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Prevents overflow */
+}
+
+.portal-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 24px;
+}
+
+/* Responsive sidebar toggle */
+@media (max-width: 768px) {
+  .portal-sidebar {
+    position: fixed;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  .portal-sidebar.open {
+    transform: translateX(0);
+  }
+  .portal-container {
+    padding: 16px;
+    padding-top: calc(16px + var(--safe-top));
+  }
+  .mobile-topbar {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+  .mobile-close {
+    display: block !important;
+  }
 }

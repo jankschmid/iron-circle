@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import PaginationControl from '@/components/ui/PaginationControl';
 
-export default function TranslationsAdminPage() {
+export default function TranslationsAdminComponent() {
     const [keys, setKeys] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -12,6 +13,9 @@ export default function TranslationsAdminPage() {
     const [filterMissing, setFilterMissing] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [categories, setCategories] = useState([]);
+
+    const [currentPage, setCurrentPage] = useState(0);
+    const pageSize = 20;
 
     // Language Form
     const [newLangCode, setNewLangCode] = useState('');
@@ -290,12 +294,19 @@ export default function TranslationsAdminPage() {
         return matchesSearch;
     });
 
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(0);
+    }, [search, selectedLang, filterMissing, selectedCategory]);
+
+    const paginatedKeys = filteredKeys.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+
     const completionPercent = keys.length > 0
         ? Math.round((keys.filter(k => k.translations?.[selectedLang]).length / keys.length) * 100)
         : 0;
 
     return (
-        <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#e0e0e0', padding: 'env(safe-area-inset-top, 40px) 20px 100px 20px', fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ width: '100%', color: '#e0e0e0' }}>
 
             {/* ALERT TOAST */}
             {message && (
@@ -310,13 +321,10 @@ export default function TranslationsAdminPage() {
             )}
 
             {/* HEADER */}
-            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '32px', borderBottom: '1px solid #333', paddingBottom: '24px' }}>
+            <div style={{ width: '100%' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', fontWeight: '900', margin: 0, letterSpacing: '-1px' }}>
-                            TRANSLATION <span style={{ color: 'var(--primary, #00d2ff)' }}>CONTROLLER</span>
-                        </h1>
-                        <p style={{ color: '#666', marginTop: '8px', fontSize: '1rem' }}>Manage global content & localization</p>
+                        <p style={{ color: '#666', margin: 0, fontSize: '1rem' }}>Manage global content & localization</p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -451,7 +459,8 @@ export default function TranslationsAdminPage() {
                 </div>
 
                 {/* TABLE */}
-                <div style={{ background: '#111', borderRadius: '16px', border: '1px solid #222', overflow: 'hidden' }}>
+                <div style={{ background: '#111', borderRadius: '16px', border: '1px solid #222', overflowX: 'auto', WebkitOverflowScrolling: 'touch', maxWidth: '100%' }}>
+                    <div style={{ minWidth: '800px' }}>
 
                     {/* TABLE HEAD */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: '#1a1a1a', borderBottom: '1px solid #333', padding: '16px 24px' }}>
@@ -460,13 +469,13 @@ export default function TranslationsAdminPage() {
                     </div>
 
                     {/* TABLE BODY */}
-                    <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                    <div>
                         {loading ? (
                             <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>Loading dictionary...</div>
-                        ) : filteredKeys.length === 0 ? (
+                        ) : paginatedKeys.length === 0 ? (
                             <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>No keys found matching your filter.</div>
                         ) : (
-                            Object.entries(filteredKeys.reduce((acc, k) => {
+                            Object.entries(paginatedKeys.reduce((acc, k) => {
                                 const cat = k.flags?.category || 'Uncategorized';
                                 if (!acc[cat]) acc[cat] = [];
                                 acc[cat].push(k);
@@ -535,15 +544,23 @@ export default function TranslationsAdminPage() {
                             ))
                         )}
                     </div>
+                    </div>
                 </div>
+                
+                <PaginationControl 
+                    currentPage={currentPage} 
+                    totalCount={filteredKeys.length} 
+                    pageSize={pageSize} 
+                    onPageChange={(page) => setCurrentPage(page)} 
+                />
             </div>
 
-            <style jsx>{`
+            <style>{`
                 .spinner {
-                    width: 16px; height: 16px; border: 2px solid #fff; border-top: 2px solid transparent; borderRadius: 50%; animation: spin 1s linear infinite; display: inline-block;
+                    width: 16px; height: 16px; border: 2px solid #fff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block;
                 }
                 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                .row-hover:hover { background: #1a1a1a; }
+                .row-hover:hover { background: #1a1a1a !important; }
             `}</style>
         </div>
     );

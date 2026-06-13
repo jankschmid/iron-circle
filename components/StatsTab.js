@@ -5,6 +5,7 @@ import DynamicMuscleMap from './muscles/DynamicMuscleMap';
 import WorkoutHeatmap from './WorkoutHeatmap';
 import { useStore } from '@/lib/store';
 import { calculatePRs, detectPlateau } from '@/lib/algorithms';
+import { getStreakInfo } from '@/lib/streak';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,8 @@ export default function StatsTab() {
     const { t } = useTranslation();
     const { getMonthlyStats, getWeeklyMuscleHeat, history, exercises, user } = useStore();
     const { muscleSplit } = getMonthlyStats();
+
+    const displayStreak = getStreakInfo(user)?.streakCount ?? 0;
 
     // Heatmap mode: 'muscles' or 'activity'
     const [heatmapMode, setHeatmapMode] = useState('muscles');
@@ -381,7 +384,7 @@ export default function StatsTab() {
 
             {/* ── FUN STATS ────────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <StatCard icon="🔥" value={user?.streak || 0} label={t('Day Streak')} />
+                <StatCard icon="🔥" value={displayStreak} label={t('Day Streak')} />
                 <StatCard icon="🏋️" value={user?.lifetime_workouts || 0} label={t('Lifetime Sessions')} />
                 <StatCard icon="🏆" value={allPRs.length} label="Total PRs" />
                 <StatCard icon="📈" value={allPRs.filter(p => p.isRecent).length} label="New PRs (30d)" accent />

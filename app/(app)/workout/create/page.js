@@ -25,6 +25,7 @@ export default function CreateRoutinePage() {
     const [editingExercise, setEditingExercise] = useState(null); // If set, we are editing
     const [customFormName, setCustomFormName] = useState('');
     const [customFormMuscle, setCustomFormMuscle] = useState('Other');
+    const [customFormIsUnilateral, setCustomFormIsUnilateral] = useState(false);
 
     // Delete Confirmation State
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -48,6 +49,7 @@ export default function CreateRoutinePage() {
         setEditingExercise(null);
         setCustomFormName('');
         setCustomFormMuscle('Other');
+        setCustomFormIsUnilateral(false);
         setShowCustomModal(true);
     };
 
@@ -55,6 +57,7 @@ export default function CreateRoutinePage() {
         setEditingExercise(ex);
         setCustomFormName(ex.name);
         setCustomFormMuscle(ex.muscle);
+        setCustomFormIsUnilateral(ex.is_unilateral || false);
         setShowCustomModal(true);
     };
 
@@ -78,15 +81,15 @@ export default function CreateRoutinePage() {
 
         if (editingExercise) {
             // Update
-            const success = await updateCustomExercise(editingExercise.id, customFormName, customFormMuscle);
+            const success = await updateCustomExercise(editingExercise.id, customFormName, customFormMuscle, customFormIsUnilateral);
             if (success) {
                 // Update selection if it was selected
-                setSelectedExercises(prev => prev.map(e => e.id === editingExercise.id ? { ...e, name: customFormName, muscle: customFormMuscle } : e));
+                setSelectedExercises(prev => prev.map(e => e.id === editingExercise.id ? { ...e, name: customFormName, muscle: customFormMuscle, is_unilateral: customFormIsUnilateral } : e));
                 setShowCustomModal(false);
             }
         } else {
             // Create
-            const newEx = await addCustomExercise(customFormName, customFormMuscle);
+            const newEx = await addCustomExercise(customFormName, customFormMuscle, customFormIsUnilateral);
             if (newEx) {
                 // Auto-select
                 setSelectedExercises(prev => [...prev, newEx]);
@@ -349,6 +352,24 @@ export default function CreateRoutinePage() {
                                         <option key={m} value={m}>{t(m)}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                    type="checkbox"
+                                    id="unilateral-toggle"
+                                    checked={customFormIsUnilateral}
+                                    onChange={(e) => setCustomFormIsUnilateral(e.target.checked)}
+                                    style={{
+                                        width: '20px',
+                                        height: '20px',
+                                        accentColor: 'var(--primary)',
+                                        cursor: 'pointer'
+                                    }}
+                                />
+                                <label htmlFor="unilateral-toggle" style={{ color: 'var(--text-main)', cursor: 'pointer' }}>
+                                    {t('Unilateral Exercise (Left/Right)')}
+                                </label>
                             </div>
 
                             <div style={{ display: 'flex', gap: '12px' }}>

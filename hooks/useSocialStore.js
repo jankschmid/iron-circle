@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { useToast } from '@/components/ToastProvider';
 import { usePathname } from 'next/navigation';
+import { createFeedEvent } from '@/lib/feed';
 
 const supabase = createClient();
 
@@ -149,7 +150,7 @@ export function useSocialStore(user, workoutSession) {
         return { success: true };
     };
 
-    const joinChallenge = async (challengeId, teamId = null) => {
+    const joinChallenge = async (challengeId, teamId = null, challengeTitle = 'a Challenge') => {
         if (!user) {
             toast.error("Please login to join this challenge.");
             return false;
@@ -168,6 +169,8 @@ export function useSocialStore(user, workoutSession) {
             return false;
         }
         toast.success("Challenge Accepted! Let's get to work.");
+        // Dispatch feed event
+        createFeedEvent('challenge_joined', { challenge_id: challengeId, challenge_title: challengeTitle });
         return true;
     };
 
@@ -289,10 +292,11 @@ export function useSocialStore(user, workoutSession) {
     }, [user?.id]);
 
     // --- FEED & INTERACTIONS ---
-    const fetchFeed = async (page = 0, limit = 20) => {
+    const fetchFeed = async (page = 0, limit = 20, scope = 'squad') => {
         const { data, error } = await supabase.rpc('get_squad_feed', {
             p_limit: limit,
-            p_offset: page * limit
+            p_offset: page * limit,
+            p_scope: scope
         });
         if (error) {
             console.error("Feed fetch error:", error.message, error.details, error.hint);

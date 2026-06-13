@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { getSvgIdsForMuscle } from '@/lib/muscleEngine/muscleMapper';
+import { getSvgIdsForMuscle, LOGICAL_MUSCLES } from '@/lib/muscleEngine/muscleMapper';
 
 // --- Color helpers ---
 const INACTIVE_COLOR = '#757575';
@@ -65,11 +65,17 @@ export default function DynamicMuscleMap({
         });
 
         // 2. Patch Active / Inactive Muscles
-        // We know exactly what muscle IDs are.
-        // First we set all known muscle IDs to INACTIVE
-        const allKeys = Object.keys(activeMuscles).length > 0 
-            ? Object.keys(activeMuscles)
-            : []; // We will just apply active ones directly to override
+        // First we set all known muscle IDs to INACTIVE explicitly
+        LOGICAL_MUSCLES.forEach(logicalId => {
+            const svgIds = getSvgIdsForMuscle(logicalId);
+            const stylePayload = `fill:${INACTIVE_COLOR}; opacity: 0.5; transition: all 0.5s ease-out;`;
+            svgIds.forEach(id => {
+                out = out.replace(
+                    new RegExp(`(id="${id}"[^>]*?style=")([^"]*?)(")`, 'g'),
+                    `$1${stylePayload}$3`
+                );
+            });
+        });
 
         for (const [logicalId, rawIntensity] of Object.entries(activeMuscles)) {
             // Cap visual intensity between 0 and 1

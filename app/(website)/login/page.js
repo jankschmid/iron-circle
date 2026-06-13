@@ -20,9 +20,19 @@ export default function LoginPage() {
 
     useEffect(() => {
         if (user) {
-            router.replace('/')
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('next')) return; // handled by handleLogin
+
+            // Route based on roles
+            if (user.gyms && user.gyms.some(g => g.role === 'admin' || g.role === 'owner')) {
+                router.replace('/gym/admin');
+            } else if (user.gyms && user.gyms.some(g => g.role === 'trainer')) {
+                router.replace('/trainer/dashboard');
+            } else {
+                router.replace('/dashboard');
+            }
         }
-    }, [user, router])
+    }, [user, router]);
 
     const handleLogin = async (e) => {
         e.preventDefault()
@@ -46,7 +56,12 @@ export default function LoginPage() {
 
             const params = new URLSearchParams(window.location.search)
             const next = params.get('next')
-            router.push(next ? decodeURIComponent(next) : '/')
+
+            // The routing will primarily be handled by the useEffect once the store updates `user`.
+            // But if `next` is set, we immediately redirect.
+            if (next) {
+                router.push(decodeURIComponent(next))
+            }
 
         } catch (err) {
             setError(err.message || 'Failed to sign in. Please try again.')
