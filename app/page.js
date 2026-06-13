@@ -24,7 +24,10 @@ export default function LandingPage() {
 
     useEffect(() => {
         if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
-            router.replace('/login');
+            if (!sessionStorage.getItem('bypassed_landing')) {
+                sessionStorage.setItem('bypassed_landing', 'true');
+                router.replace('/login');
+            }
         }
     }, [router]);
 
@@ -36,7 +39,7 @@ export default function LandingPage() {
     const yFloating2 = useTransform(scrollYProgress, [0, 1], [0, -80]);
 
     return (
-        <div className="min-h-screen bg-[#020202] text-zinc-200 font-sans selection:bg-brand/30 selection:text-brand overflow-x-hidden">
+        <div style={{ paddingTop: 'var(--safe-top)' }} className="min-h-screen bg-[#020202] text-zinc-200 font-sans selection:bg-brand/30 selection:text-brand overflow-x-hidden">
             {/* Ambient Background Glows */}
             <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-brand/10 blur-[120px] rounded-full pointer-events-none z-0" />
             
